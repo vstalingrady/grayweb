@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, type MutableRefObject, type SetStateAct
 import { chatService } from "@/lib/api";
 import type { ChatSession } from "../types";
 import { buildGeneralConversationId, normalizeConversationIdValue } from "../utils";
-import { mapApiMessagesToChatMessages, normalizeSessionsList } from "./sessionStore";
+import { mergeConversationHistoryIntoSession, normalizeSessionsList } from "./sessionStore";
 
 type SetSessions = (updater: SetStateAction<ChatSession[]>) => void;
 
@@ -14,7 +14,14 @@ type UseConversationHistoryOptions = {
 };
 
 type UseConversationHistoryResult = {
-  loadConversationMessages: (sessionId: string) => Promise<void>;
+  loadConversationMessages: (
+    sessionId: string,
+    options?: {
+      force?: boolean;
+      touchUpdatedAt?: boolean;
+      conversationIdOverride?: string | null;
+    }
+  ) => Promise<void>;
 };
 
 export const useConversationHistory = ({
@@ -28,16 +35,28 @@ export const useConversationHistory = ({
   const generalHistoryRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadConversationMessages = useCallback(
-    async (sessionId: string) => {
+    async (
+      sessionId: string,
+      options?: {
+        force?: boolean;
+        touchUpdatedAt?: boolean;
+        conversationIdOverride?: string | null;
+      }
+    ) => {
       const session = sessionsRef.current.find((candidate) => candidate.id === sessionId);
-      if (!session || !session.conversationId) {
+      if (!session) {
         return;
       }
-      const normalizedConversationId = normalizeConversationIdValue(session.conversationId);
+      if (session.isResponding) {
+        return;
+      }
+      const normalizedConversationId = normalizeConversationIdValue(
+        options?.conversationIdOverride ?? session.conversationId
+      );
       if (!normalizedConversationId) {
         return;
       }
-      if (session.messages.length > 0) {
+      if (!options?.force && session.messages.length > 0) {
         return;
       }
 
@@ -47,29 +66,24 @@ export const useConversationHistory = ({
           return;
         }
 
-        const now = Date.now();
-        const mapped = mapApiMessagesToChatMessages(history, normalizedConversationId, now);
-
-        if (!mapped.length) {
-          return;
-        }
-
         setSessions((prev) => {
           const index = prev.findIndex((candidate) => candidate.id === sessionId);
           if (index === -1) {
             return prev;
           }
           const current = prev[index];
-          // Double check to avoid race conditions
-          if (current.messages && current.messages.length > 0) {
+          const updated = mergeConversationHistoryIntoSession(
+            current,
+            history,
+            normalizedConversationId,
+            {
+              force: options?.force,
+              touchUpdatedAt: options?.touchUpdatedAt,
+            }
+          );
+          if (!updated) {
             return prev;
           }
-          const updated: ChatSession = {
-            ...current,
-            messages: mapped,
-            // We don't update updatedAt here to avoid jumping it to the top of the list
-            isResponding: false,
-          };
           const next = [...prev];
           next[index] = updated;
           const ordered = normalizeSessionsList(next);
@@ -137,78 +151,19 @@ export const useConversationHistory = ({
       if (!generalConversationId) {
         return;
       }
-      const localMessageCount = general.messages.length;
-      const localHasMessages = localMessageCount > 0;
-
       generalHistoryHydratingRef.current = true;
       try {
-        const history = await chatService.getConversation(generalConversationId);
-        if (cancelled) {
-          return;
-        }
-
-        if (!Array.isArray(history)) {
-          if (localHasMessages) {
-            scheduleRetry();
-            return;
-          }
-          generalHistoryHydratedRef.current = true;
-          return;
-        }
-
-        if (history.length === 0) {
-          if (localHasMessages) {
-            scheduleRetry();
-            return;
-          }
-          generalHistoryHydratedRef.current = true;
-          return;
-        }
-
-        const now = Date.now();
-        const mapped = mapApiMessagesToChatMessages(history, generalConversationId, now);
-
-        if (!mapped.length) {
-          if (localHasMessages) {
-            scheduleRetry();
-            return;
-          }
-          generalHistoryHydratedRef.current = true;
-          return;
-        }
-
-        setSessions((prev) => {
-          const index = prev.findIndex((session) => session.scope === "general");
-          if (index === -1) {
-            return prev;
-          }
-          const current = prev[index];
-
-          // Always replace with server data since the backend is the source of truth.
-          // This fixes the issue where only proactivity messages showed after refresh
-          // because local storage had fewer messages than the database.
-          const updated: ChatSession = {
-            ...current,
-            conversationId: generalConversationId,
-            messages: mapped,
-            updatedAt: now,
-            isResponding: false,
-          };
-          const next = [...prev];
-          next[index] = updated;
-          const ordered = normalizeSessionsList(next);
-          persistSessions(ordered);
-          return ordered;
+        await loadConversationMessages(general.id, {
+          force: true,
+          touchUpdatedAt: true,
+          conversationIdOverride: generalConversationId,
         });
         generalHistoryHydratedRef.current = true;
         retryCount = 0;
         clearRetryTimer();
       } catch (error) {
         console.error("Failed to load general conversation history:", error);
-        if (localHasMessages) {
-          scheduleRetry();
-          return;
-        }
+        scheduleRetry();
         // Mark as hydrated even on error to prevent infinite retry loops
         generalHistoryHydratedRef.current = true;
       } finally {
@@ -221,7 +176,7 @@ export const useConversationHistory = ({
       cancelled = true;
       clearRetryTimer();
     };
-  }, [persistSessions, setSessions, sessionsRef, userId]);
+  }, [loadConversationMessages, sessionsRef, userId]);
 
 
   return { loadConversationMessages };

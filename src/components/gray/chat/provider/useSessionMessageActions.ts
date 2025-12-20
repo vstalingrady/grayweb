@@ -18,7 +18,11 @@ type UseSessionMessageActionsOptions = {
   generalConversationIdRef: MutableRefObject<string | undefined>;
   pendingHistorySyncRef: MutableRefObject<Set<string>>;
   enqueueHistorySync: (conversationId: string, payload: ConversationHistoryEntryPayload[]) => void;
-  applyAutoTitle: (sessionId: string, candidate?: string | null) => void;
+  applyAutoTitle: (
+    sessionId: string,
+    candidate?: string | null,
+    options?: { sync?: boolean }
+  ) => void;
 };
 
 type UseSessionMessageActionsResult = {
@@ -291,4 +295,3 @@ export const useSessionMessageActions = ({
     appendMessage,
   };
 };
-

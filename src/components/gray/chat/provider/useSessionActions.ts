@@ -42,7 +42,11 @@ type UseSessionActionsOptions = {
 
 type UseSessionActionsResult = {
   updateSession: (sessionId: string, partial: Partial<ChatSession>) => void;
-  applyAutoTitle: (sessionId: string, candidate?: string | null) => void;
+  applyAutoTitle: (
+    sessionId: string,
+    candidate?: string | null,
+    options?: { sync?: boolean }
+  ) => void;
   updateMessage: (sessionId: string, messageId: string, partial: Partial<ChatMessage>) => void;
   updateMessageThrottled: (
     sessionId: string,
@@ -104,7 +108,11 @@ export const useSessionActions = ({
   );
 
   const applyAutoTitle = useCallback(
-    (sessionId: string, candidate?: string | null) => {
+    (
+      sessionId: string,
+      candidate?: string | null,
+      options?: { sync?: boolean }
+    ) => {
       const session = sessionsRef.current.find((entry) => entry.id === sessionId);
       if (!session || session.scope === "general" || session.titleMode === "manual") {
         return;
@@ -120,7 +128,9 @@ export const useSessionActions = ({
         return;
       }
       updateSession(sessionId, { title: rawTitle, titleMode: "auto", isGeneratingTitle: false });
-      queueConversationTitleSync(sessionId, rawTitle);
+      if (options?.sync !== false) {
+        queueConversationTitleSync(sessionId, rawTitle);
+      }
     },
     [queueConversationTitleSync, sessionsRef, updateSession]
   );

@@ -205,3 +205,66 @@ export function mapApiMessagesToChatMessages(
     };
   });
 }
+
+type MergeHistoryOptions = {
+  force?: boolean;
+  touchUpdatedAt?: boolean;
+};
+
+const areChatMessagesEquivalent = (left: ChatMessage[], right: ChatMessage[]): boolean => {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    const leftMessage = left[index];
+    const rightMessage = right[index];
+    if (!leftMessage || !rightMessage) {
+      return false;
+    }
+    if (leftMessage.role !== rightMessage.role) {
+      return false;
+    }
+    if ((leftMessage.content ?? "") !== (rightMessage.content ?? "")) {
+      return false;
+    }
+  }
+  return true;
+};
+
+export function mergeConversationHistoryIntoSession(
+  session: ChatSession,
+  history: ApiConversationMessage[],
+  conversationId: string,
+  options?: MergeHistoryOptions
+): ChatSession | null {
+  if (!Array.isArray(history) || history.length === 0) {
+    return null;
+  }
+  const mapped = mapApiMessagesToChatMessages(history, conversationId, Date.now());
+  if (!mapped.length) {
+    return null;
+  }
+
+  const localMessages = session.messages ?? [];
+  const force = Boolean(options?.force);
+  const shouldReplace =
+    localMessages.length === 0 ||
+    mapped.length > localMessages.length ||
+    (force && mapped.length >= localMessages.length);
+
+  if (!shouldReplace || areChatMessagesEquivalent(localMessages, mapped)) {
+    return null;
+  }
+
+  const nextSession: ChatSession = {
+    ...session,
+    conversationId,
+    messages: mapped,
+    isResponding: false,
+  };
+  if (options?.touchUpdatedAt) {
+    nextSession.updatedAt = Date.now();
+  }
+
+  return nextSession;
+}

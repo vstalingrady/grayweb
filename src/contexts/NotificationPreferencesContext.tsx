@@ -56,26 +56,34 @@ export function NotificationPreferencesProvider({ children }: { children: ReactN
   );
 
   useEffect(() => {
-    setNotificationPreferencesState(loadNotificationPreferences(storageKey));
-  }, [storageKey]);
-
-  useEffect(() => {
+    let nextPrefs: NotificationPreferences;
     if (!user) {
-      return;
+      lastPersistedRef.current = null;
+      nextPrefs = loadNotificationPreferences(storageKey);
+    } else {
+      const serverPrefs = user.notification_preferences
+        ? parseNotificationPreferences(user.notification_preferences)
+        : null;
+
+      if (serverPrefs) {
+        nextPrefs = serverPrefs;
+        lastPersistedRef.current = serverPrefs;
+      } else {
+        nextPrefs = loadNotificationPreferences(storageKey);
+      }
     }
-    if (!user.notification_preferences) {
-      return;
+
+    if (!arePreferencesEqual(notificationPreferences, nextPrefs)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setNotificationPreferencesState(nextPrefs);
     }
-    const parsed = parseNotificationPreferences(user.notification_preferences);
-    if (arePreferencesEqual(parsed, notificationPreferences)) {
-      return;
-    }
-    setNotificationPreferencesState(parsed);
-    saveNotificationPreferences(storageKey, parsed);
-  }, [arePreferencesEqual, notificationPreferences, storageKey, user]);
+  }, [storageKey, user, arePreferencesEqual, notificationPreferences]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
+      return;
+    }
+    if (user) {
       return;
     }
     const handleStorage = (event: StorageEvent) => {
@@ -85,31 +93,37 @@ export function NotificationPreferencesProvider({ children }: { children: ReactN
     };
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
-  }, [storageKey]);
+  }, [storageKey, user]);
 
   const setNotificationPreferences = useCallback(
     (preferences: NotificationPreferences) => {
       setNotificationPreferencesState(preferences);
-      saveNotificationPreferences(storageKey, preferences);
+      if (!user) {
+        saveNotificationPreferences(storageKey, preferences);
+      }
     },
-    [storageKey]
+    [storageKey, user]
   );
 
   const setNotificationPreference = useCallback(
     (key: keyof NotificationPreferences, value: boolean) => {
       setNotificationPreferencesState((current) => {
         const next = { ...current, [key]: value };
-        saveNotificationPreferences(storageKey, next);
+        if (!user) {
+          saveNotificationPreferences(storageKey, next);
+        }
         return next;
       });
     },
-    [storageKey]
+    [storageKey, user]
   );
 
   const resetNotificationPreferences = useCallback(() => {
     setNotificationPreferencesState(DEFAULT_NOTIFICATION_PREFERENCES);
-    clearNotificationPreferences(storageKey);
-  }, [storageKey]);
+    if (!user) {
+      clearNotificationPreferences(storageKey);
+    }
+  }, [storageKey, user]);
 
   useEffect(() => {
     if (!userId || typeof userId !== "number") {
@@ -123,6 +137,9 @@ export function NotificationPreferencesProvider({ children }: { children: ReactN
       return;
     }
     if (lastPersistedRef.current && arePreferencesEqual(lastPersistedRef.current, notificationPreferences)) {
+      return;
+    }
+    if (!serverPrefs && arePreferencesEqual(notificationPreferences, DEFAULT_NOTIFICATION_PREFERENCES)) {
       return;
     }
     lastPersistedRef.current = notificationPreferences;

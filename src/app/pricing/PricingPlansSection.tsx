@@ -74,7 +74,7 @@ export const PATHFINDER_FEATURES: FeatureItem[] = [
     },
     {
         id: "more_messages",
-        label: "3x more messages",
+        label: "18x more messages",
         icon: MessageSquare,
     },
     {
@@ -95,7 +95,7 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
     },
     {
         id: "more_messages",
-        label: "9x more messages",
+        label: "54x more messages",
         icon: MessageSquare,
     },
     {
@@ -110,9 +110,8 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
     },
     {
         id: "chatgpt_export_compression",
-        label: "ChatGPT export compression",
+        label: "Import ChatGPT Data",
         icon: ChatGptIcon,
-        subtext: "Text-only + Grok 4.1 Fast",
     },
     {
         id: "integrations",
@@ -133,7 +132,7 @@ export const PIONEER_FEATURES: FeatureItem[] = [
     },
     {
         id: "more_messages",
-        label: "21x more messages",
+        label: "108x more messages",
         icon: MessageSquare,
         subtext: "Built for heavy daily use",
     },

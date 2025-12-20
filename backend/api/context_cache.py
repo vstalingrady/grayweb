@@ -7,7 +7,7 @@ This router handles context cache CRUD endpoints.
 from typing import Any, Dict
 
 import databases
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from backend.auth import get_current_user, require_same_user
 
@@ -65,3 +65,20 @@ async def get_context_cache(
         raise HTTPException(status_code=404, detail="Context cache not found.")
     require_same_user(payload["user_id"], current_user)
     return ContextCache(**payload)
+
+
+@router.delete("/context-cache/{cache_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_context_cache(
+    request: Request,
+    cache_id: int,
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> None:
+    record = await db.fetch_one(
+        context_cache.select().where(context_cache.c.id == cache_id)
+    )
+    payload = _serialize_context_cache(record)
+    if not payload:
+        raise HTTPException(status_code=404, detail="Context cache not found.")
+    require_same_user(payload["user_id"], current_user)
+    await db.execute(context_cache.delete().where(context_cache.c.id == cache_id))

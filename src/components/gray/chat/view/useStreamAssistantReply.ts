@@ -31,7 +31,11 @@ type UseStreamAssistantReplyOptions = {
   appendMessage: (sessionId: string, role: "assistant" | "user", content: string) => ChatMessage | null;
   updateMessage: (sessionId: string, messageId: string, partial: Partial<ChatMessage>) => void;
   updateSession: (sessionId: string, partial: Partial<ChatSession>) => void;
-  applyAutoTitle: (sessionId: string, candidate?: string | null) => void;
+  applyAutoTitle: (
+    sessionId: string,
+    candidate?: string | null,
+    options?: { sync?: boolean }
+  ) => void;
   clearAttachments: () => void;
   setActiveStreamingMessageId: Dispatch<SetStateAction<string | null>>;
   setConversationUsage: Dispatch<SetStateAction<ConversationUsage | null>>;
@@ -176,6 +180,24 @@ export const useStreamAssistantReply = ({
       streamAbortControllerRef.current = abortController;
       const shouldUseWebSearch = autoWebSearchEnabled || webSearchEnabled;
       const shouldAttachToConversation = !isRegeneration;
+      const resolveConversationIdUpdate = (candidate?: string | null) => {
+        if (!shouldAttachToConversation) {
+          return session?.conversationId ?? undefined;
+        }
+        if (!candidate) {
+          return session?.conversationId ?? undefined;
+        }
+        if (!session?.conversationId) {
+          return candidate;
+        }
+        if (session.conversationId === candidate) {
+          return candidate;
+        }
+        if (session.conversationId === session.id) {
+          return candidate;
+        }
+        return session.conversationId;
+      };
       const effectiveTimeZone = resolvedUser.personalization_time_zone?.trim() || resolveClientTimezone();
       const timeContext = buildLocalTimeContextWithOverrides(undefined, {
         timeZone: effectiveTimeZone,
@@ -258,13 +280,16 @@ export const useStreamAssistantReply = ({
             if (!isGeneralSession) {
               streamedConversationId = normalizeConversationIdValue(event.conversationId) ?? streamedConversationId;
               if (streamedConversationId) {
-                streamedConversationIdRef.current = streamedConversationId;
+                const nextConversationId = resolveConversationIdUpdate(streamedConversationId);
+                if (nextConversationId) {
+                  streamedConversationIdRef.current = nextConversationId;
+                }
               }
             }
             const normalizedResponse = normalizeAssistantContent(event.response ?? accumulated, prompt);
             accumulated = normalizedResponse;
             if (event.title) {
-              applyAutoTitle(targetSessionId, event.title);
+              applyAutoTitle(targetSessionId, event.title, { sync: false });
             } else {
               applyFallbackTitle();
             }
@@ -286,10 +311,9 @@ export const useStreamAssistantReply = ({
                 activeVariantIndex: nextActiveIndex,
               });
             }
+            const nextConversationId = resolveConversationIdUpdate(streamedConversationId);
             updateSession(targetSessionId, {
-              conversationId: shouldAttachToConversation
-                ? streamedConversationId ?? undefined
-                : session?.conversationId ?? undefined,
+              ...(nextConversationId ? { conversationId: nextConversationId } : {}),
               isResponding: false,
               pendingAutoStream: false,
               isGeneratingTitle: false,
@@ -317,10 +341,9 @@ export const useStreamAssistantReply = ({
             activeVariantIndex: nextActiveIndex,
           });
         }
+        const nextConversationId = resolveConversationIdUpdate(streamedConversationId);
         updateSession(targetSessionId, {
-          conversationId: shouldAttachToConversation
-            ? streamedConversationId ?? undefined
-            : session?.conversationId ?? undefined,
+          ...(nextConversationId ? { conversationId: nextConversationId } : {}),
           isResponding: false,
           pendingAutoStream: false,
           isGeneratingTitle: false,
@@ -366,7 +389,7 @@ export const useStreamAssistantReply = ({
           const finalResponse = normalizeAssistantContent(fallbackResponse.response, prompt);
           const fallbackMetadata = fallbackResponse.groundingMetadata ?? undefined;
           if (fallbackResponse.title) {
-            applyAutoTitle(targetSessionId, fallbackResponse.title);
+            applyAutoTitle(targetSessionId, fallbackResponse.title, { sync: false });
           } else {
             applyFallbackTitle();
           }
@@ -393,10 +416,9 @@ export const useStreamAssistantReply = ({
             }
           }
 
+          const nextConversationId = resolveConversationIdUpdate(streamedConversationId);
           updateSession(targetSessionId, {
-            conversationId: shouldAttachToConversation
-              ? streamedConversationId ?? undefined
-              : session?.conversationId ?? undefined,
+            ...(nextConversationId ? { conversationId: nextConversationId } : {}),
             isResponding: false,
             pendingAutoStream: false,
             isGeneratingTitle: false,

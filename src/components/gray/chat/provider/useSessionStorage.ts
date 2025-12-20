@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, type SetStateAction } from "react";
-import { buildSessionStorageKeyCandidates } from "../utils";
+import { buildSessionStorageKeyCandidates, normalizeConversationIdValue } from "../utils";
 import type { ChatSession } from "../types";
 import {
   dedupeSessionsByConversation,
@@ -84,22 +84,29 @@ export const useSessionStorage = ({
       }
 
       try {
-        const serializable = next.map((session) => ({
-          ...session,
-          messages: session.messages.map((message) => {
-            if (!message.attachments?.length) {
-              return message;
-            }
-            return {
-              ...message,
-              attachments: message.attachments.map((attachment) => {
-                // Strip blob URLs (previewUrl) before saving so we don't load expired ones later
-                const { previewUrl, ...rest } = attachment;
-                return rest;
-              }),
-            };
-          }),
-        }));
+        const serializable = next.map((session) => {
+          const normalizedConversationId = normalizeConversationIdValue(session.conversationId);
+          const shouldPersistMessages = !normalizedConversationId;
+          const sanitizedMessages = shouldPersistMessages
+            ? session.messages.map((message) => {
+              if (!message.attachments?.length) {
+                return message;
+              }
+              return {
+                ...message,
+                attachments: message.attachments.map((attachment) => {
+                  // Strip blob URLs (previewUrl) before saving so we don't load expired ones later
+                  const { previewUrl, ...rest } = attachment;
+                  return rest;
+                }),
+              };
+            })
+            : [];
+          return {
+            ...session,
+            messages: sanitizedMessages,
+          };
+        });
         window.localStorage.setItem(key, JSON.stringify(serializable));
       } catch (error) {
         console.warn("Failed to persist sessions to localStorage:", error);

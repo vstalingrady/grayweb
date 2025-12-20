@@ -86,7 +86,11 @@ export type ChatContextValue = {
     setWorkspaceContext: (context: string | null) => void;
     contextCacheId: number | null;
     setContextCacheId: (id: number | null) => void;
-    applyAutoTitle: (sessionId: string, candidate?: string | null) => void;
+    applyAutoTitle: (
+        sessionId: string,
+        candidate?: string | null,
+        options?: { sync?: boolean }
+    ) => void;
     hasAutoStreamTriggered: (sessionId: string, messageId?: string | null) => boolean;
     markAutoStreamTriggered: (sessionId: string, messageId?: string | null) => void;
     resetAutoStreamState: (sessionId?: string | null) => void;
@@ -113,7 +117,14 @@ export type ChatContextValue = {
     webSearchEnabled: boolean;
     remindersEnabled: boolean;
     toggleRemindersEnabled: () => void;
-    loadConversationMessages: (sessionId: string) => Promise<void>;
+    loadConversationMessages: (
+        sessionId: string,
+        options?: {
+            force?: boolean;
+            touchUpdatedAt?: boolean;
+            conversationIdOverride?: string | null;
+        }
+    ) => Promise<void>;
     reasoningMode: boolean;
     setReasoningMode: (value: boolean) => void;
     modelTier: "lite" | "pro" | "pioneer";

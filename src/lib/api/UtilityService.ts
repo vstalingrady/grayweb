@@ -46,6 +46,12 @@ export class UtilityService {
         return apiFetch<ContextCache>(`/context-cache/${cacheId}`);
     }
 
+    async deleteContextCache(cacheId: number): Promise<void> {
+        await apiFetch(`/context-cache/${cacheId}`, {
+            method: 'DELETE',
+        });
+    }
+
     async createFileSearchStore(displayName?: string): Promise<{ name: string; display_name?: string }> {
         return apiFetch<{ name: string; display_name?: string }>('/api/file-search/stores', {
             method: 'POST',

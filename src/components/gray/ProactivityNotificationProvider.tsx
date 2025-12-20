@@ -12,11 +12,10 @@ import {
 import { useUser } from "@/contexts/UserContext";
 import { useChatStore } from "./ChatProvider";
 import { GENERAL_CHAT_SESSION_ID } from "./chat/constants";
-import { chatService, resolveApiBaseUrl } from "@/lib/api";
+import { resolveApiBaseUrl } from "@/lib/api";
 import { useI18n } from "@/contexts/I18nContext";
 import { useNotificationPreferences } from "@/contexts/NotificationPreferencesContext";
 import { buildGeneralConversationId, normalizeAssistantMessage, parseGrayTitleMarkers } from "./chat/utils";
-import { mapApiMessagesToChatMessages } from "./chat/provider/sessionStore";
 import { getSupabaseAccessToken } from "@/lib/auth/supabaseAccessToken";
 
 type ProactivityNotificationContextValue = {
@@ -46,7 +45,7 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
   const { t } = useI18n();
   const { user } = useUser();
   const userId = typeof user?.id === "number" ? user.id : null;
-  const { appendMessage, sessions, updateSession } = useChatStore();
+  const { appendMessage, sessions, loadConversationMessages } = useChatStore();
   const { notificationPreferences } = useNotificationPreferences();
   const [deliveredKeys, setDeliveredKeys] = useState<Set<string>>(new Set());
   const pushSetupRef = useRef<Promise<void> | null>(null);
@@ -82,34 +81,17 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
 
     isHydratingHistoryRef.current = true;
     try {
-      const history = await chatService.getConversation(generalConversationId);
-      if (!Array.isArray(history) || history.length === 0) {
-        return;
-      }
-      const now = Date.now();
-      const mapped = mapApiMessagesToChatMessages(history, generalConversationId, now);
-      if (!mapped.length) {
-        return;
-      }
-
-      const latestSession = sessionsRef.current.find((session) => session.id === generalSession.id);
-      const currentCount = latestSession?.messages.length ?? 0;
-      if (mapped.length <= currentCount) {
-        return;
-      }
-
-      updateSession(generalSession.id, {
-        conversationId: generalConversationId,
-        messages: mapped,
-        updatedAt: now,
-        isResponding: false,
+      await loadConversationMessages(generalSession.id, {
+        force: true,
+        touchUpdatedAt: true,
+        conversationIdOverride: generalConversationId,
       });
     } catch (error) {
       console.warn("[Proactivity] Failed to refresh general chat history:", error);
     } finally {
       isHydratingHistoryRef.current = false;
     }
-  }, [updateSession, userId]);
+  }, [loadConversationMessages, userId]);
 
   const handleProactivityMessage = useCallback(
     (payload: { session_id?: string; message?: string; delivery_key?: string }) => {

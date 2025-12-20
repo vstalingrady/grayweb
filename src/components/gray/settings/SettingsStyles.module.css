@@ -288,6 +288,10 @@
   border-bottom: none;
 }
 
+.settingsRowMuted {
+  opacity: 0.6;
+}
+
 .settingsLabelGroup {
   display: flex;
   flex-direction: column;

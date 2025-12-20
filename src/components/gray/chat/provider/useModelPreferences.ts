@@ -86,11 +86,11 @@ export const useModelPreferences = ({
         localStorage.setItem("gray_model_tier", "lite");
       }
       const storedModelId = localStorage.getItem("gray_selected_model_id");
-      if (storedModelId) {
+      if (storedModelId && !user) {
         setSelectedModelId(storedModelId);
       }
     }
-  }, [setModelTier, setSelectedModelId]);
+  }, [setModelTier, setSelectedModelId, user]);
 
   // Enforce plan-tier model access on the client to avoid stale localStorage
   // keeping a user on a higher-tier model after downgrade.
@@ -164,13 +164,16 @@ export const useModelPreferences = ({
     if (typeof window === "undefined") {
       return;
     }
+    if (user) {
+      return;
+    }
     const key = `${VISIBLE_MODEL_IDS_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
     if (visibleModelIds === null) {
       window.localStorage.removeItem(key);
       return;
     }
     window.localStorage.setItem(key, JSON.stringify(visibleModelIds));
-  }, [user?.id, visibleModelIds]);
+  }, [user, user?.id, visibleModelIds]);
 
   // Persist visible models preference to the backend (so it survives browser resets / multi-device).
   useEffect(() => {
@@ -210,12 +213,12 @@ export const useModelPreferences = ({
   }, [modelTier]);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    if (typeof window !== "undefined" && !user) {
       if (selectedModelId) {
         localStorage.setItem("gray_selected_model_id", selectedModelId);
       } else {
         localStorage.removeItem("gray_selected_model_id");
       }
     }
-  }, [selectedModelId]);
+  }, [selectedModelId, user]);
 };

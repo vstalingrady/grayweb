@@ -7,6 +7,7 @@ import { ChatProvider } from "@/components/gray/ChatProvider";
 import { ProactivityNotificationProvider } from "@/components/gray/ProactivityNotificationProvider";
 import { I18nProvider } from "@/contexts/I18nContext";
 import { NotificationPreferencesProvider } from "@/contexts/NotificationPreferencesContext";
+import { UserSettingsSync } from "@/components/UserSettingsSync";
 
 type GrayProvidersProps = {
   viewerEmail?: string | null;
@@ -123,6 +124,7 @@ export function GrayProviders({ viewerEmail, children }: GrayProvidersProps) {
   return (
     <I18nProvider>
       <UserProvider userEmail={effectiveEmail ?? undefined}>
+        <UserSettingsSync />
         <NotificationPreferencesProvider>
           <ChatProvider>
             <ProactivityNotificationProvider>{children}</ProactivityNotificationProvider>

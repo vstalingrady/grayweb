@@ -68,6 +68,20 @@ const resolveInitialTheme = (): ThemeMode => {
   return "system";
 };
 
+const resolveThemeFromProfile = (value: unknown): ThemeMode | null => {
+  if (value === "light" || value === "dark" || value === "system") {
+    return value;
+  }
+  return null;
+};
+
+const resolveResponseLanguageFromProfile = (value: unknown): string | null => {
+  if (value === "auto" || value === "en" || value === "id") {
+    return value;
+  }
+  return null;
+};
+
 export function SettingsModal({
   isOpen,
   onClose,
@@ -184,19 +198,33 @@ export function SettingsModal({
     }
   }, [apiKeysStorageKey]);
 
-  // Load response language preference
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("gray_response_language");
-      if (stored) setResponseLanguage(stored);
-    }
-  }, []);
-
   const handleResponseLanguageChange = (val: string) => {
+    const previous = responseLanguage;
     setResponseLanguage(val);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("gray_response_language", val);
+    if (!user) {
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("gray_response_language", val);
+        } catch {
+          // ignore storage failures
+        }
+      }
+      return;
     }
+    void updateUser({ preferred_response_language: val as "auto" | "en" | "id" }).catch((error) => {
+      console.error("Failed to persist response language preference:", error);
+      setResponseLanguage(previous);
+    });
+  };
+
+  const handleLocaleChange = (next: typeof activeLocale) => {
+    setLocale(next);
+    if (!user) {
+      return;
+    }
+    void updateUser({ ui_locale: next }).catch((error) => {
+      console.error("Failed to persist UI language preference:", error);
+    });
   };
 
   const handleAvatarFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -297,11 +325,34 @@ export function SettingsModal({
         setNotificationPermission("unsupported");
       }
 
+      const resolvedTheme = resolveThemeFromProfile(user?.theme_mode) ?? resolveInitialTheme();
+      setTheme(resolvedTheme);
+
+      const resolvedResponseLanguage =
+        resolveResponseLanguageFromProfile(user?.preferred_response_language) ??
+        (() => {
+          try {
+            return window.localStorage.getItem("gray_response_language");
+          } catch {
+            return null;
+          }
+        })() ??
+        "auto";
+      setResponseLanguage(resolvedResponseLanguage);
+
       try {
         const storedMemory = window.localStorage.getItem(conversationMemoryStorageKey);
-        setConversationMemoryEnabled(storedMemory !== "0");
+        const resolvedMemory =
+          typeof user?.conversation_memory_enabled === "boolean"
+            ? user.conversation_memory_enabled
+            : storedMemory !== "0";
+        setConversationMemoryEnabled(resolvedMemory);
       } catch {
-        setConversationMemoryEnabled(true);
+        setConversationMemoryEnabled(
+          typeof user?.conversation_memory_enabled === "boolean"
+            ? user.conversation_memory_enabled
+            : true
+        );
       }
 
       try {
@@ -312,7 +363,11 @@ export function SettingsModal({
             : storedModelImprovement === "1";
         setModelImprovementEnabled(resolvedValue);
       } catch {
-        setModelImprovementEnabled(typeof user?.improve_model_for_everyone === "boolean" ? user.improve_model_for_everyone : false);
+        setModelImprovementEnabled(
+          typeof user?.improve_model_for_everyone === "boolean"
+            ? user.improve_model_for_everyone
+            : false
+        );
       }
     }
 
@@ -332,8 +387,11 @@ export function SettingsModal({
     conversationMemoryStorageKey,
     modelImprovementStorageKey,
     isOpen,
-    user?.improve_model_for_everyone,
     onClose,
+    user?.conversation_memory_enabled,
+    user?.improve_model_for_everyone,
+    user?.preferred_response_language,
+    user?.theme_mode,
   ]);
 
   useEffect(() => {
@@ -402,7 +460,7 @@ export function SettingsModal({
     window.location.reload();
   };
 
-  const applyTheme = (nextTheme: ThemeMode) => {
+  const applyTheme = (nextTheme: ThemeMode, options?: { syncUser?: boolean }) => {
     const root = document.documentElement;
     const prefersLight = window.matchMedia("(prefers-color-scheme: light)").matches;
     const shouldBeLight = nextTheme === "light" || (nextTheme === "system" && prefersLight);
@@ -415,6 +473,12 @@ export function SettingsModal({
     }
 
     setTheme(nextTheme);
+    if (options?.syncUser === false || !user) {
+      return;
+    }
+    void updateUser({ theme_mode: nextTheme }).catch((error) => {
+      console.error("Failed to persist theme preference:", error);
+    });
   };
 
 
@@ -831,7 +895,7 @@ export function SettingsModal({
               theme={theme}
               onThemeChange={applyTheme}
               activeLocale={activeLocale}
-              onLocaleChange={setLocale}
+              onLocaleChange={handleLocaleChange}
               responseLanguage={responseLanguage}
               onResponseLanguageChange={handleResponseLanguageChange}
             />

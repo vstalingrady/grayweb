@@ -5,7 +5,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
-import type { User } from "@/lib/api";
+import type { User, UserUpdate } from "@/lib/api";
 
 type MapPayload = {
   maps_enabled: boolean;
@@ -27,7 +27,10 @@ type UseMapsSettingsResult = {
   toggleMapsEnabled: () => Promise<void>;
 };
 
-export const useMapsSettings = (user: User | null): UseMapsSettingsResult => {
+export const useMapsSettings = (
+  user: User | null,
+  updateUser?: (userData: UserUpdate) => Promise<void>
+): UseMapsSettingsResult => {
   const userScopeKey = useMemo(() => String(user?.id ?? "anon"), [user?.id]);
   const [mapsEnabledOverride, setMapsEnabledOverride] = useState<{
     userScopeKey: string;
@@ -46,20 +49,36 @@ export const useMapsSettings = (user: User | null): UseMapsSettingsResult => {
 
   const setMapsEnabled: Dispatch<SetStateAction<boolean>> = useCallback(
     (updater) => {
-      setMapsEnabledOverride((prev) => {
-        const isSameScope = prev.userScopeKey === userScopeKey;
-        const baseValue =
-          isSameScope && prev.value !== null
-            ? prev.value
-            : Boolean(user?.maps_enabled);
-        const nextValue =
-          typeof updater === "function"
-            ? (updater as (value: boolean) => boolean)(baseValue)
-            : updater;
-        return { userScopeKey, value: nextValue };
-      });
+      const baseValue = mapsEnabled;
+      const nextValue =
+        typeof updater === "function"
+          ? (updater as (value: boolean) => boolean)(baseValue)
+          : updater;
+
+      setMapsEnabledOverride({ userScopeKey, value: nextValue });
+
+      if (!user || typeof updateUser !== "function") {
+        return;
+      }
+
+      void updateUser({ maps_enabled: nextValue })
+        .then(() => {
+          setMapsEnabledOverride((prev) =>
+            prev.userScopeKey === userScopeKey && prev.value === nextValue
+              ? { userScopeKey, value: null }
+              : prev
+          );
+        })
+        .catch((error) => {
+          console.error("Failed to update maps preference:", error);
+          setMapsEnabledOverride((prev) =>
+            prev.userScopeKey === userScopeKey && prev.value === nextValue
+              ? { userScopeKey, value: baseValue }
+              : prev
+          );
+        });
     },
-    [user?.maps_enabled, userScopeKey]
+    [mapsEnabled, updateUser, user, userScopeKey]
   );
 
   const [mapsWidgetEnabled, setMapsWidgetEnabled] = useState(false);

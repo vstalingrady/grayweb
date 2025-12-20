@@ -51,6 +51,7 @@ export function DataControlsSection({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [isDeletingImport, setIsDeletingImport] = useState(false);
   const canImportChatGpt = tierLevel >= PLAN_TIER_LEVELS.voyager;
 
   const handleImportClick = () => {
@@ -111,26 +112,19 @@ export function DataControlsSection({
               const previous = modelImprovementEnabled;
               const next = !previous;
               setModelImprovementEnabled(next);
-              if (typeof window !== "undefined") {
-                try {
-                  window.localStorage.setItem(modelImprovementStorageKey, next ? "1" : "0");
-                } catch {
-                  // ignore storage failures
-                }
-              }
               if (typeof userId !== "number") {
+                if (typeof window !== "undefined") {
+                  try {
+                    window.localStorage.setItem(modelImprovementStorageKey, next ? "1" : "0");
+                  } catch {
+                    // ignore storage failures
+                  }
+                }
                 return;
               }
               void updateUser({ improve_model_for_everyone: next }).catch((error) => {
                 console.error("Failed to update model improvement preference:", error);
                 setModelImprovementEnabled(previous);
-                if (typeof window !== "undefined") {
-                  try {
-                    window.localStorage.setItem(modelImprovementStorageKey, previous ? "1" : "0");
-                  } catch {
-                    // ignore storage failures
-                  }
-                }
               });
             }}
           >
@@ -149,21 +143,31 @@ export function DataControlsSection({
           <SettingsToggle
             checked={conversationMemoryEnabled}
             onChange={() => {
-              const next = !conversationMemoryEnabled;
+              const previous = conversationMemoryEnabled;
+              const next = !previous;
               setConversationMemoryEnabled(next);
-              if (typeof window !== "undefined") {
-                try {
-                  window.localStorage.setItem(conversationMemoryStorageKey, next ? "1" : "0");
-                } catch {
-                  // ignore storage failures
+              if (typeof userId !== "number") {
+                if (typeof window !== "undefined") {
+                  try {
+                    window.localStorage.setItem(conversationMemoryStorageKey, next ? "1" : "0");
+                  } catch {
+                    // ignore storage failures
+                  }
                 }
+                return;
               }
+              void updateUser({ conversation_memory_enabled: next }).catch((error) => {
+                console.error("Failed to update conversation memory preference:", error);
+                setConversationMemoryEnabled(previous);
+              });
             }}
             label={t("Toggle Conversation memory")}
           />
         </div>
 
-        <div className={`${styles.settingsRow} ${styles.settingsRowFlexStart}`}>
+        <div
+          className={`${styles.settingsRow} ${styles.settingsRowFlexStart} ${!canImportChatGpt ? styles.settingsRowMuted : ""}`}
+        >
           <div className={styles.settingsLabelGroup}>
             <span className={styles.settingsLabel}>{t("Import ChatGPT memory")}</span>
             <span className={styles.settingsItemDescription}>
@@ -180,16 +184,41 @@ export function DataControlsSection({
           </div>
           <div className={styles.settingsFlexRow}>
             {contextCacheId ? (
-              <button
-                type="button"
-                className={styles.settingsAction}
-                onClick={() => {
-                  setContextCacheId(null);
-                  setImportStatus(t("ChatGPT memory disabled."));
-                }}
-              >
-                {t("Disable")}
-              </button>
+              <>
+                <button
+                  type="button"
+                  className={styles.settingsAction}
+                  onClick={() => {
+                    setContextCacheId(null);
+                    setImportStatus(t("ChatGPT memory disabled."));
+                  }}
+                >
+                  {t("Disable")}
+                </button>
+                <button
+                  type="button"
+                  className={styles.settingsAction}
+                  disabled={isDeletingImport}
+                  onClick={async () => {
+                    if (!confirm(t("Delete ChatGPT memory? This cannot be undone."))) {
+                      return;
+                    }
+                    setIsDeletingImport(true);
+                    try {
+                      await utilityService.deleteContextCache(contextCacheId);
+                      setContextCacheId(null);
+                      setImportStatus(t("ChatGPT memory deleted."));
+                    } catch (error) {
+                      console.error("Failed to delete ChatGPT memory:", error);
+                      setImportStatus(t("Failed to delete ChatGPT memory. Please try again."));
+                    } finally {
+                      setIsDeletingImport(false);
+                    }
+                  }}
+                >
+                  {isDeletingImport ? t("Deleting…") : t("Delete")}
+                </button>
+              </>
             ) : null}
             {canImportChatGpt ? (
               <button

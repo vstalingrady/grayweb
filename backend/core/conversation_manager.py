@@ -145,19 +145,22 @@ async def get_or_create_conversation(
     _ensure_user_data_record = gen_funcs["ensure_user_data"]
     
     valid_id = conversation_id if _is_valid_uuid(conversation_id) else None
+    candidate_id: Optional[str] = None
     if valid_id:
         cached_owner = CONVERSATION_OWNER_CACHE.get(valid_id)
         if str(cached_owner) == str(user_id):
             return valid_id
         try:
-            query = user_chat_threads.select().where(
-                (user_chat_threads.c.id == valid_id) & 
-                (user_chat_threads.c.user_identifier == user_id)
-            )
+            query = user_chat_threads.select().where(user_chat_threads.c.id == valid_id)
             row = await database.fetch_one(query)
             if row:
-                CONVERSATION_OWNER_CACHE.set(valid_id, user_id)
-                return valid_id
+                owner_id = row["user_identifier"]
+                if str(owner_id) == str(user_id):
+                    CONVERSATION_OWNER_CACHE.set(valid_id, user_id)
+                    return valid_id
+                valid_id = None
+            else:
+                candidate_id = valid_id
         except Exception as error:
             _handle_conversation_store_error("Error checking conversation", error)
             raise HTTPException(status_code=503, detail="Conversation storage is not available.")
@@ -168,7 +171,7 @@ async def get_or_create_conversation(
         if user_data_id is None:
             raise HTTPException(status_code=503, detail="User metadata storage is not available.")
         
-        new_id = str(uuid.uuid4())
+        new_id = candidate_id or str(uuid.uuid4())
         now = utcnow()
         insert_query = user_chat_threads.insert().values(
             id=new_id,

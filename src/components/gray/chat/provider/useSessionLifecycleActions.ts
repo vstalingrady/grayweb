@@ -26,7 +26,11 @@ type UseSessionLifecycleActionsOptions = {
 
 type UseSessionLifecycleActionsResult = {
   updateSession: (sessionId: string, partial: Partial<ChatSession>) => void;
-  applyAutoTitle: (sessionId: string, candidate?: string | null) => void;
+  applyAutoTitle: (
+    sessionId: string,
+    candidate?: string | null,
+    options?: { sync?: boolean }
+  ) => void;
   renameSession: (sessionId: string, title: string) => void;
   pinSession: (sessionId: string, pinned: boolean) => Promise<void>;
   deleteSession: (sessionId: string) => void;
@@ -70,7 +74,11 @@ export const useSessionLifecycleActions = ({
   );
 
   const applyAutoTitle = useCallback(
-    (sessionId: string, candidate?: string | null) => {
+    (
+      sessionId: string,
+      candidate?: string | null,
+      options?: { sync?: boolean }
+    ) => {
       const session = sessionsRef.current.find((entry) => entry.id === sessionId);
       if (!session || session.scope === "general" || session.titleMode === "manual") {
         return;
@@ -86,7 +94,9 @@ export const useSessionLifecycleActions = ({
         return;
       }
       updateSession(sessionId, { title: rawTitle, titleMode: "auto", isGeneratingTitle: false });
-      queueConversationTitleSync(sessionId, rawTitle);
+      if (options?.sync !== false) {
+        queueConversationTitleSync(sessionId, rawTitle);
+      }
     },
     [queueConversationTitleSync, sessionsRef, updateSession]
   );
@@ -286,4 +296,3 @@ export const useSessionLifecycleActions = ({
     ensureSession,
   };
 };
-

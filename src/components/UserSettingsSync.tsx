@@ -9,6 +9,7 @@ type ThemeMode = "light" | "dark" | "system";
 const THEME_STORAGE_KEY = "gray_theme";
 const RESPONSE_LANGUAGE_STORAGE_KEY = "gray_response_language";
 const CONVERSATION_MEMORY_STORAGE_PREFIX = "gray_conversation_memory";
+const MODEL_IMPROVEMENT_STORAGE_PREFIX = "gray_model_improvement";
 
 const isThemeMode = (value: unknown): value is ThemeMode =>
   value === "light" || value === "dark" || value === "system";
@@ -78,11 +79,17 @@ export function UserSettingsSync() {
       const memoryKey = `${CONVERSATION_MEMORY_STORAGE_PREFIX}:${user.id}`;
       writeLocalStorage(memoryKey, user.conversation_memory_enabled ? "1" : "0");
     }
+
+    if (typeof user.improve_model_for_everyone === "boolean") {
+      const improvementKey = `${MODEL_IMPROVEMENT_STORAGE_PREFIX}:${user.id}`;
+      writeLocalStorage(improvementKey, user.improve_model_for_everyone ? "1" : "0");
+    }
   }, [
     locale,
     setLocale,
     user?.conversation_memory_enabled,
     user?.id,
+    user?.improve_model_for_everyone,
     user?.preferred_response_language,
     user?.theme_mode,
     user?.ui_locale,
@@ -104,6 +111,7 @@ export function UserSettingsSync() {
       ui_locale?: "en" | "id" | null;
       preferred_response_language?: "auto" | "en" | "id" | null;
       conversation_memory_enabled?: boolean | null;
+      improve_model_for_everyone?: boolean | null;
     } = {};
 
     if (!isThemeMode(user.theme_mode)) {
@@ -135,6 +143,14 @@ export function UserSettingsSync() {
       }
     }
 
+    if (typeof user.improve_model_for_everyone !== "boolean") {
+      const improvementKey = `${MODEL_IMPROVEMENT_STORAGE_PREFIX}:${user.id}`;
+      const raw = readLocalStorage(improvementKey);
+      if (raw === "0" || raw === "1") {
+        pending.improve_model_for_everyone = raw === "1";
+      }
+    }
+
     if (Object.keys(pending).length === 0) {
       return;
     }
@@ -145,6 +161,7 @@ export function UserSettingsSync() {
     updateUser,
     user?.conversation_memory_enabled,
     user?.id,
+    user?.improve_model_for_everyone,
     user?.preferred_response_language,
     user?.theme_mode,
     user?.ui_locale,

@@ -131,10 +131,11 @@ async def chat_route(
         # Generate a title for the chat session (only if requested)
         session_title = _fallback_title_from_message(chat_request.message)
 
-        # Determine conversation_id
+        # Determine conversation_id (general conversations bypass thread creation).
         requested_conversation_id = chat_request.conversation_id
+        general_user_id = _general_conversation_user_id(requested_conversation_id)
         valid_requested_conversation_id = _is_valid_uuid(requested_conversation_id)
-        if requested_conversation_id and not valid_requested_conversation_id:
+        if general_user_id is not None:
             conversation_id = requested_conversation_id
         else:
             conversation_id = await get_or_create_conversation(
@@ -354,16 +355,20 @@ async def chat_stream_route(
         # 4. Start Conversation Setup (Async)
         t0_conv = time.perf_counter()
         requested_conversation_id = chat_request.conversation_id
-        
-        # FIX: If no conversation_id provided, default to General Chat format
-        if not requested_conversation_id:
-            requested_conversation_id = f"general:{chat_request.user_id}"
-        
-        conv_task = asyncio.create_task(get_or_create_conversation(
-            requested_conversation_id if _is_valid_uuid(requested_conversation_id) else None,
-            chat_request.user_id,
-            title=session_title,
-        ))
+        general_user_id = _general_conversation_user_id(requested_conversation_id)
+        valid_requested_conversation_id = _is_valid_uuid(requested_conversation_id)
+        conv_task: Optional[asyncio.Task] = None
+        conversation_id: Optional[str] = None
+        if general_user_id is not None:
+            conversation_id = requested_conversation_id
+        else:
+            conv_task = asyncio.create_task(
+                get_or_create_conversation(
+                    requested_conversation_id if valid_requested_conversation_id else None,
+                    chat_request.user_id,
+                    title=session_title,
+                )
+            )
 
         # 5. Resolve System Prompt & Tier (Concurrent with User Fetch)
         user_record = await user_task
@@ -387,7 +392,8 @@ async def chat_stream_route(
                 chat_request.timezone = tz_label
 
         # Await conversation ID
-        conversation_id = await conv_task
+        if conv_task:
+            conversation_id = await conv_task
         t1_conv = time.perf_counter()
         api_logger.info(f"Conversation setup time: {(t1_conv - t0_conv)*1000:.2f}ms", extra={"user_id": chat_request.user_id})
 

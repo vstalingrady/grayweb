@@ -147,7 +147,7 @@ export const useChatProviderValue = (workspaceContext?: string): ChatContextValu
     setMapsLongitude,
     mapPayload,
     toggleMapsEnabled,
-  } = useMapsSettings(user);
+  } = useMapsSettings(user, updateUser);
 
   const { remindersEnabled, toggleRemindersEnabled } = useRemindersEnabled(user?.id);
 
