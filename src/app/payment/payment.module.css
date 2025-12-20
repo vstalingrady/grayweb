@@ -191,7 +191,7 @@
     margin-bottom: 0.7rem;
 }
 
-.methodGroupTabs button:first-child {
+.methodGroupTabs[data-has-global="true"] button:first-child {
     grid-column: 1 / -1;
 }
 

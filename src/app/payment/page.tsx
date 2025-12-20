@@ -207,15 +207,22 @@ function PaymentContent() {
     }, []);
 
 
+    const showGlobalMethods = isIndonesia === false;
+
     useEffect(() => {
         if (selectedMethodId === "dodo_card") {
-            setMethodGroup("global");
+            if (showGlobalMethods) {
+                setMethodGroup("global");
+            } else {
+                setMethodGroup("wallet");
+                setSelectedMethodId(defaultWalletId);
+            }
         } else if (["gopay", "qris"].includes(selectedMethodId)) {
             setMethodGroup("wallet");
         } else {
             setMethodGroup("va");
         }
-    }, [selectedMethodId]);
+    }, [selectedMethodId, showGlobalMethods, defaultWalletId]);
 
 
     useEffect(() => {
@@ -250,10 +257,7 @@ function PaymentContent() {
     const selectedMethodConfig = PAYMENT_METHODS.find(m => m.id === selectedMethodId);
     const poweredByLabel = selectedMethodConfig?.provider === "dodo" ? "Dodo Payments" : "Midtrans";
     const localPaymentsDisabled = isIndonesia === false;
-    const selectionHint =
-        methodGroup === "global"
-            ? "You'll complete payment on Dodo's secure checkout."
-            : "You can change this later in checkout.";
+    const selectionHint = methodGroup === "global" ? "" : "You can change this later in checkout.";
 
     const getPaymentErrorDetail = async (res: Response) => {
         const contentType = res.headers.get("content-type") || "";
@@ -683,20 +687,27 @@ function PaymentContent() {
 
                             <div className={styles.activePaymentMethodsCard}>
                                 <h3 className={styles.activePaymentMethodsTitle}>Active payment methods</h3>
-                                <div className={styles.methodGroupTabs} role="tablist" aria-label="Payment method type">
-                                    <button
-                                        type="button"
-                                        role="tab"
-                                        data-active={methodGroup === "global"}
-                                        aria-selected={methodGroup === "global"}
-                                        onClick={() => {
-                                            setMethodGroup("global");
-                                            setSelectedMethodId(defaultGlobalId);
-                                            setBankSearch("");
-                                        }}
-                                    >
-                                        Card & Global (Dodo)
-                                    </button>
+                                <div
+                                    className={styles.methodGroupTabs}
+                                    role="tablist"
+                                    aria-label="Payment method type"
+                                    data-has-global={showGlobalMethods ? "true" : "false"}
+                                >
+                                    {showGlobalMethods && (
+                                        <button
+                                            type="button"
+                                            role="tab"
+                                            data-active={methodGroup === "global"}
+                                            aria-selected={methodGroup === "global"}
+                                            onClick={() => {
+                                                setMethodGroup("global");
+                                                setSelectedMethodId(defaultGlobalId);
+                                                setBankSearch("");
+                                            }}
+                                        >
+                                            Card & Global (Dodo)
+                                        </button>
+                                    )}
                                     <button
                                         type="button"
                                         role="tab"
@@ -746,32 +757,36 @@ function PaymentContent() {
                                     </div>
                                 )}
 
-                                <div className={styles.methodGrid} role="tabpanel">
-                                    {filteredActiveMethods.map((method) => (
-                                        <button
-                                            key={method.id}
-                                            type="button"
-                                            className={styles.methodOption}
-                                            data-selected={selectedMethodId === method.id}
-                                            onClick={() => setSelectedMethodId(method.id)}
-                                        >
-                                            {method.logo ? (
-                                                // eslint-disable-next-line @next/next/no-img-element
-                                                <img
-                                                    src={method.logo}
-                                                    alt=""
-                                                    className={styles.methodLogo}
-                                                    loading="lazy"
-                                                />
-                                            ) : null}
-                                            <span className={styles.methodLabel}>{method.label}</span>
-                                        </button>
-                                    ))}
-                                    {filteredActiveMethods.length === 0 && (
-                                        <div className={styles.methodEmpty}>No banks match that search.</div>
-                                    )}
-                                </div>
-                                <div className={styles.paymentSelectHint}>{selectionHint}</div>
+                                {methodGroup !== "global" && (
+                                    <div className={styles.methodGrid} role="tabpanel">
+                                        {filteredActiveMethods.map((method) => (
+                                            <button
+                                                key={method.id}
+                                                type="button"
+                                                className={styles.methodOption}
+                                                data-selected={selectedMethodId === method.id}
+                                                onClick={() => setSelectedMethodId(method.id)}
+                                            >
+                                                {method.logo ? (
+                                                    // eslint-disable-next-line @next/next/no-img-element
+                                                    <img
+                                                        src={method.logo}
+                                                        alt=""
+                                                        className={styles.methodLogo}
+                                                        loading="lazy"
+                                                    />
+                                                ) : null}
+                                                <span className={styles.methodLabel}>{method.label}</span>
+                                            </button>
+                                        ))}
+                                        {filteredActiveMethods.length === 0 && (
+                                            <div className={styles.methodEmpty}>No banks match that search.</div>
+                                        )}
+                                    </div>
+                                )}
+                                {selectionHint ? (
+                                    <div className={styles.paymentSelectHint}>{selectionHint}</div>
+                                ) : null}
                             </div>
 
                             <div className={styles.payButtonContainer}>
