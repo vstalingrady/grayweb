@@ -207,30 +207,36 @@ function PaymentContent() {
     }, []);
 
 
-    const showGlobalMethods = isIndonesia === false;
+    const showGlobalMethods = true;
+    const globalMethodsDisabled = true;
 
     useEffect(() => {
         if (selectedMethodId === "dodo_card") {
-            if (showGlobalMethods) {
-                setMethodGroup("global");
-            } else {
+            if (globalMethodsDisabled) {
                 setMethodGroup("wallet");
                 setSelectedMethodId(defaultWalletId);
+                return;
             }
+            setMethodGroup("global");
         } else if (["gopay", "qris"].includes(selectedMethodId)) {
             setMethodGroup("wallet");
         } else {
             setMethodGroup("va");
         }
-    }, [selectedMethodId, showGlobalMethods, defaultWalletId]);
+    }, [selectedMethodId, globalMethodsDisabled, defaultWalletId]);
 
 
     useEffect(() => {
         if (isIndonesia === false) {
-            setMethodGroup("global");
-            setSelectedMethodId(defaultGlobalId);
+            if (globalMethodsDisabled) {
+                setMethodGroup("wallet");
+                setSelectedMethodId(defaultWalletId);
+            } else {
+                setMethodGroup("global");
+                setSelectedMethodId(defaultGlobalId);
+            }
         }
-    }, [isIndonesia, defaultGlobalId]);
+    }, [isIndonesia, globalMethodsDisabled, defaultGlobalId, defaultWalletId]);
 
 
     // Derived Data
@@ -698,7 +704,9 @@ function PaymentContent() {
                                             type="button"
                                             role="tab"
                                             data-active={methodGroup === "global"}
+                                            data-muted={globalMethodsDisabled ? "true" : "false"}
                                             aria-selected={methodGroup === "global"}
+                                            disabled={globalMethodsDisabled}
                                             onClick={() => {
                                                 setMethodGroup("global");
                                                 setSelectedMethodId(defaultGlobalId);

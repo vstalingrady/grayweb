@@ -222,7 +222,12 @@
 
 .methodGroupTabs button:disabled {
     cursor: not-allowed;
-    opacity: 0.45;
+    opacity: 0.55;
+}
+
+.methodGroupTabs button[data-muted="true"] {
+    border-color: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.4);
 }
 
 .methodSearch {
