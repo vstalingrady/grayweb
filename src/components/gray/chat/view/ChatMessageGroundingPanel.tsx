@@ -154,7 +154,7 @@ export function ChatMessageGroundingPanel({
                   <a
                     key={source.id}
                     href={source.href}
-                    target="_blank"
+                    target="_self"
                     rel="noreferrer"
                     className={styles.chatGroundingSourceCard}
                   >
@@ -180,7 +180,7 @@ export function ChatMessageGroundingPanel({
             return (
               <div key={`${messageId}-maps-source-${index}`} className={styles.chatGroundingSource}>
                 {href ? (
-                  <a href={href} target="_blank" rel="noreferrer" className={styles.chatGroundingLink}>
+                  <a href={href} target="_self" rel="noreferrer" className={styles.chatGroundingLink}>
                     <span translate="no">Google Maps</span> · {label}
                   </a>
                 ) : (

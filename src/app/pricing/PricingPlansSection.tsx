@@ -74,7 +74,7 @@ export const PATHFINDER_FEATURES: FeatureItem[] = [
     },
     {
         id: "more_messages",
-        label: "18x more messages",
+        label: "6x more messages",
         icon: MessageSquare,
     },
     {
@@ -95,7 +95,7 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
     },
     {
         id: "more_messages",
-        label: "54x more messages",
+        label: "18x more messages",
         icon: MessageSquare,
     },
     {
@@ -132,7 +132,7 @@ export const PIONEER_FEATURES: FeatureItem[] = [
     },
     {
         id: "more_messages",
-        label: "108x more messages",
+        label: "36x more messages",
         icon: MessageSquare,
         subtext: "Built for heavy daily use",
     },

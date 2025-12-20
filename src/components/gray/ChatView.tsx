@@ -518,6 +518,11 @@ export function GrayChatView({
           </div>
         );
       },
+      a: ({ children, href, ...rest }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+        <a href={href} {...rest} target="_self">
+          {children}
+        </a>
+      ),
     }),
     []
   );
@@ -569,8 +574,8 @@ export function GrayChatView({
             {introContent}
             <div ref={scrollAnchorRef} aria-hidden="true" />
           </div>
-      ) : (
-        <ChatMessagesList
+        ) : (
+          <ChatMessagesList
             messages={messages}
             activeStreamingMessageId={activeStreamingMessageId}
             regeneratingMessageId={regeneratingMessageId}
