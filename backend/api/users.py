@@ -387,8 +387,8 @@ async def update_user(
     query = users.update().where(users.c.id == user_id).values(**update_data)
     await db.execute(query)
 
-    # Invalidate cache
-    USER_CACHE.invalidate(f"user_{user_id}")
+    # Invalidate cache locally and globally
+    await USER_CACHE.invalidate_global(f"user_{user_id}")
     if current_user_record:
         user_email = current_user_record["email"] if "email" in current_user_record else None
         if isinstance(user_email, str) and user_email.strip():

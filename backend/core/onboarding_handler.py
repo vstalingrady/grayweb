@@ -168,8 +168,8 @@ async def complete_onboarding(
 
     await db.execute(users.update().where(users.c.id == user_id).values(**updates))
 
-    # Invalidate cache so the new has_seen_general_chat status is picked up immediately
-    USER_CACHE.invalidate(f"user_{user_id}")
+    # Invalidate cache so the new onboarding status is picked up immediately by all workers
+    await USER_CACHE.invalidate_global(f"user_{user_id}")
     
     # Also invalidate auth cache
     try:

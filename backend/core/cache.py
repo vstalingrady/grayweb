@@ -20,9 +20,13 @@ class AsyncTTLCache:
     async def get(self, key: str, fetch_func: Callable) -> Any:
         """Get value from cache or fetch it using the provided async function."""
         now = time.time()
+        
+        # Check global invalidation version if Redis is available
+        redis_version = await self._get_redis_version(key)
+        
         if key in self.cache:
-            value, timestamp = self.cache[key]
-            if now - timestamp < self.ttl_seconds:
+            value, timestamp, local_version = self.cache[key]
+            if now - timestamp < self.ttl_seconds and local_version == redis_version:
                 return value
 
         value = await fetch_func()
@@ -30,8 +34,35 @@ class AsyncTTLCache:
         if len(self.cache) >= self.max_size:
             oldest = min(self.cache.items(), key=lambda item: item[1][1])[0]
             self.cache.pop(oldest, None)
-        self.cache[key] = (value, now)
+        self.cache[key] = (value, now, redis_version)
         return value
+
+    async def _get_redis_version(self, key: str) -> str:
+        """Return a version string from Redis to track global invalidation."""
+        from backend.redis_client import get_redis_client
+        redis = get_redis_client()
+        if not redis.available:
+            return "0"
+        
+        try:
+            # We use a simple counter/timestamp in Redis as a version for this key
+            version = await redis.get(f"cache_version:{key}")
+            return version or "0"
+        except Exception:
+            return "0"
+
+    async def invalidate_global(self, key: str) -> None:
+        """Invalidate the cache locally and globally via Redis."""
+        self.invalidate(key)
+        
+        from backend.redis_client import get_redis_client
+        redis = get_redis_client()
+        if redis.available:
+            try:
+                # Increment version in Redis to force all workers to refresh
+                await redis.set(f"cache_version:{key}", str(time.time()), ttl=3600)
+            except Exception:
+                pass
 
     def clear(self) -> None:
         """Clear all entries from the cache."""
@@ -83,6 +114,9 @@ class TTLCache:
 
 # Pre-configured cache instances
 USER_CACHE = AsyncTTLCache(ttl_seconds=300)
+# Shorten default user cache TTL to 10 seconds as a safety fallback
+# when Redis happens to be unavailable.
+USER_CACHE.ttl_seconds = 10
 CONVERSATION_OWNER_CACHE = TTLCache(ttl_seconds=900, max_size=512)
 CONVERSATION_HISTORY_CACHE = TTLCache(ttl_seconds=900, max_size=256)
 
