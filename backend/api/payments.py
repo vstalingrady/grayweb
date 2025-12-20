@@ -585,6 +585,10 @@ async def handle_dodo_webhook(request: Request, background_tasks: BackgroundTask
 
     audit = get_audit_logger()
     raw_body = await request.body()
+    try:
+        raw_payload = raw_body.decode("utf-8")
+    except UnicodeDecodeError:
+        raw_payload = raw_body.decode("utf-8", errors="replace")
     headers = {
         "webhook-id": request.headers.get("webhook-id", ""),
         "webhook-signature": request.headers.get("webhook-signature", ""),
@@ -593,7 +597,7 @@ async def handle_dodo_webhook(request: Request, background_tasks: BackgroundTask
 
     try:
         client = get_dodo_client()
-        payload = client.webhooks.unwrap(raw_body, headers=headers)
+        payload = client.webhooks.unwrap(raw_payload, headers=headers)
     except Exception as exc:
         app_logger.warning("Invalid Dodo webhook signature", extra={"error": str(exc)})
         raise HTTPException(status_code=401, detail="Invalid signature")
