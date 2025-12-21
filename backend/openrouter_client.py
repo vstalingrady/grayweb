@@ -574,21 +574,17 @@ class OpenRouterService:
 
         # Build provider preferences with routing logic
         provider_preferences = {
-            "sort": "price",
+            "sort": "throughput",
             "allow_fallbacks": True,
         }
         
         # Apply provider routing overrides
         resolved_lower = resolved_model.lower()
-        if "deepseek" in resolved_lower:
+        if "kimi" in resolved_lower or "moonshot" in resolved_lower:
+            # Route Kimi through Groq for maximum speed
+            provider_preferences["order"] = ["Groq"]
+        elif "deepseek" in resolved_lower:
             provider_preferences["order"] = ["DeepSeek"]
-        elif "moonshot" in resolved_lower or "kimi" in resolved_lower:
-            provider_preferences["order"] = ["Novita", "DeepInfra"]
-        
-        # For premium models, prioritize throughput/latency over price to reduce TTFT
-        is_premium = any(p in resolved_lower for p in ["sonnet", "opus", "gpt-4", "gpt-5", "grok-4"])
-        if is_premium:
-            provider_preferences["sort"] = "throughput"
 
         if provider_routing:
             provider_preferences.update(provider_routing)

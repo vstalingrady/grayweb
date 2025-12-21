@@ -24,10 +24,6 @@ from pywebpush import webpush, WebPushException
 logger = logging.getLogger(__name__)
 _INVALID_TIMEZONES_LOGGED: set[str] = set()
 
-# Avoid duplicate sends if a user gets evaluated twice in a short window.
-# Keep the guard short so scheduled touchpoints aren't skipped after manual triggers.
-MIN_SEND_INTERVAL_SECONDS = 300  # 5 minutes
-
 PROACTIVITY_PUSH_TABLE = "proactivity_push_subscriptions"
 
 @dataclass
@@ -209,19 +205,6 @@ class ProactivityEngine:
         cadence = (payload.get("cadence") or "").strip().lower()
         if cadence in {"manual", "paused"} and not force:
             return None
-        last_sent_at = await self._last_notification_timestamp(user_id)
-        if last_sent_at:
-            last_sent_utc = (
-                last_sent_at if last_sent_at.tzinfo else last_sent_at.replace(tzinfo=dt_timezone.utc)
-            ).astimezone(dt_timezone.utc)
-            if datetime.now(dt_timezone.utc) - last_sent_utc < timedelta(seconds=MIN_SEND_INTERVAL_SECONDS):
-                logger.debug("Skipping duplicate proactivity send", extra={
-                    "event_type": "proactivity_send_skipped",
-                    "user_id": user_id,
-                    "source": source,
-                })
-                if not force:
-                    return None
 
         current_window = self._current_window_bounds(payload, timezone)
         should_send = force or current_window is not None
@@ -229,16 +212,45 @@ class ProactivityEngine:
         if not should_send:
             return None
 
-        if not force and last_sent_at and current_window:
-            if self._already_sent_in_window(last_sent_at, current_window):
-                logger.debug("Skipping proactivity send because window already satisfied", extra={
-                    "event_type": "proactivity_window_satisfied",
+        # Generate delivery_key FIRST - this is our deduplication key
+        delivery_key = None
+        if current_window:
+            window_start, _ = current_window
+            window_start_utc = window_start.astimezone(dt_timezone.utc)
+            delivery_key = f"check_in:{user_id}:{window_start_utc.strftime('%Y%m%dT%H%M')}"
+        elif force:
+            now_utc = datetime.now(dt_timezone.utc)
+            delivery_key = f"check_in:{user_id}:{now_utc.strftime('%Y%m%dT%H%M')}"
+
+        # DATABASE-BASED DEDUPLICATION: Check if this delivery_key was already sent
+        # This is the single source of truth - works across all processes (APScheduler, arq, SSE)
+        if delivery_key and not force:
+            existing = await self.db.fetch_one(
+                """
+                SELECT id FROM proactive_notifications 
+                WHERE user_id = :user_id 
+                  AND type = 'check_in'
+                  AND json_extract(metadata, '$.delivery_key') = :delivery_key
+                LIMIT 1
+                """,
+                {"user_id": user_id, "delivery_key": delivery_key},
+            )
+            if existing:
+                logger.debug("Skipping duplicate proactivity send (delivery_key exists)", extra={
+                    "event_type": "proactivity_dedup_skipped",
                     "user_id": user_id,
                     "source": source,
+                    "delivery_key": delivery_key,
                 })
                 return None
 
-        return await self._send_proactivity_message(user_id, payload, timezone, source=source)
+        return await self._send_proactivity_message(
+            user_id,
+            payload,
+            timezone,
+            source=source,
+            delivery_key=delivery_key,
+        )
 
     def _current_window_bounds(
         self,
@@ -422,6 +434,7 @@ class ProactivityEngine:
         timezone: str,
         *,
         source: str,
+        delivery_key: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         message = await self._generate_checkin_message(user_id, settings, timezone)
         if not message:
@@ -437,11 +450,21 @@ class ProactivityEngine:
 
         cadence = (settings.get("cadence") or "Check-in").title()
         notification_title = f"🔔 {cadence} Check-in"
-        notification_sent = await self._send_browser_notification(user_id, notification_title, message)
+        notification_sent = await self._send_browser_notification(
+            user_id,
+            notification_title,
+            message,
+            delivery_key=delivery_key,
+        )
         if not notification_sent:
             logger.warning(f"Proactivity notification creation failed for user {user_id}")
 
-        await self._send_web_push_notification(user_id, notification_title, message)
+        await self._send_web_push_notification(
+            user_id,
+            notification_title,
+            message,
+            delivery_key=delivery_key,
+        )
 
         dispatch = {
             "user_id": user_id,
@@ -451,6 +474,8 @@ class ProactivityEngine:
             "timezone": timezone,
             "sent_at": datetime.now(dt_timezone.utc).isoformat(),
         }
+        if delivery_key:
+            dispatch["delivery_key"] = delivery_key
 
         logger.info("Proactivity message delivered", extra={
             "event_type": "proactivity_message_sent",
@@ -515,14 +540,22 @@ class ProactivityEngine:
         await self._save_general_message(user_id, "model", message)
 
         title = "🔔 Reminder"
+        delivery_key = f"reminder:{reminder_id}"
+
         await self._send_browser_notification(
             user_id,
             title,
             message,
             notification_type="reminder",
             due_at=remind_at_utc,
+            delivery_key=delivery_key,
         )
-        await self._send_web_push_notification(user_id, title, message)
+        await self._send_web_push_notification(
+            user_id,
+            title,
+            message,
+            delivery_key=delivery_key,
+        )
 
         now = datetime.now(dt_timezone.utc)
         try:
@@ -542,7 +575,7 @@ class ProactivityEngine:
             "message": message,
             "source": source,
             "due_at": remind_at_utc.isoformat(),
-            "delivery_key": f"reminder:{reminder_id}",
+            "delivery_key": delivery_key,
             "sent_at": now.isoformat(),
         }
 
@@ -564,7 +597,14 @@ class ProactivityEngine:
             logger.error(f"Error generating check-in message for user {user_id}: {exc}", exc_info=True)
             return None
 
-    async def _send_web_push_notification(self, user_id: int, title: str, message: str) -> None:
+    async def _send_web_push_notification(
+        self,
+        user_id: int,
+        title: str,
+        message: str,
+        *,
+        delivery_key: Optional[str] = None,
+    ) -> None:
         vapid_public = os.getenv("VAPID_PUBLIC_KEY")
         vapid_private = os.getenv("VAPID_PRIVATE_KEY")
         enable_flag = os.getenv("ENABLE_WEB_PUSH")
@@ -604,10 +644,13 @@ class ProactivityEngine:
             )
             return
 
-        payload = json.dumps({
+        payload_data: Dict[str, Any] = {
             "title": title,
             "message": message,
-        })
+        }
+        if delivery_key:
+            payload_data["tag"] = f"gray-proactivity-{delivery_key}"
+        payload = json.dumps(payload_data)
         for row in rows:
             subscription_info = {
                 "endpoint": row["endpoint"],
@@ -1030,6 +1073,7 @@ class ProactivityEngine:
         *,
         notification_type: str = "check_in",
         due_at: Optional[datetime] = None,
+        delivery_key: Optional[str] = None,
     ) -> bool:
         now = datetime.now(dt_timezone.utc)
         try:
@@ -1039,9 +1083,10 @@ class ProactivityEngine:
             await self._ensure_connection()
             query = """
                 INSERT INTO proactive_notifications
-                (user_id, type, title, message, due_at, sent_at, created_at)
-                VALUES (:user_id, :type, :title, :message, :due_at, :sent_at, :created_at)
+                (user_id, type, title, message, metadata, due_at, sent_at, created_at)
+                VALUES (:user_id, :type, :title, :message, :metadata, :due_at, :sent_at, :created_at)
             """
+            metadata = {"delivery_key": delivery_key} if delivery_key else None
             await self.db.execute(
                 query,
                 {
@@ -1049,6 +1094,7 @@ class ProactivityEngine:
                     "type": notification_type,
                     "title": title,
                     "message": message,
+                    "metadata": metadata,
                     "due_at": due_at or now,
                     "sent_at": now,
                     "created_at": now,
