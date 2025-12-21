@@ -465,7 +465,7 @@ async def update_proactivity_settings(
         )
         await db.execute(insert_query)
 
-    await proactivity_scheduler.reload_user_settings(user_id)
+    await proactivity_scheduler.refresh_jobs(user_id)
 
     cadence = updated_payload.get("cadence")
     return ProactivitySettings(
