@@ -466,30 +466,26 @@ async def chat_stream_route(
             and (_row_get(last_history_entry, "text") or "") == effective_message
         )
         if should_persist_user:
-            # Make persistence non-blocking to improve time-to-first-token
-            async def _persist_user_msg():
-                try:
-                    general_user_id = _general_conversation_user_id(conversation_id)
-                    if general_user_id is not None:
-                         await _insert_general_conversation_message(
-                            user_id=general_user_id,
-                            role="user",
-                            text=effective_message,
-                        )
-                    else:
-                        await save_conversation_message(
-                            conversation_id,
-                            user_message_payload,
-                            user_id=chat_request.user_id,
-                        )
-                except Exception as e:
-                    api_logger.error(f"Failed to persist user message: {e}", extra={"user_id": chat_request.user_id})
+            # IMPORTANT: Await user message persistence to avoid race conditions.
+            # If this runs asynchronously, the next request might load history before
+            # this message is persisted, causing the AI to not see conversation context.
+            try:
+                general_user_id = _general_conversation_user_id(conversation_id)
+                if general_user_id is not None:
+                    await _insert_general_conversation_message(
+                        user_id=general_user_id,
+                        role="user",
+                        text=effective_message,
+                    )
+                else:
+                    await save_conversation_message(
+                        conversation_id,
+                        user_message_payload,
+                        user_id=chat_request.user_id,
+                    )
+            except Exception as e:
+                api_logger.error(f"Failed to persist user message: {e}", extra={"user_id": chat_request.user_id})
 
-            create_logged_task(
-                _persist_user_msg(),
-                logger=api_logger,
-                name="chat.persist_user_message",
-            )
 
         # Enforce tier restrictions for streaming
         normalized_tier = normalize_plan_tier(

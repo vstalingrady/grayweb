@@ -67,6 +67,12 @@ export const PIONEER_GROUPS: ModelGroup[] = [
     iconPath: "/logos/whitekimi.svg",
     models: [{ id: "moonshotai/kimi-k2-thinking", label: "Kimi K2", cost: "$$", tierRequired: "pathfinder" }],
   },
+  {
+    id: "xiaomi",
+    label: "Xiaomi",
+    iconPath: "/logos/xiaomi.svg",
+    models: [{ id: "xiaomi/mimo-v2-flash:free", label: "MiMo V2 Flash", cost: "$", tierRequired: "pathfinder" }],
+  },
 ];
 
 export const ALL_PIONEER_MODEL_IDS: string[] = PIONEER_GROUPS.flatMap((group) => group.models.map((model) => model.id));

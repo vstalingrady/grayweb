@@ -565,6 +565,10 @@
   .settingsContent {
     padding: 24px;
   }
+
+  .settingsContainer[data-mobile-view="root"] .settingsContent {
+    display: none;
+  }
 }
 
 /* Toggle Switch */
@@ -925,6 +929,18 @@
 .mobileProfileHandle {
   font-size: 0.85rem;
   color: rgba(245, 245, 245, 0.6);
+}
+
+.mobileProfileEmail {
+  display: block;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
+  font-size: 0.86rem;
+  color: rgba(245, 245, 245, 0.65);
+  text-align: center;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mobileGroupLabel {

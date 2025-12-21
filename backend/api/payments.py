@@ -602,8 +602,23 @@ async def handle_dodo_webhook(request: Request, background_tasks: BackgroundTask
         app_logger.warning("Invalid Dodo webhook signature", extra={"error": str(exc)})
         raise HTTPException(status_code=401, detail="Invalid signature")
 
+    if not isinstance(payload, dict):
+        if hasattr(payload, "to_dict"):
+            payload = payload.to_dict()
+        elif hasattr(payload, "model_dump"):
+            payload = payload.model_dump(by_alias=True)
+        elif hasattr(payload, "dict"):
+            payload = payload.dict()
+
     event_type = _event_value(payload, "type") or _event_value(payload, "event_type")
     data = _event_value(payload, "data") or {}
+    if not isinstance(data, dict):
+        if hasattr(data, "to_dict"):
+            data = data.to_dict()
+        elif hasattr(data, "model_dump"):
+            data = data.model_dump(by_alias=True)
+        elif hasattr(data, "dict"):
+            data = data.dict()
 
     metadata = _extract_metadata(data)
     order_id = (
@@ -671,9 +686,11 @@ async def handle_dodo_webhook(request: Request, background_tasks: BackgroundTask
         and subscription_status in subscription_failure_states
     )
 
-    if event_type in ("payment.succeeded", "payment.success") or is_subscription_success:
+    is_payment_success = event_type in ("payment.succeeded", "payment.success")
+    if is_payment_success or is_subscription_success:
         new_status = "success"
-        should_notify_success = previous_status != "success"
+        # Only notify on payment success events to avoid duplicate Discord messages.
+        should_notify_success = is_payment_success and previous_status != "success"
 
         if order_id:
             await database.execute(

@@ -15,6 +15,7 @@ type UseChatViewScrollOptions = {
   sessionKey: string | null;
   messages: ChatMessage[];
   activeStreamingMessageId: string | null;
+  isResponding?: boolean;
   suppressAutoScroll?: boolean;
 };
 
@@ -31,6 +32,7 @@ export const useChatViewScroll = ({
   sessionKey,
   messages,
   activeStreamingMessageId,
+  isResponding = false,
   suppressAutoScroll = false,
 }: UseChatViewScrollOptions): UseChatViewScrollResult => {
   const chatViewportRef = useRef<HTMLDivElement>(null);
@@ -62,17 +64,33 @@ export const useChatViewScroll = ({
     prevSessionKeyRef.current = sessionKey;
   }, [hasHydrated, messages.length, sessionKey, suppressAutoScroll]);
 
-  const streamingContentSignature = useMemo(() => {
-    if (!activeStreamingMessageId) {
+  const streamingTargetId = useMemo(() => {
+    if (activeStreamingMessageId) {
+      return activeStreamingMessageId;
+    }
+    if (!isResponding) {
       return null;
     }
-    const target = messages.find((message) => message.id === activeStreamingMessageId);
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message.role === "assistant") {
+        return message.id;
+      }
+    }
+    return null;
+  }, [activeStreamingMessageId, isResponding, messages]);
+
+  const streamingContentSignature = useMemo(() => {
+    if (!streamingTargetId) {
+      return null;
+    }
+    const target = messages.find((message) => message.id === streamingTargetId);
     if (!target) {
       return null;
     }
     const contentLength = target.content?.length ?? 0;
-    return `${activeStreamingMessageId}:${contentLength}`;
-  }, [activeStreamingMessageId, messages]);
+    return `${streamingTargetId}:${contentLength}`;
+  }, [messages, streamingTargetId]);
 
   const handleScroll = useCallback(() => {
     const viewport = chatViewportRef.current;
@@ -89,7 +107,7 @@ export const useChatViewScroll = ({
   const prevStreamingIdRef = useRef<string | null>(null);
   useEffect(() => {
     // Detect when streaming just started
-    if (activeStreamingMessageId && !prevStreamingIdRef.current) {
+    if (streamingTargetId && !prevStreamingIdRef.current) {
       // Reset to bottom state so streaming auto-scrolls
       isAtBottomRef.current = true;
       // Immediately scroll to bottom
@@ -97,8 +115,8 @@ export const useChatViewScroll = ({
         scrollAnchorRef.current.scrollIntoView({ behavior: "instant" });
       }
     }
-    prevStreamingIdRef.current = activeStreamingMessageId;
-  }, [activeStreamingMessageId]);
+    prevStreamingIdRef.current = streamingTargetId;
+  }, [streamingTargetId]);
 
   useEffect(() => {
     if (!streamingContentSignature || !scrollAnchorRef.current || !isAtBottomRef.current) {

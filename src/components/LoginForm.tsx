@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { FaDiscord, FaGoogle } from "react-icons/fa6";
+import { Turnstile, TurnstileInstance } from "@marsidev/react-turnstile";
 import ShaderBackground from "@/components/shaders/ShaderBackground";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { getSupabaseAuthStorageKeys } from "@/lib/supabaseStorage";
@@ -94,6 +95,10 @@ export default function LoginForm({
   const [authMode, setAuthMode] = useState<AuthMode>(initialMode);
   const [showPassword, setShowPassword] = useState(false);
   const [pendingEmailConfirmation, setPendingEmailConfirmation] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [shouldUseCaptcha, setShouldUseCaptcha] = useState(false);
+  const turnstileRef = useRef<TurnstileInstance>();
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() ?? "";
 
   const searchParams = useSearchParams();
 
@@ -102,13 +107,58 @@ export default function LoginForm({
   }, [initialMode]);
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (!turnstileSiteKey) {
+      setShouldUseCaptcha(false);
+      setCaptchaToken(null);
+      return;
+    }
+
+    const { hostname } = window.location;
+    const isLocal = isLocalHostname(hostname);
+    setShouldUseCaptcha(!isLocal);
+
+    if (isLocal) {
+      setCaptchaToken(null);
+    }
+  }, [turnstileSiteKey]);
+
+  useEffect(() => {
     setMessage({ type: "idle" });
     if (authMode === "signup") {
       setPassword("");
     }
     setShowPassword(false);
     setPendingEmailConfirmation(false);
+    setCaptchaToken(null);
+    if (turnstileRef.current) {
+      turnstileRef.current.reset();
+    }
   }, [authMode]);
+
+  const resetCaptcha = () => {
+    setCaptchaToken(null);
+    if (turnstileRef.current) {
+      turnstileRef.current.reset();
+    }
+  };
+
+  const ensureCaptcha = () => {
+    if (!shouldUseCaptcha) {
+      return true;
+    }
+    if (captchaToken) {
+      return true;
+    }
+    setMessage({
+      type: "error",
+      text: t("Please complete the verification step before continuing."),
+    });
+    return false;
+  };
 
   const handleCaptchaErrorReset = (error: unknown) => {
     const raw =
@@ -181,6 +231,10 @@ export default function LoginForm({
       return;
     }
 
+    if (!ensureCaptcha()) {
+      return;
+    }
+
     if (typeof window !== "undefined") {
       try {
         window.sessionStorage.removeItem("auth-callback-processed");
@@ -195,6 +249,7 @@ export default function LoginForm({
     try {
       const callbackUrl = ensureAbsoluteUrl(buildCallbackDestination(redirectTo));
       console.log("[AUTH DEBUG] Generated OAuth redirectTo:", callbackUrl);
+      const captchaTokenValue = shouldUseCaptcha ? captchaToken : null;
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
@@ -204,6 +259,7 @@ export default function LoginForm({
             provider === "discord"
               ? "identify email guilds"
               : "email profile openid",
+          ...(captchaTokenValue ? { captchaToken: captchaTokenValue } : {}),
         },
       });
       if (error) {
@@ -221,7 +277,11 @@ export default function LoginForm({
     } catch (error) {
       const text = handleCaptchaErrorReset(error) || "OAuth request failed.";
       setMessage({ type: "error", text });
+    } finally {
       setLoading(false);
+      if (shouldUseCaptcha) {
+        resetCaptcha();
+      }
     }
   };
 
@@ -306,14 +366,20 @@ export default function LoginForm({
       return;
     }
 
+    if (!ensureCaptcha()) {
+      return;
+    }
+
     setLoading(true);
     try {
+      const captchaTokenValue = shouldUseCaptcha ? captchaToken : null;
       const isSignIn = authMode === "signin";
       if (isSignIn) {
         const authStart = performance.now();
         const { data, error } = await supabase.auth.signInWithPassword({
           email: trimmedEmail,
           password,
+          ...(captchaTokenValue ? { options: { captchaToken: captchaTokenValue } } : {}),
         });
 
         console.log(
@@ -358,6 +424,7 @@ export default function LoginForm({
         password,
         options: {
           emailRedirectTo: ensureAbsoluteUrl(buildCallbackDestination(redirectTo)),
+          ...(captchaTokenValue ? { captchaToken: captchaTokenValue } : {}),
         },
       });
       console.log(`[AUTH PERF] Sign up request took ${(performance.now() - authStart).toFixed(2)}ms`);
@@ -405,6 +472,9 @@ export default function LoginForm({
       setMessage({ type: "error", text });
     } finally {
       setLoading(false);
+      if (shouldUseCaptcha) {
+        resetCaptcha();
+      }
     }
   };
 
@@ -430,6 +500,10 @@ export default function LoginForm({
       return;
     }
 
+    if (!ensureCaptcha()) {
+      return;
+    }
+
     setLoading(true);
     setMessage({ type: "idle" });
 
@@ -439,6 +513,7 @@ export default function LoginForm({
         email: trimmedEmail,
         options: {
           emailRedirectTo: ensureAbsoluteUrl(buildCallbackDestination(redirectTo)),
+          ...(shouldUseCaptcha && captchaToken ? { captchaToken } : {}),
         },
       });
 
@@ -463,6 +538,9 @@ export default function LoginForm({
       setPendingEmailConfirmation(false);
     } finally {
       setLoading(false);
+      if (shouldUseCaptcha) {
+        resetCaptcha();
+      }
     }
   };
 
@@ -488,6 +566,10 @@ export default function LoginForm({
       return;
     }
 
+    if (!ensureCaptcha()) {
+      return;
+    }
+
     setLoading(true);
     setMessage({ type: "idle" });
 
@@ -495,7 +577,10 @@ export default function LoginForm({
       const redirectTo = ensureAbsoluteUrl("/reset-password");
       const { error } = await supabase.auth.resetPasswordForEmail(
         trimmedEmail,
-        { redirectTo }
+        {
+          redirectTo,
+          ...(shouldUseCaptcha && captchaToken ? { captchaToken } : {}),
+        }
       );
 
       if (error) {
@@ -514,6 +599,9 @@ export default function LoginForm({
       setMessage({ type: "error", text });
     } finally {
       setLoading(false);
+      if (shouldUseCaptcha) {
+        resetCaptcha();
+      }
     }
   };
   const isSignIn = authMode === "signin";
@@ -696,6 +784,21 @@ export default function LoginForm({
                   {t("Forgot password?")}
                 </button>
               </div>
+
+              {shouldUseCaptcha && turnstileSiteKey ? (
+                <div className={styles.authCaptcha}>
+                  <Turnstile
+                    ref={turnstileRef}
+                    siteKey={turnstileSiteKey}
+                    options={{
+                      theme: isLightTheme ? "light" : "dark",
+                    }}
+                    onSuccess={(token) => setCaptchaToken(token)}
+                    onExpire={() => setCaptchaToken(null)}
+                    onError={() => setCaptchaToken(null)}
+                  />
+                </div>
+              ) : null}
 
               {renderedMessage}
 

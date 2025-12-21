@@ -691,35 +691,42 @@ class OpenRouterService:
                                 if tool_calls:
                                     yield {"tool_calls": tool_calls}
                                 
-                                # Handle reasoning content - both plaintext and encrypted
-                                # Track if we yielded reasoning to avoid double-yielding content
+                                # Handle reasoning content - both plaintext and encrypted.
+                                # Only surface reasoning when explicitly enabled to avoid leaking tags.
+                                allow_reasoning = reasoning_mode
                                 reasoning = delta.get("reasoning") or delta.get("reasoning_content")
                                 yielded_reasoning = False
-                                if reasoning:
+                                if allow_reasoning and reasoning:
                                     yield {"type": "reasoning", "content": reasoning}
                                     yielded_reasoning = True
-                                
+
                                 # Handle reasoning_details (may contain encrypted xAI reasoning)
                                 reasoning_pieces = []
                                 details = delta.get("reasoning_details") or []
                                 if isinstance(details, list):
                                     for item in details:
-                                        if isinstance(item, dict):
-                                            # Check for encrypted reasoning (xAI/Grok)
-                                            if item.get("type") == "reasoning.encrypted":
-                                                # Emit a thinking indicator for encrypted reasoning
-                                                yield {"type": "reasoning_active", "encrypted": True}
-                                            # Check for plaintext reasoning
-                                            txt = item.get("text")
-                                            if txt:
-                                                reasoning_pieces.append(txt)
-                                
-                                # Only yield content if we didn't already yield reasoning from this delta
+                                        if not isinstance(item, dict):
+                                            continue
+                                        if allow_reasoning and item.get("type") == "reasoning.encrypted":
+                                            # Emit a thinking indicator for encrypted reasoning
+                                            yield {"type": "reasoning_active", "encrypted": True}
+                                        txt = item.get("text")
+                                        if txt:
+                                            reasoning_pieces.append(txt)
+
+                                # If reasoning is disabled and content is empty, fall back to reasoning text.
+                                if not allow_reasoning and not content:
+                                    if reasoning:
+                                        content = reasoning
+                                    elif reasoning_pieces:
+                                        content = "".join(reasoning_pieces)
+
+                                # Only yield content if we didn't already yield reasoning from this delta.
                                 # This prevents DeepSeek v3.2 from doubling text when it sends both
-                                # reasoning_content AND content in the same chunk
-                                if content and not yielded_reasoning:
+                                # reasoning_content AND content in the same chunk.
+                                if content and (not yielded_reasoning or not allow_reasoning):
                                     yield content
-                                elif reasoning_pieces and not yielded_reasoning:
+                                elif allow_reasoning and reasoning_pieces and not yielded_reasoning:
                                     # Plaintext reasoning_details support
                                     yield {"type": "reasoning", "content": "".join(reasoning_pieces)}
 

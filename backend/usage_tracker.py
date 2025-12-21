@@ -55,6 +55,9 @@ FALLBACK_PRICING: Dict[str, Dict[str, float]] = {
     
     # Moonshot Kimi (Pioneer)
     "moonshotai/kimi-k2-thinking": {"prompt": 4.5e-07, "completion": 2.35e-06, "cached": 4.5e-08},
+    
+    # Xiaomi MiMo (Pioneer)
+    "xiaomi/mimo-v2-flash:free": {"prompt": 1.0e-07, "completion": 3.0e-07, "cached": 1.0e-08},
 }
 
 # Default pricing for unknown models

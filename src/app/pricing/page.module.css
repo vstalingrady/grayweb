@@ -284,10 +284,6 @@
   flex: 1;
 }
 
-.cardBodyCentered {
-  justify-content: center;
-}
-
 .cardFooter {
   margin-top: 1rem;
 }

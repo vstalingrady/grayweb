@@ -140,6 +140,17 @@ def test_naive_datetime_handling():
     assert normalize_plan_tier("voyager", subscription_expires_at=naive_past) == "scout"
 
 
+def test_string_datetime_handling():
+    """ISO timestamp strings are parsed for expiration checks."""
+    future = datetime(2099, 1, 1, 0, 0, 0, tzinfo=timezone.utc).isoformat()
+    past = datetime(2000, 1, 1, 0, 0, 0, tzinfo=timezone.utc).isoformat()
+    naive_future = datetime(2099, 1, 1, 0, 0, 0).isoformat()
+
+    assert normalize_plan_tier("voyager", subscription_expires_at=future) == "voyager"
+    assert normalize_plan_tier("voyager", subscription_expires_at=past) == "scout"
+    assert normalize_plan_tier("voyager", subscription_expires_at=naive_future) == "voyager"
+
+
 def test_role_fallback_with_expiration():
     """Role fallback works with expiration checking."""
     future_date = datetime.now(timezone.utc) + timedelta(days=10)

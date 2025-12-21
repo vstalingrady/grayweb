@@ -195,6 +195,7 @@ export function GrayChatView({
     sessionKey: session?.id ?? null,
     messages,
     activeStreamingMessageId,
+    isResponding: Boolean(session?.isResponding),
     suppressAutoScroll: isLoadingHistory,
   });
 

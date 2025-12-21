@@ -631,10 +631,11 @@ export function SettingsModal({
                   <Pencil size={14} />
                 </button>
               </div>
-              <h3 className={styles.mobileProfileName}>{user?.full_name || "Gray User"}</h3>
-              {user?.personalization_nickname ? (
-                <span className={styles.mobileProfileHandle}>@{user.personalization_nickname}</span>
-              ) : null}
+              {user?.email ? (
+                <span className={styles.mobileProfileEmail}>{user.email}</span>
+              ) : (
+                <h3 className={styles.mobileProfileName}>{user?.full_name || "Gray User"}</h3>
+              )}
               <button
                 className={railNavStyles.railNav}
                 style={{ width: "auto", height: 32, padding: "0 16px", borderRadius: 16, background: "#1c1c1e", fontSize: "0.9rem", color: "#fff" }}
@@ -647,7 +648,6 @@ export function SettingsModal({
               </button>
             </div>
 
-            <div className={styles.mobileGroupLabel}>{t("My Gray")}</div>
             <div className={styles.mobileGroup}>
               <button
                 className={styles.mobileGroupItem}
@@ -673,7 +673,6 @@ export function SettingsModal({
               </button>
             </div>
 
-            <div className={styles.mobileGroupLabel}>{t("Account")}</div>
             <div className={styles.mobileGroup}>
               <div className={styles.mobileGroupItem}>
                 <Database className={styles.mobileGroupItemIcon} size={20} />

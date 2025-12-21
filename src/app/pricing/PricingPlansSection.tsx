@@ -70,7 +70,7 @@ export const PATHFINDER_FEATURES: FeatureItem[] = [
         id: "choose_model",
         label: "Choose your model",
         icon: Shuffle,
-        subtext: "Claude Haiku 4.5, Gemini 3 Flash, DeepSeek V3.2, Kimi K2",
+        subtext: "Claude Haiku 4.5, Gemini 3 Flash, DeepSeek V3.2, Kimi K2, MiMo V2 Flash",
     },
     {
         id: "more_messages",
@@ -95,7 +95,7 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
     },
     {
         id: "more_messages",
-        label: "18x more messages",
+        label: "15x more messages",
         icon: MessageSquare,
     },
     {
@@ -222,10 +222,7 @@ export function PricingPlansSection() {
     const currency = isIndonesia === false ? "usd" : "idr";
     const currentPlan = normalizePlanTier(user);
     const currentPlanLevel = PLAN_TIER_LEVELS[currentPlan] ?? 0;
-    const hidePaidCtas = currentPlan !== "scout";
-    const paidCardBodyClassName = hidePaidCtas
-        ? `${styles.cardBody} ${styles.cardBodyCentered}`
-        : styles.cardBody;
+    const paidCardBodyClassName = styles.cardBody;
     const getPlanAction = (tier: keyof typeof PLAN_TIER_LEVELS) => {
         const tierLevel = PLAN_TIER_LEVELS[tier] ?? 0;
         if (currentPlan === tier) {
@@ -372,18 +369,16 @@ export function PricingPlansSection() {
                             ))}
                         </ul>
                     </div>
-                    {!hidePaidCtas ? (
-                        <div className={styles.cardFooter}>
-                            <button
-                                type="button"
-                                className={`${styles.planButton} ${pathfinderAction.status === "upgrade" ? styles.planButtonOutline : ""}`}
-                                onClick={() => handleUpgrade("pathfinder")}
-                                disabled={pathfinderAction.disabled}
-                            >
-                                {pathfinderAction.label}
-                            </button>
-                        </div>
-                    ) : null}
+                    <div className={styles.cardFooter}>
+                        <button
+                            type="button"
+                            className={`${styles.planButton} ${pathfinderAction.status === "upgrade" ? styles.planButtonOutline : ""}`}
+                            onClick={() => handleUpgrade("pathfinder")}
+                            disabled={pathfinderAction.disabled}
+                        >
+                            {pathfinderAction.label}
+                        </button>
+                    </div>
                 </article>
 
                 <article className={styles.planCard} data-variant="highlighted">
@@ -420,18 +415,16 @@ export function PricingPlansSection() {
                             ))}
                         </ul>
                     </div>
-                    {!hidePaidCtas ? (
-                        <div className={styles.cardFooter}>
-                            <button
-                                type="button"
-                                className={`${styles.planButton} ${voyagerAction.status === "upgrade" ? styles.planButtonOutline : ""}`}
-                                onClick={() => handleUpgrade("voyager")}
-                                disabled={voyagerAction.disabled}
-                            >
-                                {voyagerAction.label}
-                            </button>
-                        </div>
-                    ) : null}
+                    <div className={styles.cardFooter}>
+                        <button
+                            type="button"
+                            className={`${styles.planButton} ${voyagerAction.status === "upgrade" ? styles.planButtonOutline : ""}`}
+                            onClick={() => handleUpgrade("voyager")}
+                            disabled={voyagerAction.disabled}
+                        >
+                            {voyagerAction.label}
+                        </button>
+                    </div>
                 </article>
 
                 <article className={styles.planCard} data-variant="primary">
@@ -464,18 +457,16 @@ export function PricingPlansSection() {
                             ))}
                         </ul>
                     </div>
-                    {!hidePaidCtas ? (
-                        <div className={styles.cardFooter}>
-                            <button
-                                type="button"
-                                className={`${styles.planButton} ${pioneerAction.status === "upgrade" ? styles.planButtonPrimary : ""}`}
-                                onClick={() => handleUpgrade("pioneer")}
-                                disabled={pioneerAction.disabled}
-                            >
-                                {pioneerAction.label}
-                            </button>
-                        </div>
-                    ) : null}
+                    <div className={styles.cardFooter}>
+                        <button
+                            type="button"
+                            className={`${styles.planButton} ${pioneerAction.status === "upgrade" ? styles.planButtonPrimary : ""}`}
+                            onClick={() => handleUpgrade("pioneer")}
+                            disabled={pioneerAction.disabled}
+                        >
+                            {pioneerAction.label}
+                        </button>
+                    </div>
                 </article>
             </section>
             <p className={styles.disclaimer}>

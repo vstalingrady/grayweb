@@ -54,6 +54,24 @@ def normalize_plan_tier(
     
     # Check if subscription has expired (only for paid tiers)
     if normalized in ("pathfinder", "voyager", "pioneer") and subscription_expires_at is not None:
+        if isinstance(subscription_expires_at, str):
+            trimmed = subscription_expires_at.strip()
+            subscription_expires_at = None
+            if trimmed:
+                normalized_value = trimmed.replace("Z", "+00:00")
+                try:
+                    subscription_expires_at = datetime.fromisoformat(normalized_value)
+                except ValueError:
+                    for fmt in ("%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
+                        try:
+                            subscription_expires_at = datetime.strptime(normalized_value, fmt)
+                            break
+                        except ValueError:
+                            continue
+        if subscription_expires_at is None:
+            return normalized
+        if not isinstance(subscription_expires_at, datetime):
+            return normalized
         now = datetime.now(timezone.utc)
         # Make subscription_expires_at timezone-aware if it isn't already
         if subscription_expires_at.tzinfo is None:

@@ -176,7 +176,7 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
   docker compose -p gray-dev -f docker-compose.yml -f docker-compose.dev.yml up -d --build --remove-orphans
   ```
 
-- Captcha (Turnstile) is automatically disabled on localhost and port `3000`.
+- Captcha (Turnstile) is automatically disabled on localhost.
 
 ## Auth experience
 

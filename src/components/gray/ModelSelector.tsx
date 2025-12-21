@@ -7,7 +7,7 @@ import { useChatStore } from "@/components/gray/ChatProvider";
 import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
 import styles from "./ModelSelector.module.css";
-import { PIONEER_GROUPS } from "./modelCatalog";
+import { ALL_PIONEER_MODEL_IDS, PIONEER_GROUPS } from "./modelCatalog";
 import { normalizePlanTier, PLAN_TIER_LEVELS } from "@/components/gray/utils/helperFunctions";
 
 type ModelOption = {
@@ -58,8 +58,10 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
     })).filter((group) => group.models.length > 0);
   }, [selectedModelId, visibleModelIds]);
 
+  const hasPioneerSelection = selectedModelId ? ALL_PIONEER_MODEL_IDS.includes(selectedModelId) : false;
+
   const activeOption = useMemo(() => {
-    if (modelTier === "pioneer" && selectedModelId) {
+    if (modelTier === "pioneer" && selectedModelId && hasPioneerSelection) {
       // Find the group so we can use its icon
       const group = PIONEER_GROUPS.find(g => g.models.some(m => m.id === selectedModelId));
       const pioneerModel = group?.models.find((m) => m.id === selectedModelId);
@@ -82,7 +84,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
     // Since "pro" is removed, this will naturally fallback to OPTIONS[0] (Lite) if state is arguably "pro"
     // (though ChatProvider should catch that).
     return OPTIONS.find(o => o.id === modelTier) ?? OPTIONS[0];
-  }, [modelTier, selectedModelId, t]);
+  }, [hasPioneerSelection, modelTier, selectedModelId, t]);
 
   const handleSelect = useCallback(
     (index: number) => {
@@ -335,7 +337,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
               {OPTIONS.map((option, index) => {
                 const requiredLevel = PLAN_TIER_LEVELS[option.tierRequired];
                 const isLocked = currentLevel < requiredLevel;
-                const isActive = activeOption.id === option.id && !selectedModelId; // Only active if no specific model selected
+                const isActive = activeOption.id === option.id && !hasPioneerSelection; // Only active if no specific model selected
                 const Icon = option.icon;
 
                 return (
@@ -361,7 +363,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
               })}
 
               {/* Display Active Model if selected */}
-              {selectedModelId && (
+              {hasPioneerSelection && (
                 <button className={`${styles.menuItem} ${styles.menuItemActive}`} disabled>
                   {/* We use activeOption.icon here which I will update in useMemo to be the group icon */}
                   <div className={styles.itemIconWrapper}>

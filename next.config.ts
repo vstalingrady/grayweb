@@ -170,7 +170,7 @@ const nextConfig: NextConfig = {
           {
             key: 'Permissions-Policy',
             value:
-              'camera=(), microphone=(), geolocation=(), payment=(self "https://api.midtrans.com" "https://api.sandbox.midtrans.com" "https://gray.alignment.id"), usb=(), magnetometer=(), gyroscope=(), accelerometer=()',
+              'camera=(), microphone=(), geolocation=(), payment=(self "https://api.midtrans.com" "https://api.sandbox.midtrans.com" "https://gray.alignment.id"), encrypted-media=(self "https://www.youtube.com" "https://www.youtube-nocookie.com"), usb=(), magnetometer=(), gyroscope=(), accelerometer=()',
           },
         ],
       },

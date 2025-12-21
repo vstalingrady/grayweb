@@ -26,6 +26,28 @@ const ProactivityNotificationContext = createContext<ProactivityNotificationCont
   deliveredKeys: new Set<string>(),
 });
 
+const MAX_RECENT_PROACTIVITY_EVENTS = 50;
+
+type ProactivityPayload = {
+  session_id?: string;
+  message?: string;
+  delivery_key?: string;
+  sent_at?: string;
+};
+
+const buildProactivityEventKey = (payload: ProactivityPayload): string | null => {
+  if (payload.delivery_key) {
+    return `delivery:${payload.delivery_key}`;
+  }
+  if (payload.sent_at) {
+    return `sent:${payload.sent_at}`;
+  }
+  if (payload.message) {
+    return `message:${payload.message}`;
+  }
+  return null;
+};
+
 const urlBase64ToUint8Array = (base64String: string): Uint8Array => {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -70,6 +92,8 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
   const pushSetupRef = useRef<Promise<void> | null>(null);
   const sessionsRef = useRef(sessions);
   const isHydratingHistoryRef = useRef(false);
+  const recentEventKeysRef = useRef<string[]>([]);
+  const recentEventSetRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     sessionsRef.current = sessions;
@@ -112,8 +136,25 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
     }
   }, [loadConversationMessages, userId]);
 
+  const rememberEventKey = useCallback((key: string): boolean => {
+    const seen = recentEventSetRef.current;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    const order = recentEventKeysRef.current;
+    order.push(key);
+    while (order.length > MAX_RECENT_PROACTIVITY_EVENTS) {
+      const removed = order.shift();
+      if (removed) {
+        seen.delete(removed);
+      }
+    }
+    return true;
+  }, []);
+
   const handleProactivityMessage = useCallback(
-    (payload: { session_id?: string; message?: string; delivery_key?: string }) => {
+    (payload: ProactivityPayload) => {
       // 1. Append to chat if we have a session ID
       const targetSessionId = payload.session_id || GENERAL_CHAT_SESSION_ID;
       if (targetSessionId && payload.message) {
@@ -174,8 +215,12 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
 
       const handleEvent = (event: MessageEvent) => {
         try {
-          const data = JSON.parse(event.data);
+          const data = JSON.parse(event.data) as ProactivityPayload;
           // console.log("[Proactivity] Message received:", data);
+          const eventKey = buildProactivityEventKey(data);
+          if (eventKey && !rememberEventKey(eventKey)) {
+            return;
+          }
           handleProactivityMessage(data);
 
           // Track delivery to avoid re-showing
@@ -210,7 +255,7 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
     return () => {
       cleanup.then(fn => fn?.());
     };
-  }, [getAuthToken, userId, handleProactivityMessage]);
+  }, [getAuthToken, userId, handleProactivityMessage, rememberEventKey]);
 
   useEffect(() => {
     if (!userId || typeof window === "undefined") return;
