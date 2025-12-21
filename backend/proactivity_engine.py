@@ -1087,6 +1087,9 @@ class ProactivityEngine:
                 VALUES (:user_id, :type, :title, :message, :metadata, :due_at, :sent_at, :created_at)
             """
             metadata = {"delivery_key": delivery_key} if delivery_key else None
+            if metadata is not None and isinstance(metadata, dict):
+                metadata = json.dumps(metadata)
+
             await self.db.execute(
                 query,
                 {
