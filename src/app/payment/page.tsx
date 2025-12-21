@@ -206,36 +206,33 @@ function PaymentContent() {
             .catch(() => setIsIndonesia(true)); // Default to Indonesia on error
     }, []);
 
-    const showGlobalMethods = true;
-    const globalMethodsDisabled = false;
+    // Show Dodo for international, Midtrans for Indonesia
+    const showGlobalMethods = isIndonesia === false;
+    const showLocalMethods = isIndonesia === true;
 
     useEffect(() => {
         if (selectedMethodId === "dodo_card") {
-            if (globalMethodsDisabled) {
-                setMethodGroup("wallet");
-                setSelectedMethodId(defaultWalletId);
-                return;
-            }
             setMethodGroup("global");
         } else if (["gopay", "qris"].includes(selectedMethodId)) {
             setMethodGroup("wallet");
         } else {
             setMethodGroup("va");
         }
-    }, [selectedMethodId, globalMethodsDisabled, defaultWalletId]);
+    }, [selectedMethodId]);
 
 
+    // Set the right default method based on geo
     useEffect(() => {
         if (isIndonesia === false) {
-            if (globalMethodsDisabled) {
-                setMethodGroup("wallet");
-                setSelectedMethodId(defaultWalletId);
-            } else {
-                setMethodGroup("global");
-                setSelectedMethodId(defaultGlobalId);
-            }
+            // International: use Dodo
+            setMethodGroup("global");
+            setSelectedMethodId(defaultGlobalId);
+        } else if (isIndonesia === true) {
+            // Indonesia: use Midtrans wallet by default
+            setMethodGroup("wallet");
+            setSelectedMethodId(defaultWalletId);
         }
-    }, [isIndonesia, globalMethodsDisabled, defaultGlobalId, defaultWalletId]);
+    }, [isIndonesia, defaultGlobalId, defaultWalletId]);
 
 
     // Derived Data
@@ -261,7 +258,6 @@ function PaymentContent() {
     const features = planParam === "pioneer" ? PIONEER_FEATURES : planParam === "voyager" ? VOYAGER_FEATURES : PATHFINDER_FEATURES;
     const selectedMethodConfig = PAYMENT_METHODS.find(m => m.id === selectedMethodId);
     const poweredByLabel = selectedMethodConfig?.provider === "dodo" ? "Dodo Payments" : "Midtrans";
-    const localPaymentsDisabled = isIndonesia === false;
     const selectionHint = methodGroup === "global" ? "" : "You can change this later in checkout.";
 
     const getPaymentErrorDetail = async (res: Response) => {
@@ -703,9 +699,7 @@ function PaymentContent() {
                                             type="button"
                                             role="tab"
                                             data-active={methodGroup === "global"}
-                                            data-muted={globalMethodsDisabled ? "true" : "false"}
                                             aria-selected={methodGroup === "global"}
-                                            disabled={globalMethodsDisabled}
                                             onClick={() => {
                                                 setMethodGroup("global");
                                                 setSelectedMethodId(defaultGlobalId);
@@ -715,42 +709,39 @@ function PaymentContent() {
                                             Card & Global (Dodo)
                                         </button>
                                     )}
-                                    <button
-                                        type="button"
-                                        role="tab"
-                                        data-active={methodGroup === "wallet"}
-                                        aria-selected={methodGroup === "wallet"}
-                                        disabled={localPaymentsDisabled}
-                                        onClick={() => {
-                                            setMethodGroup("wallet");
-                                            setSelectedMethodId(defaultWalletId);
-                                            setBankSearch("");
-                                        }}
-                                    >
-                                        E‑Wallet & QRIS
-                                    </button>
-                                    <button
-                                        type="button"
-                                        role="tab"
-                                        data-active={methodGroup === "va"}
-                                        aria-selected={methodGroup === "va"}
-                                        disabled={localPaymentsDisabled}
-                                        onClick={() => {
-                                            setMethodGroup("va");
-                                            setSelectedMethodId(defaultVaId);
-                                        }}
-                                    >
-                                        Virtual Accounts
-                                    </button>
+                                    {showLocalMethods && (
+                                        <>
+                                            <button
+                                                type="button"
+                                                role="tab"
+                                                data-active={methodGroup === "wallet"}
+                                                aria-selected={methodGroup === "wallet"}
+                                                onClick={() => {
+                                                    setMethodGroup("wallet");
+                                                    setSelectedMethodId(defaultWalletId);
+                                                    setBankSearch("");
+                                                }}
+                                            >
+                                                E‑Wallet & QRIS
+                                            </button>
+                                            <button
+                                                type="button"
+                                                role="tab"
+                                                data-active={methodGroup === "va"}
+                                                aria-selected={methodGroup === "va"}
+                                                onClick={() => {
+                                                    setMethodGroup("va");
+                                                    setSelectedMethodId(defaultVaId);
+                                                }}
+                                            >
+                                                Virtual Accounts
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
 
-                                {localPaymentsDisabled && (
-                                    <div className={styles.paymentSelectHint}>
-                                        Local methods are available only for Indonesia-based checkout.
-                                    </div>
-                                )}
 
-                                {methodGroup === "va" && !localPaymentsDisabled && (
+                                {methodGroup === "va" && showLocalMethods && (
                                     <div className={styles.methodSearch}>
                                         <Search size={16} aria-hidden="true" />
                                         <input
