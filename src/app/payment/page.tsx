@@ -206,9 +206,8 @@ function PaymentContent() {
             .catch(() => setIsIndonesia(true)); // Default to Indonesia on error
     }, []);
 
-
     const showGlobalMethods = true;
-    const globalMethodsDisabled = true;
+    const globalMethodsDisabled = false;
 
     useEffect(() => {
         if (selectedMethodId === "dodo_card") {
