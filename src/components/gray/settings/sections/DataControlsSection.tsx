@@ -4,6 +4,7 @@ import { useRef, useState, type ChangeEvent, type Dispatch, type SetStateAction 
 import { ChevronRight } from "lucide-react";
 import styles from "../SettingsStyles.module.css";
 import { chatService, utilityService, type UserUpdate } from "@/lib/api";
+import { SettingsLogo } from "@/components/gray/settings/components/SettingsLogo";
 import { SettingsToggle } from "@/components/gray/settings/components/SettingsToggle";
 import { PLAN_TIER_LEVELS } from "@/components/gray/utils/helperFunctions";
 
@@ -169,7 +170,10 @@ export function DataControlsSection({
           className={`${styles.settingsRow} ${styles.settingsRowFlexStart} ${!canImportChatGpt ? styles.settingsRowMuted : ""}`}
         >
           <div className={styles.settingsLabelGroup}>
-            <span className={styles.settingsLabel}>{t("Import ChatGPT memory")}</span>
+            <div className={styles.settingsLabelRow}>
+              <SettingsLogo src="/logos/chatgpt.svg" alt="ChatGPT" />
+              <span className={styles.settingsLabel}>{t("Import ChatGPT memory")}</span>
+            </div>
             <span className={styles.settingsItemDescription}>
               {t("Upload your ChatGPT export (.zip) to add memories to Gray.")}
             </span>
