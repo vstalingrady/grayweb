@@ -81,6 +81,7 @@ export function GrayChatView({
     reasoningMode,
     modelTier,
     selectedModelId,
+    remindersEnabled,
   } = useChatStore();
   // Use sessions state directly for reactivity.
   const session = useMemo(() => {
@@ -309,6 +310,7 @@ export function GrayChatView({
     modelTier,
     selectedModelId,
     reasoningMode,
+    remindersEnabled,
     buildAttachmentPayloads,
     resolveChatUser,
     appendMessage,

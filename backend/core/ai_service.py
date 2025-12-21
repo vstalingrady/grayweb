@@ -155,10 +155,8 @@ async def stream_ai_response(
     intent_window_text = deps["build_intent_window_text"](message, conversation_history)
 
     request_structured_reminders = deps["_should_request_structured_reminders"](intent_window_text)
-    needs_structured_tools = reminders_enabled or request_structured_reminders or deps["_needs_structured_tools"](intent_window_text)
-
-    if needs_structured_tools:
-        request_structured_reminders = True
+    intent_requires_tools = request_structured_reminders or deps["_needs_structured_tools"](intent_window_text)
+    needs_structured_tools = intent_requires_tools and reminders_enabled
 
     if not search_enabled and deps["_should_enable_search"](message):
         api_logger.info(f"Auto-enabling search for message: {message[:50]}...")

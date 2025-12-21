@@ -26,6 +26,7 @@ type UseStreamAssistantReplyOptions = {
   modelTier: "lite" | "pro" | "pioneer";
   selectedModelId: string | null;
   reasoningMode: boolean;
+  remindersEnabled: boolean;
   buildAttachmentPayloads: () => Array<{ id: number }>;
   resolveChatUser: () => Promise<User | null>;
   appendMessage: (sessionId: string, role: "assistant" | "user", content: string) => ChatMessage | null;
@@ -57,6 +58,7 @@ export const useStreamAssistantReply = ({
   modelTier,
   selectedModelId,
   reasoningMode,
+  remindersEnabled,
   buildAttachmentPayloads,
   resolveChatUser,
   appendMessage,
@@ -226,6 +228,7 @@ export const useStreamAssistantReply = ({
             web_search_enabled: shouldUseWebSearch,
             model: selectedModelId ?? modelTier,
             reasoning_mode: reasoningMode,
+            reminders_enabled: remindersEnabled,
             ...(modelTier === "lite" ? { maps_enabled: false, maps_widget: false } : mapPayload),
           },
           { signal: abortController.signal }
@@ -382,6 +385,7 @@ export const useStreamAssistantReply = ({
             should_generate_title: requestTitleHint,
             model: selectedModelId ?? modelTier,
             reasoning_mode: reasoningMode,
+            reminders_enabled: remindersEnabled,
             ...(modelTier === "lite" ? { maps_enabled: false, maps_widget: false } : mapPayload),
           });
           streamedConversationId =
@@ -476,6 +480,7 @@ export const useStreamAssistantReply = ({
       mapPayload,
       modelTier,
       reasoningMode,
+      remindersEnabled,
       resolveChatUser,
       selectedModelId,
       session,

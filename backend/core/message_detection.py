@@ -18,13 +18,31 @@ REMINDER_KEYWORDS = frozenset({
     "goal", "plan", "habit", "schedule", "deadline", "due", "task", "todo",
 })
 
-TOOL_TRIGGER_KEYWORDS = REMINDER_KEYWORDS | frozenset({
+EVENT_KEYWORDS = frozenset({
     "meeting", "appointment", "call", "checkin", "check-in", "check in",
     "sync", "standup", "doctor", "dentist", "gym", "workout", "project", "routine",
-    "at", "tomorrow", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
-    # Time expressions to catch conversational follow-ups like "in 2 hours"
-    "pm", "am", "hour", "hours", "minute", "minutes", "oclock", "o'clock",
 })
+
+TIME_KEYWORDS = frozenset({
+    "tomorrow", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+})
+
+TOOL_TRIGGER_KEYWORDS = REMINDER_KEYWORDS | EVENT_KEYWORDS
+
+# Explicit time expressions to avoid matching common words like "am" or "at".
+_TIME_OF_DAY_RE = re.compile(
+    r"\b(?:[01]?\d|2[0-3])(?::[0-5]\d)?\s*(?:am|pm)\b"
+    r"|\b(?:[01]?\d|2[0-3]):[0-5]\d\b"
+    r"|\b(?:noon|midnight)\b"
+    r"|\b\d{1,2}\s*(?:o'clock|oclock)\b",
+    re.IGNORECASE,
+)
+
+_RELATIVE_TIME_RE = re.compile(
+    r"\b(?:in|after)\s+\d+\s+(?:minutes?|hours?)\b"
+    r"|\b\d+\s+(?:minutes?|hours?)\s+from\s+now\b",
+    re.IGNORECASE,
+)
 
 # Live/recency-oriented keywords for web search detection
 LIVE_KEYWORDS = [
@@ -60,6 +78,11 @@ def needs_structured_tools(message: str) -> bool:
         return False
     
     for kw in TOOL_TRIGGER_KEYWORDS:
+        if re.search(rf'\b{re.escape(kw)}\b', normalized):
+            return True
+    if _TIME_OF_DAY_RE.search(normalized) or _RELATIVE_TIME_RE.search(normalized):
+        return True
+    for kw in TIME_KEYWORDS:
         if re.search(rf'\b{re.escape(kw)}\b', normalized):
             return True
     return False
