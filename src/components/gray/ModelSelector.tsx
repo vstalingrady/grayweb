@@ -86,6 +86,9 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
     return OPTIONS.find(o => o.id === modelTier) ?? OPTIONS[0];
   }, [hasPioneerSelection, modelTier, selectedModelId, t]);
 
+  const shouldShowSelectedModel =
+    hasPioneerSelection && !OPTIONS.some((option) => option.id === activeOption.id);
+
   const handleSelect = useCallback(
     (index: number) => {
       const option = OPTIONS[index];
@@ -337,7 +340,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
               {OPTIONS.map((option, index) => {
                 const requiredLevel = PLAN_TIER_LEVELS[option.tierRequired];
                 const isLocked = currentLevel < requiredLevel;
-                const isActive = activeOption.id === option.id && !hasPioneerSelection; // Only active if no specific model selected
+                const isActive = activeOption.id === option.id && !shouldShowSelectedModel; // Only active if no specific model selected
                 const Icon = option.icon;
 
                 return (
@@ -363,7 +366,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
               })}
 
               {/* Display Active Model if selected */}
-              {hasPioneerSelection && (
+              {shouldShowSelectedModel && (
                 <button className={`${styles.menuItem} ${styles.menuItemActive}`} disabled>
                   {/* We use activeOption.icon here which I will update in useMemo to be the group icon */}
                   <div className={styles.itemIconWrapper}>

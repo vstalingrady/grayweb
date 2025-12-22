@@ -37,6 +37,15 @@ def int_env(var_name: str, default: int) -> int:
         return default
 
 
+def proactivity_dispatch_source(default: str = "apscheduler") -> str:
+    """Return the configured proactivity dispatch source."""
+    raw = os.getenv("PROACTIVITY_DISPATCH_SOURCE", default)
+    normalized = raw.strip().lower()
+    if normalized in {"apscheduler", "arq", "realtime"}:
+        return normalized
+    return default
+
+
 # ==============================================================================
 # UUID Validation
 # ==============================================================================

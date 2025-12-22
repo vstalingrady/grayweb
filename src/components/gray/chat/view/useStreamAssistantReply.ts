@@ -181,11 +181,7 @@ export const useStreamAssistantReply = ({
       const abortController = new AbortController();
       streamAbortControllerRef.current = abortController;
       const shouldUseWebSearch = autoWebSearchEnabled || webSearchEnabled;
-      const shouldAttachToConversation = !isRegeneration;
       const resolveConversationIdUpdate = (candidate?: string | null) => {
-        if (!shouldAttachToConversation) {
-          return session?.conversationId ?? undefined;
-        }
         if (!candidate) {
           return session?.conversationId ?? undefined;
         }
@@ -211,11 +207,9 @@ export const useStreamAssistantReply = ({
         for await (const event of chatService.sendMessageStream(
           {
             message: prompt,
-            conversation_id: shouldAttachToConversation
-              ? isGeneralSession
-                ? buildGeneralConversationId(streamingUserId)
-                : streamedConversationId ?? undefined
-              : undefined,
+            conversation_id: isGeneralSession
+              ? buildGeneralConversationId(streamingUserId)
+              : streamedConversationId ?? undefined,
             system_prompt: personalizedSystemPrompt,
             user_id: streamingUserId,
             context: contextPayload,
@@ -368,11 +362,9 @@ export const useStreamAssistantReply = ({
         try {
           const fallbackResponse = await chatService.sendMessage({
             message: prompt,
-            conversation_id: shouldAttachToConversation
-              ? isGeneralSession
-                ? buildGeneralConversationId(streamingUserId)
-                : streamedConversationId ?? undefined
-              : undefined,
+            conversation_id: isGeneralSession
+              ? buildGeneralConversationId(streamingUserId)
+              : streamedConversationId ?? undefined,
             system_prompt: personalizedSystemPrompt,
             user_id: streamingUserId,
             context: contextPayload,

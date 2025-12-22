@@ -410,6 +410,16 @@ proactivity_settings = sqlalchemy.Table(
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
 
+proactivity_delivery_guard = sqlalchemy.Table(
+    "proactivity_delivery_guard",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("user_id", sqlalchemy.Integer, nullable=False, index=True),
+    sqlalchemy.Column("delivery_key", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.UniqueConstraint("user_id", "delivery_key", name="uq_proactivity_delivery_guard_user_key"),
+)
+
 proactive_notifications = sqlalchemy.Table(
     "proactive_notifications",
     metadata,

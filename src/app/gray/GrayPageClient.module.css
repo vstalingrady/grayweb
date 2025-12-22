@@ -16,17 +16,14 @@
   overflow-y: auto;
 }
 
+/* Light mode overrides are now handled via CSS variables in globals.css */
 :global(html.light) .page {
-  filter: invert(1) hue-rotate(180deg);
+  filter: none;
 }
 
 :global(html.light) .page img,
 :global(html.light) .page video,
 :global(html.light) .page canvas {
-  filter: invert(1) hue-rotate(180deg);
-}
-
-:global(html.light) .page img.uiIconImage {
   filter: none;
 }
 
@@ -85,7 +82,7 @@
     /* Use dynamic viewport height for mobile browsers */
     max-height: 100vh;
     max-height: 100dvh;
-    position: fixed;
+    position: relative;
     width: 100%;
   }
 

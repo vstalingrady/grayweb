@@ -560,7 +560,9 @@
 
 @media (max-width: 768px) {
   .chatComposerDock {
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+    padding-left: 0;
+    padding-right: 0;
   }
 
   .chatIconButton {
@@ -580,20 +582,26 @@
 
   .generalChatComposer {
     padding: 0 !important;
-    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    padding-bottom: 0 !important;
     width: 100% !important;
     max-width: none !important;
   }
 
   .chatBarRounded {
     gap: 8px !important;
-    padding: 10px 12px !important;
-    border-radius: 18px !important;
-    width: 98% !important;
-    max-width: 98% !important;
-    margin: 0 auto !important;
+    padding: 8px !important;
+    border-radius: 26px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
     flex-wrap: nowrap !important;
     align-items: flex-end !important;
+  }
+
+  .chatComposerDock .chatBarRounded {
+    border-bottom-left-radius: 26px;
+    border-bottom-right-radius: 26px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   }
 
   .chatBarLeftGroup {

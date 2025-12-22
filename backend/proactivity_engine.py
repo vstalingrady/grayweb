@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 _INVALID_TIMEZONES_LOGGED: set[str] = set()
 
 PROACTIVITY_PUSH_TABLE = "proactivity_push_subscriptions"
+PROACTIVITY_DELIVERY_GUARD_TABLE = "proactivity_delivery_guard"
 
 @dataclass
 class ProactivityUserSettings:
@@ -89,6 +90,7 @@ class ProactivityEngine:
         self._user_data_cache: Dict[int, int] = {}
         # Per-user locks to prevent concurrent dispatch from multiple sources
         self._user_dispatch_locks: Dict[int, asyncio.Lock] = {}
+        self._last_delivery_guard_cleanup: Optional[datetime] = None
 
     def _get_user_lock(self, user_id: int) -> asyncio.Lock:
         """Get or create a lock for a specific user to prevent concurrent dispatches."""
@@ -104,6 +106,61 @@ class ProactivityEngine:
         except Exception as exc:  # pragma: no cover - defensive guardrail
             logger.error(f"Failed to ensure proactivity DB connection: {exc}", exc_info=True)
             raise
+
+    async def _reserve_delivery_key(self, user_id: int, delivery_key: str, source: str) -> bool:
+        await self._ensure_connection()
+        now = datetime.now(dt_timezone.utc)
+        try:
+            async with self.db.transaction():
+                await self.db.execute(
+                    f"""
+                    INSERT OR IGNORE INTO {PROACTIVITY_DELIVERY_GUARD_TABLE}
+                    (user_id, delivery_key, created_at)
+                    VALUES (:user_id, :delivery_key, :created_at)
+                    """,
+                    {"user_id": user_id, "delivery_key": delivery_key, "created_at": now},
+                )
+                inserted = await self.db.fetch_val("SELECT changes()")
+        except Exception as exc:
+            logger.error(
+                "Failed to reserve proactivity delivery key: %s",
+                exc,
+                exc_info=True,
+                extra={"event_type": "proactivity_delivery_guard_error", "user_id": user_id},
+            )
+            return True
+
+        if not inserted:
+            logger.debug(
+                "Skipping duplicate proactivity send (delivery_key reserved)",
+                extra={
+                    "event_type": "proactivity_dedup_skipped",
+                    "user_id": user_id,
+                    "source": source,
+                    "delivery_key": delivery_key,
+                },
+            )
+            return False
+
+        if (
+            self._last_delivery_guard_cleanup is None
+            or now - self._last_delivery_guard_cleanup > timedelta(hours=6)
+        ):
+            cutoff = now - timedelta(days=30)
+            try:
+                await self.db.execute(
+                    f"DELETE FROM {PROACTIVITY_DELIVERY_GUARD_TABLE} WHERE created_at < :cutoff",
+                    {"cutoff": cutoff},
+                )
+                self._last_delivery_guard_cleanup = now
+            except Exception as exc:
+                logger.warning(
+                    "Failed to prune proactivity delivery guard rows: %s",
+                    exc,
+                    exc_info=True,
+                )
+
+        return True
 
     async def list_active_user_settings(self) -> List[ProactivityUserSettings]:
         await self._ensure_connection()
@@ -221,28 +278,6 @@ class ProactivityEngine:
         elif force:
             now_utc = datetime.now(dt_timezone.utc)
             delivery_key = f"check_in:{user_id}:{now_utc.strftime('%Y%m%dT%H%M')}"
-
-        # DATABASE-BASED DEDUPLICATION: Check if this delivery_key was already sent
-        # This is the single source of truth - works across all processes (APScheduler, arq, SSE)
-        if delivery_key and not force:
-            existing = await self.db.fetch_one(
-                """
-                SELECT id FROM proactive_notifications 
-                WHERE user_id = :user_id 
-                  AND type = 'check_in'
-                  AND json_extract(metadata, '$.delivery_key') = :delivery_key
-                LIMIT 1
-                """,
-                {"user_id": user_id, "delivery_key": delivery_key},
-            )
-            if existing:
-                logger.debug("Skipping duplicate proactivity send (delivery_key exists)", extra={
-                    "event_type": "proactivity_dedup_skipped",
-                    "user_id": user_id,
-                    "source": source,
-                    "delivery_key": delivery_key,
-                })
-                return None
 
         return await self._send_proactivity_message(
             user_id,
@@ -440,6 +475,10 @@ class ProactivityEngine:
         if not message:
             logger.warning(f"Unable to generate proactivity message for user {user_id}")
             return None
+        if delivery_key:
+            reserved = await self._reserve_delivery_key(user_id, delivery_key, source)
+            if not reserved:
+                return None
 
         # Persist the message to general chat history. Use the canonical
         # "model" role so it passes the Supabase check constraint that only

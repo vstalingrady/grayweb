@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, date
 from typing import Any, Dict, List, Optional
+from backend.core.serializers import normalize_proactivity as _normalize_proactivity_settings
 from backend.core.serializers import row_get as _row_get
 
 # Lazy utilities
@@ -59,6 +60,9 @@ def serialize_dashboard_pulse_record(record: Any) -> Optional[Dict[str, Any]]:
             return val
         return {}
 
+    proactivity_raw = _parse_json_dict("proactivity")
+    proactivity_payload = normalize_proactivity(proactivity_raw)
+
     return {
         "id": _row_get(record, "id"),
         "user_id": _row_get(record, "user_id"),
@@ -66,7 +70,7 @@ def serialize_dashboard_pulse_record(record: Any) -> Optional[Dict[str, Any]]:
         "timestamp": _row_get(record, "timestamp"),
         "plans": _parse_json("plans"),
         "habits": _parse_json("habits"),
-        "proactivity": _parse_json_dict("proactivity"),
+        "proactivity": proactivity_payload,
         "created_at": _row_get(record, "created_at"),
         "updated_at": _row_get(record, "updated_at"),
     }
@@ -118,12 +122,8 @@ def normalize_habit_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return normalized
 
 def normalize_proactivity(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Ensure proactivity data has required fields for JSON storage."""
-    return {
-        "score": float(_row_get(data, "score", 0.0)),
-        "summary": str(_row_get(data, "summary", "")),
-        "notes": str(_row_get(data, "notes", "")),
-    }
+    """Ensure proactivity settings have required fields for JSON storage."""
+    return _normalize_proactivity_settings(data)
 
 def carry_forward_dashboard_entries(
     previous: Dict[str, Any], current_plans: List[Dict[str, Any]], current_habits: List[Dict[str, Any]]

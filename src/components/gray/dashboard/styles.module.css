@@ -1511,6 +1511,10 @@
   cursor: pointer;
 }
 
+:global(html.light) .dateInput::-webkit-calendar-picker-indicator {
+  filter: invert(0);
+}
+
 .toSeparator {
   font-size: 0.8rem;
   color: rgba(255, 255, 255, 0.4);

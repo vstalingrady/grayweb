@@ -15,7 +15,13 @@ import {
   ensureAbsoluteUrl,
   resolvePostAuthDestination,
 } from "@/components/login/loginRedirect";
-import { isLocalHostname, normalizeWorkspaceRedirect, resolveWorkspaceHost, resolveWorkspaceOrigin } from "@/lib/grayRouting";
+import {
+  isLocalHostname,
+  hostFromUrl,
+  normalizeWorkspaceRedirect,
+  resolveWorkspaceHost,
+  resolveWorkspaceOrigin,
+} from "@/lib/grayRouting";
 import styles from "./LoginForm.module.css";
 import { persistAuthCookies, clearAuthCookies } from "@/lib/auth/cookies";
 
@@ -43,6 +49,7 @@ const providers = [
 
 const SUPABASE_STORAGE_KEYS = getSupabaseAuthStorageKeys();
 const MIN_PASSWORD_LENGTH = 8;
+
 export default function LoginForm({
   initialMode = "signin",
   deleted,
@@ -99,6 +106,7 @@ export default function LoginForm({
   const [shouldUseCaptcha, setShouldUseCaptcha] = useState(false);
   const turnstileRef = useRef<TurnstileInstance>();
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() ?? "";
+  const supabaseHost = hostFromUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
 
   const searchParams = useSearchParams();
 
@@ -119,12 +127,14 @@ export default function LoginForm({
 
     const { hostname } = window.location;
     const isLocal = isLocalHostname(hostname);
-    setShouldUseCaptcha(!isLocal);
+    const isSupabaseLocal = isLocalHostname(supabaseHost);
+    const shouldEnable = !(isLocal && isSupabaseLocal);
+    setShouldUseCaptcha(shouldEnable);
 
-    if (isLocal) {
+    if (!shouldEnable) {
       setCaptchaToken(null);
     }
-  }, [turnstileSiteKey]);
+  }, [turnstileSiteKey, supabaseHost]);
 
   useEffect(() => {
     setMessage({ type: "idle" });

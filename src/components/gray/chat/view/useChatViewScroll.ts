@@ -40,8 +40,8 @@ export const useChatViewScroll = ({
   const composerDockRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
   const [composerHeight, setComposerHeight] = useState(0);
-  const prevMessageCountRef = useRef(messages.length);
-  const prevSessionKeyRef = useRef<string | null>(sessionKey);
+  const prevMessageCountRef = useRef(0);
+  const prevSessionKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     const shouldScroll =

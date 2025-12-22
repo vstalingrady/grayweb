@@ -16,17 +16,14 @@
   overflow-y: auto;
 }
 
+/* Light mode overrides are now handled via CSS variables in globals.css */
 :global(html.light) .page {
-  filter: invert(1) hue-rotate(180deg);
+  filter: none;
 }
 
 :global(html.light) .page img,
 :global(html.light) .page video,
 :global(html.light) .page canvas {
-  filter: invert(1) hue-rotate(180deg);
-}
-
-:global(html.light) .page img:global(.uiIconImage) {
   filter: none;
 }
 
@@ -68,7 +65,7 @@
     height: 100dvh;
     max-height: 100vh;
     max-height: 100dvh;
-    position: fixed;
+    position: relative;
     width: 100%;
   }
 
@@ -177,9 +174,7 @@
   padding-right: max(env(safe-area-inset-right, 0px), 0px);
   overflow-y: auto;
   overflow-x: hidden;
-  scroll-padding-bottom: calc(
-    var(--chat-composer-overlap, clamp(10px, 2vh, 18px)) + clamp(12px, 2vh, 20px)
-  );
+  scroll-padding-bottom: calc(var(--chat-composer-overlap, clamp(10px, 2vh, 18px)) + clamp(12px, 2vh, 20px));
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
@@ -272,11 +267,11 @@
   padding-bottom: 0;
 }
 
-.mainContent > * {
+.mainContent>* {
   width: min(var(--chat-column-max-width, 680px), 100%);
 }
 
-.mainContent[data-view="dashboard"] > * {
+.mainContent[data-view="dashboard"]>* {
   width: 100%;
   max-width: none;
   flex: 1 1 auto;
@@ -296,12 +291,12 @@
   overflow: hidden;
 }
 
-.mainContent[data-view="chat"] > * {
+.mainContent[data-view="chat"]>* {
   width: 100%;
   max-width: none;
 }
 
-.mainContent[data-view="history"] > * {
+.mainContent[data-view="history"]>* {
   width: 100%;
   max-width: none;
 }
@@ -357,18 +352,18 @@
   flex: 1;
 }
 
-.mainContent[data-view="general"] > .generalViewSection {
+.mainContent[data-view="general"]>.generalViewSection {
   width: min(calc(var(--chat-column-max-width, 840px) + 40px), 100%);
   max-width: min(calc(var(--chat-column-max-width, 840px) + 40px), 100%);
   justify-content: center;
 }
 
 @media (min-width: 769px) {
-  .mainContent[data-view="general"] > .generalViewSection {
+  .mainContent[data-view="general"]>.generalViewSection {
     padding-bottom: 0;
   }
 
-  .page[data-general-attachments="true"] .mainContent[data-view="general"] > .generalViewSection {
+  .page[data-general-attachments="true"] .mainContent[data-view="general"]>.generalViewSection {
     padding-bottom: 0;
   }
 }

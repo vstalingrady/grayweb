@@ -5,6 +5,8 @@ from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from backend.core.serializers import DEFAULT_DASHBOARD_PROACTIVITY
+
 
 def utcnow_aware() -> datetime:
     """Return current UTC time with timezone info."""
@@ -103,11 +105,11 @@ class DashboardPulseHabitItem(BaseModel):
 
 class DashboardPulseProactivity(BaseModel):
     """Dashboard pulse proactivity settings."""
-    id: Union[str, int]
-    label: str
-    description: Optional[str] = None
-    cadence: str
-    time: str
+    id: Union[str, int] = Field(default=DEFAULT_DASHBOARD_PROACTIVITY["id"])
+    label: str = Field(default=DEFAULT_DASHBOARD_PROACTIVITY["label"])
+    description: Optional[str] = Field(default=DEFAULT_DASHBOARD_PROACTIVITY.get("description"))
+    cadence: str = Field(default=DEFAULT_DASHBOARD_PROACTIVITY["cadence"])
+    time: str = Field(default=DEFAULT_DASHBOARD_PROACTIVITY["time"])
 
 
 class DashboardPulseBase(BaseModel):
@@ -117,6 +119,15 @@ class DashboardPulseBase(BaseModel):
     plans: List[DashboardPulsePlanItem] = []
     habits: List[DashboardPulseHabitItem] = []
     proactivity: DashboardPulseProactivity
+
+    @field_validator("proactivity", mode="before")
+    @classmethod
+    def _validate_proactivity(cls, value):
+        from backend.core.serializers import normalize_proactivity
+        if isinstance(value, dict):
+            # If it's already a dict but missing keys, normalize it
+            return normalize_proactivity(value)
+        return normalize_proactivity({})
 
     @field_validator("timestamp", mode="before")
     @classmethod

@@ -15,13 +15,13 @@
 }
 
 :global(html.light) .delete-account {
-    filter: invert(1) hue-rotate(180deg);
+    filter: none;
 }
 
 :global(html.light) .delete-account img,
 :global(html.light) .delete-account video,
 :global(html.light) .delete-account canvas {
-    filter: invert(1) hue-rotate(180deg);
+    filter: none;
 }
 
 .delete-account__card {

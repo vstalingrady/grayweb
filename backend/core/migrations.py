@@ -129,6 +129,21 @@ def run_startup_migrations():
     _ensure_sqlite_columns("proactive_notifications", [
         ("metadata", "JSON", None),
     ])
+
+    _ensure_sqlite_table("proactivity_delivery_guard", """
+        CREATE TABLE proactivity_delivery_guard (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            delivery_key TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, delivery_key)
+        )
+    """)
+    _ensure_sqlite_unique_index(
+        "proactivity_delivery_guard",
+        "uq_proactivity_delivery_guard_user_key",
+        "user_id, delivery_key",
+    )
     
     # Indexes
     _ensure_sqlite_index("archived_chat_messages", "ix_archived_chat_messages_user_id", "user_id")

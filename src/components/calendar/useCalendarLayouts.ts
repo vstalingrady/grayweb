@@ -47,8 +47,17 @@ export const useCalendarLayouts = ({
     [calendarMap, events]
   );
 
+  const eventsForLayout = useMemo(() => {
+    if (!composerPreviewEvent) {
+      return visibleEvents;
+    }
+    const isPreviewVisible = calendarMap.get(composerPreviewEvent.calendarId)?.isVisible !== false;
+    const filtered = visibleEvents.filter((event) => event.id !== composerPreviewEvent.id);
+    return isPreviewVisible ? [...filtered, composerPreviewEvent] : filtered;
+  }, [calendarMap, composerPreviewEvent, visibleEvents]);
+
   const dayLayouts = useMemo<PositionedEvent[]>(() => {
-    const filtered = visibleEvents.filter((event) => isSameDay(event.start, selectedDate));
+    const filtered = eventsForLayout.filter((event) => isSameDay(event.start, selectedDate));
     let result = filtered;
 
     if (activeDrafts) {
@@ -65,10 +74,6 @@ export const useCalendarLayouts = ({
       });
     }
 
-    if (composerPreviewEvent && isSameDay(composerPreviewEvent.start, selectedDate)) {
-      result = [...result, composerPreviewEvent];
-    }
-
     return layoutDayEvents(result, {
       hourHeight,
       minimumHeight: shortEventMinimumHeight,
@@ -76,11 +81,10 @@ export const useCalendarLayouts = ({
     });
   }, [
     activeDrafts,
-    composerPreviewEvent,
+    eventsForLayout,
     hourHeight,
     selectedDate,
     shortEventMinimumHeight,
-    visibleEvents,
   ]);
 
   const weekLayouts = useMemo(() => {
@@ -111,19 +115,19 @@ export const useCalendarLayouts = ({
     })();
 
     return weekDays.map((day) => {
-      const dayEventsForWeek = visibleEvents.filter((event) => isSameDay(event.start, day));
+      const dayEventsForWeek = eventsForLayout.filter((event) => isSameDay(event.start, day));
       const mappedEvents = activeDrafts
         ? dayEventsForWeek.map((event) => {
-            const draft = activeDrafts[event.id];
-            if (draft) {
-              return {
-                ...event,
-                start: ensureDateZone(draft.start),
-                end: ensureDateZone(draft.end),
-              };
-            }
-            return event;
-          })
+          const draft = activeDrafts[event.id];
+          if (draft) {
+            return {
+              ...event,
+              start: ensureDateZone(draft.start),
+              end: ensureDateZone(draft.end),
+            };
+          }
+          return event;
+        })
         : dayEventsForWeek;
 
       const eventsWithPreview = mappedEvents.filter((event) => isSameDay(event.start, day));
@@ -131,10 +135,6 @@ export const useCalendarLayouts = ({
       const movedDraftEvents = movedDraftsByDayKey?.get(dayKey(day));
       if (movedDraftEvents) {
         eventsWithPreview.push(...movedDraftEvents);
-      }
-
-      if (composerPreviewEvent && isSameDay(composerPreviewEvent.start, day)) {
-        eventsWithPreview.push(composerPreviewEvent);
       }
 
       return layoutDayEvents(eventsWithPreview, {
@@ -145,11 +145,11 @@ export const useCalendarLayouts = ({
     });
   }, [
     activeDrafts,
-    composerPreviewEvent,
     dayKey,
+    eventsForLayout,
     hourHeight,
-    shortEventMinimumHeight,
     visibleEvents,
+    shortEventMinimumHeight,
     weekDays,
   ]);
 

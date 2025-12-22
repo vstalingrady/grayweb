@@ -27,6 +27,7 @@ def _get_deps():
         GEMINI_SERVICE,
         GEMINI_DEFAULT_MODEL,
     )
+    from backend.core.env_helpers import proactivity_dispatch_source
     from backend.compat_imports import (
         ProactivityEngine,
         ProactivitySchedulerManager,
@@ -103,6 +104,7 @@ async def initialize_proactivity_engine():
     deps = _get_deps()
     db = deps['database']
     app_logger = deps['app_logger']
+    dispatch_source = deps['proactivity_dispatch_source']()
     
     global proactivity_engine, proactivity_scheduler, reminder_scheduler
     
@@ -112,8 +114,15 @@ async def initialize_proactivity_engine():
             deps['proactivity_realtime_broker'],
             deps['AI_MESSAGE_GENERATOR'],
         )
-        proactivity_scheduler = deps['ProactivitySchedulerManager'](proactivity_engine)
-        await proactivity_scheduler.start()
+        proactivity_scheduler = None
+        if dispatch_source == "apscheduler":
+            proactivity_scheduler = deps['ProactivitySchedulerManager'](proactivity_engine)
+            await proactivity_scheduler.start()
+        else:
+            app_logger.info(
+                "Skipping in-app proactivity scheduler (dispatch source: %s)",
+                dispatch_source,
+            )
 
         if deps['ReminderSchedulerManager']:
             reminder_scheduler = deps['ReminderSchedulerManager'](proactivity_engine, db)

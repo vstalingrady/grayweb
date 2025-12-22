@@ -1321,6 +1321,28 @@ function GrayPageClientInner({
     }
   }, [currentChatId, generalSessionId, manualViewMode, sessions, supportsInlineChat]);
 
+  useEffect(() => {
+    if (variant !== "chat") {
+      return;
+    }
+    if (!activeChatId || !currentChatId) {
+      return;
+    }
+
+    const canonicalGeneralId = generalSessionId ?? GENERAL_CHAT_SESSION_ID;
+    if (currentChatId === canonicalGeneralId) {
+      return;
+    }
+
+    const currentSession = sessions.find((session) => session.id === currentChatId);
+    const conversationId = normalizeConversationIdValue(currentSession?.conversationId);
+    if (!conversationId || conversationId === activeChatId) {
+      return;
+    }
+
+    router.replace(`/c/${conversationId}`);
+  }, [activeChatId, currentChatId, generalSessionId, router, sessions, variant]);
+
   const handleOpenHistoryEntry = (entry: SidebarHistoryEntry) => {
     if (!entry.href || entry.href === "#") {
       return;

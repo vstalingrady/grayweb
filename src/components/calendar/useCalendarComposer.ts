@@ -119,7 +119,23 @@ export const useCalendarComposer = ({
   );
 
   const composerPreviewEvent = useMemo<CalendarEvent | null>(() => {
-    if (!composerOpen || !composerRange) {
+    if (!composerOpen) {
+      return null;
+    }
+    if (editingEvent) {
+      const draftTitle = composerDraft?.title?.trim();
+      return {
+        ...editingEvent,
+        title: draftTitle ? draftTitle : editingEvent.title,
+        color: composerDraft?.color ?? editingEvent.color,
+        entryType: composerDraft?.entryType ?? editingEvent.entryType,
+        calendarId: composerDraft?.calendarId ?? editingEvent.calendarId,
+        description: composerDraft?.details?.trim() ? composerDraft.details.trim() : editingEvent.description,
+        reminderMinutesBefore:
+          composerDraft?.reminderMinutesBefore ?? editingEvent.reminderMinutesBefore,
+      };
+    }
+    if (!composerRange) {
       return null;
     }
     const draftTitle = composerDraft?.title?.trim();
@@ -132,7 +148,7 @@ export const useCalendarComposer = ({
       entryType: composerDraft?.entryType || "event",
       calendarId: "preview",
     };
-  }, [composerDraft, composerOpen, composerRange]);
+  }, [composerDraft, composerOpen, composerRange, editingEvent]);
 
   return {
     composerOpen,

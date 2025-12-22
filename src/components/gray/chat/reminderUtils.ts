@@ -21,6 +21,9 @@ type ParsedReminderBlock = ReminderConfig;
 
 const REMINDER_STATUS_VALUES: GrayReminderStatus[] = ["created", "updated", "completed", "deleted"];
 const REMINDER_TYPE_VALUES: GrayReminderPayloadType[] = ["gray.reminder", "gray.plan", "gray.habit"];
+const TOOL_CALL_NAME_REGEX = /^(?:create|update|delete)_(?:reminder|plan|habit)$/i;
+const TOOL_USE_BLOCK_REGEX = /<tool_use>([\s\S]*?)<\/tool_use>/gi;
+const TOOL_CALL_CODE_FENCE_REGEX = /```(?:json)?\s*([\s\S]*?)```/gi;
 
 const normalizeReminderType = (value: unknown): GrayReminderPayloadType | null => {
     if (typeof value !== "string") {
@@ -242,6 +245,244 @@ const coerceStructuredReminderPayload = (candidate: Record<string, unknown>): Gr
     };
 };
 
+const asRecord = (value: unknown): Record<string, unknown> | null => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return null;
+    }
+    return value as Record<string, unknown>;
+};
+
+const parseMaybeJson = (value: string): unknown | null => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+        return null;
+    }
+    try {
+        return JSON.parse(trimmed);
+    } catch {
+        // Fall through to substring parsing.
+    }
+    const firstBracket = trimmed.indexOf("[");
+    const lastBracket = trimmed.lastIndexOf("]");
+    if (firstBracket !== -1 && lastBracket > firstBracket) {
+        try {
+            return JSON.parse(trimmed.slice(firstBracket, lastBracket + 1));
+        } catch {
+            // Ignore and keep trying.
+        }
+    }
+    const firstBrace = trimmed.indexOf("{");
+    const lastBrace = trimmed.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+        try {
+            return JSON.parse(trimmed.slice(firstBrace, lastBrace + 1));
+        } catch {
+            return null;
+        }
+    }
+    return null;
+};
+
+const resolveStringField = (record: Record<string, unknown> | null, keys: string[]): string | null => {
+    if (!record) {
+        return null;
+    }
+    for (const key of keys) {
+        const value = record[key];
+        if (typeof value === "string") {
+            const trimmed = value.trim();
+            if (trimmed) {
+                return trimmed;
+            }
+        }
+    }
+    return null;
+};
+
+const resolveNestedRecord = (record: Record<string, unknown> | null, keys: string[]): Record<string, unknown> | null => {
+    if (!record) {
+        return null;
+    }
+    for (const key of keys) {
+        const nested = asRecord(record[key]);
+        if (nested) {
+            return nested;
+        }
+    }
+    return null;
+};
+
+const resolveToolCallInputs = (candidate: Record<string, unknown>): Record<string, unknown>[] => {
+    const rawInput =
+        candidate.input ??
+        candidate.arguments ??
+        candidate.args ??
+        candidate.payload ??
+        candidate.data ??
+        candidate.params ??
+        null;
+    if (!rawInput) {
+        return [];
+    }
+    if (typeof rawInput === "string") {
+        const parsed = parseMaybeJson(rawInput);
+        if (Array.isArray(parsed)) {
+            return parsed.map((item) => asRecord(item)).filter((item): item is Record<string, unknown> => Boolean(item));
+        }
+        const record = asRecord(parsed);
+        return record ? [record] : [];
+    }
+    if (Array.isArray(rawInput)) {
+        return rawInput.map((item) => asRecord(item)).filter((item): item is Record<string, unknown> => Boolean(item));
+    }
+    const record = asRecord(rawInput);
+    return record ? [record] : [];
+};
+
+const hashString = (value: string): string => {
+    let hash = 0;
+    for (let i = 0; i < value.length; i += 1) {
+        hash = (hash << 5) - hash + value.charCodeAt(i);
+        hash |= 0;
+    }
+    return Math.abs(hash).toString(36);
+};
+
+const coerceToolCallReminderPayloads = (candidate: Record<string, unknown>): GrayReminderCreatedPayload[] => {
+    const toolName =
+        typeof candidate.tool === "string"
+            ? candidate.tool
+            : typeof candidate.name === "string"
+                ? candidate.name
+                : typeof candidate.tool_name === "string"
+                    ? candidate.tool_name
+                    : "";
+    if (!toolName || !TOOL_CALL_NAME_REGEX.test(toolName)) {
+        return [];
+    }
+
+    const [actionRaw, entityRaw] = toolName.trim().toLowerCase().split("_");
+    const entity = entityRaw === "plan" ? "plan" : entityRaw === "habit" ? "habit" : "reminder";
+    const type = entity === "plan" ? "gray.plan" : entity === "habit" ? "gray.habit" : "gray.reminder";
+    const status: GrayReminderStatus =
+        actionRaw === "update" ? "updated" : actionRaw === "delete" ? "deleted" : "created";
+
+    const inputs = resolveToolCallInputs(candidate);
+    const payloadSources = inputs.length > 0 ? inputs : [candidate];
+
+    return payloadSources.map((input) => {
+        const nested = resolveNestedRecord(input, ["reminder", "payload", "data"]);
+        const idCandidate =
+            input.id ??
+            input.reminder_id ??
+            nested?.id ??
+            nested?.reminder_id ??
+            candidate.id ??
+            candidate.reminder_id;
+        const normalizedId =
+            typeof idCandidate === "string" || typeof idCandidate === "number" ? idCandidate : null;
+        const label =
+            resolveStringField(input, [
+                "label",
+                "title",
+                "text",
+                "task",
+                "reminder",
+                "name",
+                "plan",
+                "habit",
+                "plan_name",
+                "habit_name",
+            ]) ??
+            resolveStringField(nested, ["label", "title", "text", "task", "name"]) ??
+            "Untitled reminder";
+        const summary =
+            resolveStringField(input, ["summary", "description", "note", "details"]) ??
+            resolveStringField(nested, ["summary", "description", "note", "details"]);
+        const remindAt =
+            resolveStringField(input, [
+                "remind_at",
+                "reminder_at",
+                "time_iso",
+                "time",
+                "datetime",
+                "date_time",
+                "scheduled_for",
+            ]) ??
+            resolveStringField(nested, ["remind_at", "reminder_at", "time_iso", "time", "datetime", "date_time"]);
+        const deliveryMode =
+            resolveStringField(input, ["delivery_mode", "deliveryMode", "mode"]) ??
+            resolveStringField(nested, ["delivery_mode", "deliveryMode", "mode"]) ??
+            entity;
+        const userId =
+            toNumber(input.user_id ?? input.userId) ??
+            toNumber(candidate.user_id ?? candidate.userId) ??
+            0;
+
+        const fingerprintSource = inputs.length > 0 ? JSON.stringify(input) : JSON.stringify(candidate);
+        const reminderId =
+            normalizedId ??
+            `tool-${hashString(`${toolName}:${fingerprintSource ?? ""}`)}`;
+        const reminderRecord: Record<string, unknown> = {};
+        if (remindAt) {
+            reminderRecord.remind_at = remindAt;
+        }
+
+        return {
+            type,
+            source: "native/backend",
+            status,
+            entity,
+            delivery_mode: deliveryMode,
+            data: {
+                id: reminderId,
+                user_id: userId,
+                label,
+                time_iso: remindAt,
+                raw: input,
+                delivery_mode: deliveryMode,
+                ...(summary ? { summary } : {}),
+                reminder_id: normalizedId,
+                reminder_status: status,
+                reminder: Object.keys(reminderRecord).length ? reminderRecord : null,
+            },
+        };
+    });
+};
+
+const extractToolCallReminders = (raw: string): GrayReminderCreatedPayload[] => {
+    if (!raw) {
+        return [];
+    }
+    const reminders: GrayReminderCreatedPayload[] = [];
+
+    const pushCandidates = (content: string) => {
+        const parsed = parseMaybeJson(content);
+        const candidates = Array.isArray(parsed)
+            ? parsed.map((item) => asRecord(item)).filter((item): item is Record<string, unknown> => Boolean(item))
+            : parsed
+                ? [asRecord(parsed)].filter((item): item is Record<string, unknown> => Boolean(item))
+                : [];
+        for (const candidate of candidates) {
+            reminders.push(...coerceToolCallReminderPayloads(candidate));
+        }
+    };
+
+    for (const match of raw.matchAll(TOOL_USE_BLOCK_REGEX)) {
+        pushCandidates(match[1]);
+    }
+
+    for (const match of raw.matchAll(TOOL_CALL_CODE_FENCE_REGEX)) {
+        const body = match[1] ?? "";
+        if (!/\"(?:tool|name|tool_name)\"\s*:/i.test(body)) {
+            continue;
+        }
+        pushCandidates(body);
+    }
+
+    return reminders;
+};
+
 export const coerceReminderPayload = (candidate: unknown): GrayReminderCreatedPayload | null => {
     if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
         const structured = coerceStructuredReminderPayload(candidate as Record<string, unknown>);
@@ -261,6 +502,16 @@ export const buildReminderKey = (reminder: GrayReminderCreatedPayload): string =
     }
     const label = data.label ?? "";
     const timeIso = data.time_iso ?? "";
+    return `${reminder.entity}:${label}:${timeIso}`.trim().toLowerCase();
+};
+
+const buildReminderFingerprint = (reminder: GrayReminderCreatedPayload): string | null => {
+    const data = reminder.data ?? {};
+    const label = typeof data.label === "string" ? data.label.trim().toLowerCase() : "";
+    const timeIso = typeof data.time_iso === "string" ? data.time_iso.trim().toLowerCase() : "";
+    if (!label && !timeIso) {
+        return null;
+    }
     return `${reminder.entity}:${label}:${timeIso}`.trim().toLowerCase();
 };
 
@@ -408,7 +659,7 @@ const stripIncompleteReminderArtifacts = (segment: string): string => {
 
     // 4. Remove leaked text tool-call blocks for reminder/plan/habit tools
     const toolJsonPattern =
-        /```(?:json)?\s*\{[\s\S]*?"tool"\s*:\s*"(?:create|update|delete)_(?:reminder|plan|habit)[\s\S]*?```/gi;
+        /```(?:json)?\s*\{[\s\S]*?"(?:tool|name|tool_name)"\s*:\s*"(?:create|update|delete)_(?:reminder|plan|habit)[\s\S]*?```/gi;
     updated = updated.replace(toolJsonPattern, "");
 
     // 5. Clean up extra blank lines
@@ -489,18 +740,33 @@ export const extractGrayRemindersFromText = (
 
     const sanitizedDisplay = stripIncompleteReminderArtifacts(raw);
     const blocks = parseReminderBlocks(raw);
-    if (!blocks.length) {
+    const toolCallReminders = extractToolCallReminders(raw);
+    if (!blocks.length && toolCallReminders.length === 0) {
         return { cleanText: sanitizedDisplay, reminders: [] };
     }
 
     const seenReminders = new Set<string>();
+    const seenFingerprints = new Set<string>();
     const reminders: GrayReminderCreatedPayload[] = [];
-    for (const block of blocks) {
-        const key = buildReminderKey(block.reminder);
-        if (!seenReminders.has(key)) {
-            seenReminders.add(key);
-            reminders.push(block.reminder);
+    const addReminder = (reminder: GrayReminderCreatedPayload) => {
+        const key = buildReminderKey(reminder);
+        const fingerprint = buildReminderFingerprint(reminder);
+        if (seenReminders.has(key) || (fingerprint && seenFingerprints.has(fingerprint))) {
+            return;
         }
+        seenReminders.add(key);
+        if (fingerprint) {
+            seenFingerprints.add(fingerprint);
+        }
+        reminders.push(reminder);
+    };
+
+    for (const block of blocks) {
+        addReminder(block.reminder);
+    }
+
+    for (const reminder of toolCallReminders) {
+        addReminder(reminder);
     }
 
     if (!reminders.length) {

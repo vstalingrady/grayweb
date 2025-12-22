@@ -250,6 +250,7 @@ class OpenRouterService:
         attachments: Optional[List[Any]] = None,
         *,
         history_token_budget: Optional[int] = None,
+        runtime_context: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Build messages array from conversation history, current message, and attachments."""
         history = conversation_history or []
@@ -330,6 +331,10 @@ class OpenRouterService:
         elif trimmed_message:
             payload.append({"role": "user", "content": trimmed_message})
         
+        runtime_text = _trim(runtime_context)
+        if runtime_text:
+            payload.append({"role": "system", "content": runtime_text})
+        
         return payload
 
     def _build_system_prompt(
@@ -338,7 +343,7 @@ class OpenRouterService:
         workspace_context: Optional[str],
         time_context: Optional[str],
     ) -> Optional[str]:
-        """Construct system prompt with optional context."""
+        """Construct system prompt with optional (stable) context."""
         pieces: List[str] = []
         base = _trim(system_prompt)
         if base:
@@ -347,13 +352,17 @@ class OpenRouterService:
         context_lines: List[str] = []
         if workspace_context and workspace_context.strip():
             context_lines.append(workspace_context.strip())
-        if time_context and time_context.strip():
-            context_lines.append(time_context.strip())
         
         if context_lines:
             pieces.append("<context>\n" + "\n".join(context_lines) + "\n</context>")
         
         return "\n\n".join(pieces) if pieces else None
+
+    def _build_runtime_context(self, time_context: Optional[str]) -> Optional[str]:
+        trimmed = _trim(time_context)
+        if not trimmed:
+            return None
+        return "<context>\n" + trimmed + "\n</context>"
 
     def _build_headers(self) -> Dict[str, str]:
         """Build request headers for OpenRouter API."""
@@ -440,11 +449,13 @@ class OpenRouterService:
 
         resolved_model = self._resolve_model(model)
         history_limit = self._history_window_for_model(resolved_model)
+        runtime_context = self._build_runtime_context(time_context)
         messages = self._build_messages(
             conversation_history,
             message,
             history_limit,
             history_token_budget=history_token_budget,
+            runtime_context=runtime_context,
         )
         
         if not messages:
@@ -561,12 +572,14 @@ class OpenRouterService:
         # e.g., openai/gpt-5.2-chat -> openai/gpt-5.2 when reasoning_mode=True
         resolved_model = self._resolve_model(model, reasoning_mode=reasoning_mode)
         history_limit = self._history_window_for_model(resolved_model)
+        runtime_context = self._build_runtime_context(time_context)
         messages = self._build_messages(
             conversation_history,
             message,
             history_limit,
             attachments=attachments,
             history_token_budget=history_token_budget,
+            runtime_context=runtime_context,
         )
         
         if not messages:

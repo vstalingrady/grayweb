@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, Optional
 
 from backend.time_utils import utcnow_aware
+from backend.core.env_helpers import proactivity_dispatch_source
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +175,8 @@ async def send_reminder(ctx: Dict[str, Any], user_id: int, reminder_id: int) -> 
 
 async def send_proactive_checkin(ctx: Dict[str, Any], user_id: int) -> None:
     """Execute a proactive check-in for a user."""
+    if proactivity_dispatch_source() != "arq":
+        return
     logger.info("Executing proactive check-in for user %d", user_id)
     try:
         engine = ctx.get("proactivity_engine")
@@ -233,6 +236,8 @@ async def shutdown(ctx: Dict[str, Any]) -> None:
 # Cron job for periodic proactivity dispatch
 async def dispatch_all_proactivity(ctx: Dict[str, Any]) -> None:
     """Cron job to dispatch all due proactive check-ins."""
+    if proactivity_dispatch_source() != "arq":
+        return
     logger.info(
         "Running scheduled proactivity dispatch at %s",
         utcnow_aware().isoformat().replace("+00:00", "Z"),

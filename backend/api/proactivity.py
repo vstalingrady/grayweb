@@ -31,6 +31,7 @@ from backend.database import (
 from backend.auth import get_current_user, require_same_user
 from backend.time_utils import utcnow
 from backend.core.async_utils import create_logged_task
+from backend.core.env_helpers import proactivity_dispatch_source
 from backend.logging_config import create_logger
 
 api_logger = create_logger("backend.api.proactivity")
@@ -183,11 +184,12 @@ async def stream_user_proactivity(
     async def event_stream() -> AsyncGenerator[str, None]:
         try:
             yield _sse_event("ready", {"user_id": user_id})
-            create_logged_task(
-                proactivity_engine.dispatch_user_if_due(user_id, source="realtime"),
-                logger=api_logger,
-                name="proactivity.dispatch_user_if_due",
-            )
+            if proactivity_dispatch_source() == "realtime":
+                create_logged_task(
+                    proactivity_engine.dispatch_user_if_due(user_id, source="realtime"),
+                    logger=api_logger,
+                    name="proactivity.dispatch_user_if_due",
+                )
 
             while True:
                 try:
@@ -408,12 +410,13 @@ async def update_proactivity_settings(
     proactivity_engine, proactivity_scheduler = _get_proactivity_services()
     from backend.main import proactivity_scheduler as ps
     proactivity_scheduler = ps
+    dispatch_source = proactivity_dispatch_source()
     
     user_id = int(current_user["id"])
 
     if not proactivity_engine:
         raise HTTPException(status_code=503, detail="Proactivity engine not initialized")
-    if not proactivity_scheduler:
+    if dispatch_source == "apscheduler" and not proactivity_scheduler:
         raise HTTPException(status_code=503, detail="Proactivity scheduler not initialized")
 
     existing_record = await db.fetch_one(
@@ -465,7 +468,8 @@ async def update_proactivity_settings(
         )
         await db.execute(insert_query)
 
-    await proactivity_scheduler.refresh_jobs(user_id)
+    if proactivity_scheduler:
+        await proactivity_scheduler.refresh_jobs(user_id)
 
     cadence = updated_payload.get("cadence")
     return ProactivitySettings(

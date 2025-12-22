@@ -197,6 +197,10 @@ async def stream_ai_response(
             return
 
     # Initialize context
+    runtime_context_parts: List[str] = []
+    if provider == "openrouter" and isinstance(time_context, str) and time_context.strip():
+        runtime_context_parts.append(time_context.strip())
+
     workspace_with_cache = workspace_context
     cache_record = None
     cached_contents = None
@@ -216,7 +220,10 @@ async def stream_ai_response(
                 time_context=time_context,
             )
             if calendar_context_block:
-                workspace_with_cache = "\n\n".join(filter(None, [workspace_with_cache, calendar_context_block]))
+                if provider == "openrouter":
+                    runtime_context_parts.append(calendar_context_block)
+                else:
+                    workspace_with_cache = "\n\n".join(filter(None, [workspace_with_cache, calendar_context_block]))
         except Exception as error:
             api_logger.debug(f"Failed to build calendar context: {error}")
 
@@ -259,9 +266,9 @@ async def stream_ai_response(
                 deps["GEMINI_SERVICE"], message, message_urls, workspace_with_cache, time_context
             )
             if url_content:
-                workspace_with_cache = "\n\n".join(filter(None, [
-                    workspace_with_cache, f"--- URL Content ---\n{url_content}\n--- End URL Content ---"
-                ]))
+                runtime_context_parts.append(
+                    f"--- URL Content ---\n{url_content}\n--- End URL Content ---"
+                )
 
         # Hybrid tool execution
         use_hybrid_tools = (
@@ -286,16 +293,17 @@ async def stream_ai_response(
             if hybrid_tool_results:
                 tool_context = deps["_format_tool_results_for_context"](hybrid_tool_results)
                 if tool_context:
-                    workspace_with_cache = "\n\n".join(filter(None, [workspace_with_cache, tool_context]))
+                    runtime_context_parts.append(tool_context)
                 tool_list = []
 
+        runtime_context = "\n\n".join(runtime_context_parts) if runtime_context_parts else None
         async for event_type, data in deps["stream_openrouter_response"](
             openrouter_service=deps["OPENROUTER_SERVICE"],
             message=message,
             conversation_history=conversation_history,
             workspace_context=workspace_with_cache,
             system_prompt=effective_system_prompt,
-            time_context=time_context,
+            time_context=runtime_context,
             model=model,
             tool_list=tool_list,
             search_enabled=search_enabled,
