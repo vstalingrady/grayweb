@@ -1456,6 +1456,68 @@
   gap: 10px;
 }
 
+.composerToggleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.composerToggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(32, 32, 32, 0.74);
+  color: rgba(230, 230, 230, 0.66);
+  font-size: 0.66rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.composerToggle[data-active="true"] {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(245, 245, 245, 0.9);
+}
+
+.composerToggle[data-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.composerToggleInput {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.composerToggleIndicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.25);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+.composerToggle[data-active="true"] .composerToggleIndicator {
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: none;
+}
+
+.composerToggle:focus-within {
+  outline: 2px solid rgba(255, 255, 255, 0.35);
+  outline-offset: 2px;
+}
+
 .composerTimeMetaRow {
   display: flex;
   align-items: center;

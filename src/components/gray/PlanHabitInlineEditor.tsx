@@ -76,6 +76,8 @@ export function PlanHabitInlineEditor({
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
   const [monthDate, setMonthDate] = useState(() => startOfMonth(new Date()));
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [isTimeEnabled, setIsTimeEnabled] = useState(true);
+  const [isDateEnabled, setIsDateEnabled] = useState(true);
   const [color, setColor] = useState<string>(QUICK_COLOR_SWATCHES[1]);
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const [hexDraft, setHexDraft] = useState<string>(QUICK_COLOR_SWATCHES[1]);
@@ -86,6 +88,7 @@ export function PlanHabitInlineEditor({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const headerLabel = useMemo(() => t("Events"), [t]);
+  const reminderEnabled = isTimeEnabled && isDateEnabled;
   const eventStart = useMemo(() => combineDateWithTime(selectedDate, startTime), [selectedDate, startTime]);
   const rgb = useMemo(() => hexToRgb(color) ?? { red: 0, green: 0, blue: 0 }, [color]);
   const colorPopoverStyle = useMemo(() => {
@@ -108,14 +111,17 @@ export function PlanHabitInlineEditor({
         const slot = splitScheduleSlot(planToEdit.scheduleSlot);
         setStartTime(slot?.start ?? "09:00");
         setEndTime(slot?.end ?? "10:00");
+        setIsTimeEnabled(Boolean(slot));
         const referenceValue = planToEdit.deadline ? new Date(planToEdit.deadline) : null;
         if (referenceValue && !Number.isNaN(referenceValue.getTime())) {
           const normalizedDay = startOfDay(referenceValue);
           setSelectedDate(normalizedDay);
           setMonthDate(startOfMonth(normalizedDay));
+          setIsDateEnabled(true);
         } else {
           setSelectedDate(startOfDay(now));
           setMonthDate(startOfMonth(now));
+          setIsDateEnabled(false);
         }
         setColor(planToEdit.color ?? QUICK_COLOR_SWATCHES[1]);
       } else {
@@ -125,6 +131,8 @@ export function PlanHabitInlineEditor({
         setEndTime("10:00");
         setSelectedDate(startOfDay(now));
         setMonthDate(startOfMonth(now));
+        setIsTimeEnabled(true);
+        setIsDateEnabled(true);
       }
     } else {
       if (habitToEdit) {
@@ -137,6 +145,8 @@ export function PlanHabitInlineEditor({
       setSelectedDate(startOfDay(now));
       setMonthDate(startOfMonth(now));
       setColor(QUICK_COLOR_SWATCHES[1]);
+      setIsTimeEnabled(true);
+      setIsDateEnabled(true);
     }
     setReminderPreset("none");
     setCustomReminderMinutes("");
@@ -147,6 +157,21 @@ export function PlanHabitInlineEditor({
   useEffect(() => {
     setHexDraft(color);
   }, [color]);
+
+  useEffect(() => {
+    if (!isDateEnabled) {
+      setIsDatePickerOpen(false);
+    }
+  }, [isDateEnabled]);
+
+  useEffect(() => {
+    if (reminderEnabled) {
+      return;
+    }
+    setReminderPreset("none");
+    setCustomReminderMinutes("");
+    setIsReminderMenuOpen(false);
+  }, [reminderEnabled]);
 
   const closeColorPicker = useCallback(() => {
     setIsColorPickerOpen(false);
@@ -204,7 +229,7 @@ export function PlanHabitInlineEditor({
 
   useEffect(() => {
     const editingItem = planToEdit ?? habitToEdit;
-    if (!editingItem) {
+    if (!editingItem || !reminderEnabled) {
       setReminderPreset("none");
       setCustomReminderMinutes("");
       return;
@@ -216,7 +241,7 @@ export function PlanHabitInlineEditor({
     });
     setReminderPreset(derived.preset);
     setCustomReminderMinutes(derived.customMinutes);
-  }, [eventStart, habitToEdit, planToEdit]);
+  }, [eventStart, habitToEdit, planToEdit, reminderEnabled]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -257,15 +282,21 @@ export function PlanHabitInlineEditor({
       const trimmed = title.trim();
       const details = detailsValue.trim();
       const descriptionValue = details.length > 0 ? details : null;
-      const reminderLeadMinutes = parseReminderLeadMinutes(reminderPreset, customReminderMinutes);
+      const reminderLeadMinutes = reminderEnabled
+        ? parseReminderLeadMinutes(reminderPreset, customReminderMinutes)
+        : null;
       const reminderAtIso =
         reminderLeadMinutes === null
           ? null
           : new Date(eventStart.getTime() - reminderLeadMinutes * 60000).toISOString();
 
       if (isPlan) {
-        const scheduleSlotValue = `${startTime}-${endTime}`;
-        const deadlineValue = toDateTimeLocalString(combineDateWithTime(selectedDate, endTime));
+        const scheduleSlotValue = isTimeEnabled ? `${startTime}-${endTime}` : null;
+        const deadlineValue = isDateEnabled
+          ? toDateTimeLocalString(
+            isTimeEnabled ? combineDateWithTime(selectedDate, endTime) : startOfDay(selectedDate)
+          )
+          : null;
 
         const payload: PlanUpdates = {
           label: trimmed,
@@ -431,75 +462,113 @@ export function PlanHabitInlineEditor({
         <hr className={calendarStyles.composerSectionDivider} />
 
         <div className={calendarStyles.composerTimeSection}>
-          <div className={calendarStyles.composerTimeRow}>
-            <div className={calendarStyles.composerTimeInputGroup}>
+          <div className={calendarStyles.composerToggleRow}>
+            <label
+              className={calendarStyles.composerToggle}
+              data-active={isTimeEnabled ? "true" : "false"}
+              data-disabled={isSubmitting ? "true" : undefined}
+            >
               <input
-                type="time"
-                value={startTime}
-                onChange={(event) => setStartTime(event.target.value)}
-                className={calendarStyles.composerTimeInput}
-                required
+                type="checkbox"
+                className={calendarStyles.composerToggleInput}
+                checked={isTimeEnabled}
+                onChange={() => setIsTimeEnabled((previous) => !previous)}
                 disabled={isSubmitting}
               />
-              <ArrowRight size={14} className={calendarStyles.composerTimeArrow} />
+              <span className={calendarStyles.composerToggleIndicator} aria-hidden="true" />
+              <span>{t("Time")}</span>
+            </label>
+            <label
+              className={calendarStyles.composerToggle}
+              data-active={isDateEnabled ? "true" : "false"}
+              data-disabled={isSubmitting ? "true" : undefined}
+            >
               <input
-                type="time"
-                value={endTime}
-                onChange={(event) => setEndTime(event.target.value)}
-                className={calendarStyles.composerTimeInput}
-                required
+                type="checkbox"
+                className={calendarStyles.composerToggleInput}
+                checked={isDateEnabled}
+                onChange={() => setIsDateEnabled((previous) => !previous)}
                 disabled={isSubmitting}
               />
-            </div>
-            <span className={calendarStyles.composerDuration}>
-              {formatInlineDurationLabel(startTime, endTime)}
-            </span>
+              <span className={calendarStyles.composerToggleIndicator} aria-hidden="true" />
+              <span>{t("Date")}</span>
+            </label>
           </div>
-          <div className={calendarStyles.composerTimeMetaRow}>
-            <div className={calendarStyles.composerDateRow}>
-              <button
-                type="button"
-                className={calendarStyles.composerDateTrigger}
-                onClick={() => {
-                  setMonthDate(startOfMonth(selectedDate));
-                  setIsReminderMenuOpen(false);
-                  setIsDatePickerOpen((previous) => !previous);
-                }}
-                aria-expanded={isDatePickerOpen ? "true" : "false"}
-                aria-label={t("Choose date")}
-                disabled={isSubmitting}
-              >
-                <Calendar
-                  size={14}
-                  aria-hidden="true"
-                  className={calendarStyles.composerInlineControlIcon}
+          {isTimeEnabled ? (
+            <div className={calendarStyles.composerTimeRow}>
+              <div className={calendarStyles.composerTimeInputGroup}>
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(event) => setStartTime(event.target.value)}
+                  className={calendarStyles.composerTimeInput}
+                  required={isTimeEnabled}
+                  disabled={isSubmitting}
                 />
-                <span className={calendarStyles.composerInlineControlLabel}>
-                  {selectedDate.toLocaleDateString(undefined, {
-                    weekday: "short",
-                    month: "short",
-                    day: "numeric",
-                  })}
-                </span>
-                <ChevronDown
-                  size={14}
-                  aria-hidden="true"
-                  className={calendarStyles.composerInlineControlChevron}
+                <ArrowRight size={14} className={calendarStyles.composerTimeArrow} />
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(event) => setEndTime(event.target.value)}
+                  className={calendarStyles.composerTimeInput}
+                  required={isTimeEnabled}
+                  disabled={isSubmitting}
                 />
-              </button>
+              </div>
+              <span className={calendarStyles.composerDuration}>
+                {formatInlineDurationLabel(startTime, endTime)}
+              </span>
             </div>
+          ) : null}
+          {isDateEnabled ? (
+            <div className={calendarStyles.composerTimeMetaRow}>
+              <div className={calendarStyles.composerDateRow}>
+                <button
+                  type="button"
+                  className={calendarStyles.composerDateTrigger}
+                  onClick={() => {
+                    setMonthDate(startOfMonth(selectedDate));
+                    setIsReminderMenuOpen(false);
+                    setIsDatePickerOpen((previous) => !previous);
+                  }}
+                  aria-expanded={isDatePickerOpen ? "true" : "false"}
+                  aria-label={t("Choose date")}
+                  disabled={isSubmitting}
+                >
+                  <Calendar
+                    size={14}
+                    aria-hidden="true"
+                    className={calendarStyles.composerInlineControlIcon}
+                  />
+                  <span className={calendarStyles.composerInlineControlLabel}>
+                    {selectedDate.toLocaleDateString(undefined, {
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </span>
+                  <ChevronDown
+                    size={14}
+                    aria-hidden="true"
+                    className={calendarStyles.composerInlineControlChevron}
+                  />
+                </button>
+              </div>
 
-            <ReminderControls
-              reminderPreset={reminderPreset}
-              setReminderPreset={setReminderPreset}
-              customReminderMinutes={customReminderMinutes}
-              setCustomReminderMinutes={setCustomReminderMinutes}
-              isSubmitting={isSubmitting}
-              isOpen={isReminderMenuOpen}
-              setIsOpen={setIsReminderMenuOpen}
-              onBeforeToggle={() => setIsDatePickerOpen(false)}
-            />
-          </div>
+              {reminderEnabled ? (
+                <ReminderControls
+                  reminderPreset={reminderPreset}
+                  setReminderPreset={setReminderPreset}
+                  customReminderMinutes={customReminderMinutes}
+                  setCustomReminderMinutes={setCustomReminderMinutes}
+                  isSubmitting={isSubmitting}
+                  isOpen={isReminderMenuOpen}
+                  setIsOpen={setIsReminderMenuOpen}
+                  onBeforeToggle={() => setIsDatePickerOpen(false)}
+                />
+              ) : null}
+            </div>
+          ) : null}
         </div>
         <hr className={calendarStyles.composerSectionDivider} />
 

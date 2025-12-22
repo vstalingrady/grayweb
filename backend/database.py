@@ -203,13 +203,13 @@ _db_fetch_val = database.fetch_val
 
 
 def _query_preview(query: Any) -> str:
-    if query is None:
-        text = ""
-    else:
-        try:
+    try:
+        if query is None:
+            text = ""
+        else:
             text = str(query)
-        except Exception:
-            text = "<unprintable query>"
+    except Exception:
+        text = "<unprintable query>"
     text = " ".join(text.split())
     if len(text) > 240:
         return text[:240] + "..."
@@ -553,6 +553,37 @@ media_uploads = sqlalchemy.Table(
     sqlalchemy.Column("mime_type", sqlalchemy.String, nullable=False),
     sqlalchemy.Column("size", sqlalchemy.Integer, nullable=False),
     sqlalchemy.Column("storage_path", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+)
+
+hire_applications = sqlalchemy.Table(
+    "hire_applications",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("role", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("full_name", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("email", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("location", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("university_background", sqlalchemy.Text, nullable=True),
+    sqlalchemy.Column("major_field", sqlalchemy.Text, nullable=True),
+    sqlalchemy.Column("linkedin_url", sqlalchemy.Text, nullable=True),
+    sqlalchemy.Column("social_links", sqlalchemy.Text, nullable=True),
+    sqlalchemy.Column("interest_reason", sqlalchemy.Text, nullable=True),
+    sqlalchemy.Column("alignment_vision", sqlalchemy.Text, nullable=True),
+    sqlalchemy.Column("studies_balance", sqlalchemy.Text, nullable=True),
+    sqlalchemy.Column("resume_filename", sqlalchemy.Text, nullable=True),
+    sqlalchemy.Column("resume_mime", sqlalchemy.Text, nullable=True),
+    sqlalchemy.Column("resume_size", sqlalchemy.Integer, nullable=True),
+    sqlalchemy.Column("resume_storage_path", sqlalchemy.Text, nullable=True),
+    sqlalchemy.Column("github_url", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("hardest_build", sqlalchemy.Text, nullable=True),
+    sqlalchemy.Column("tech_stack", sqlalchemy.Text, nullable=True),
+    sqlalchemy.Column("built_links", sqlalchemy.Text, nullable=True),
+    sqlalchemy.Column("growth_plan", sqlalchemy.Text, nullable=True),
+    sqlalchemy.Column("growth_take", sqlalchemy.Text, nullable=True),
+    sqlalchemy.Column("equity_reason", sqlalchemy.Text, nullable=True),
+    sqlalchemy.Column("user_agent", sqlalchemy.Text, nullable=True),
+    sqlalchemy.Column("ip_address", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
 )
 

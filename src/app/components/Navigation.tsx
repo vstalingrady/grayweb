@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDismissableLayer } from "@/components/gray/hooks/useDismissableLayer";
 import { useHasHydrated } from "@/components/gray/hooks/useHasHydrated";
 import { resolveTryGrayUrl } from "@/lib/grayCta";
@@ -13,6 +13,7 @@ const Navigation = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const drawerId = "mobile-navigation";
   const [menuOpen, setMenuOpen] = useState(false);
+  const [navHidden, setNavHidden] = useState(true);
   const hasHydrated = useHasHydrated();
   const tryGrayUrl = useMemo(() => {
     if (!hasHydrated) {
@@ -22,6 +23,7 @@ const Navigation = () => {
   }, [hasHydrated]);
   const grayHref = "/";
   const closeMenu = useCallback(() => setMenuOpen(false), []);
+  const showNav = useCallback(() => setNavHidden(false), []);
 
   const navLinks = [
     { href: grayHref, label: "GRAY" },
@@ -41,12 +43,29 @@ const Navigation = () => {
   }, [closeMenu]);
 
   const toggleMenu = () => setMenuOpen((open) => !open);
+  const handleNavBarClick = useCallback(
+    (event: MouseEvent<HTMLElement>) => {
+      if (menuOpen) return;
+      const target = event.target as HTMLElement;
+      if (target.closest("a, button")) return;
+      setNavHidden(true);
+    },
+    [menuOpen]
+  );
   const handleNavClick = closeMenu;
 
   return (
-    <div className="nav-shell" ref={containerRef}>
+    <div className={`nav-shell${navHidden ? " nav-shell--hidden" : ""}`} ref={containerRef}>
       <div className="nav-backdrop" aria-hidden />
-      <nav className="nav-bar">
+      <button
+        type="button"
+        className="nav-reveal"
+        onClick={showNav}
+        tabIndex={navHidden ? 0 : -1}
+        aria-hidden={!navHidden}
+        aria-label={t("Show navigation")}
+      />
+      <nav className="nav-bar" onClick={handleNavBarClick}>
         <Link href="/" className="nav-logo" onClick={handleNavClick}>
           <span className="sr-only">alignment.id</span>
           <Image

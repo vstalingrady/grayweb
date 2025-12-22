@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/grayai.png",
+        url: "/thumbnail.png",
         alt: "Gray",
       },
     ],
@@ -51,7 +51,7 @@ export const metadata: Metadata = {
     title: "Gray",
     description:
       "Your personal accelerator. An AI mentor that checks in throughout the day, remembers your goals, and helps you maximize your potential.",
-    images: ["/grayai.png"],
+    images: ["/thumbnail.png"],
     site: "@alignmentid",
     creator: "@alignmentid",
   },

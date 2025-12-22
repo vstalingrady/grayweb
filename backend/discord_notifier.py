@@ -14,6 +14,7 @@ logger = logging.getLogger("backend.discord_notifier")
 
 _PAYMENTS_WEBHOOK_ENV_VARS = ("DISCORD_PAYMENTS_WEBHOOK_URL", "DISCORD_WEBHOOK_URL")
 _ALERTS_WEBHOOK_ENV_VARS = ("DISCORD_ALERTS_WEBHOOK_URL", "DISCORD_WEBHOOK_URL")
+_HIRING_WEBHOOK_ENV_VARS = ("DISCORD_HIRING_WEBHOOK_URL", "DISCORD_WEBHOOK_URL")
 
 
 def get_discord_webhook_url() -> Optional[str]:
@@ -26,6 +27,14 @@ def get_discord_webhook_url() -> Optional[str]:
 
 def get_discord_alerts_webhook_url() -> Optional[str]:
     for key in _ALERTS_WEBHOOK_ENV_VARS:
+        value = (os.getenv(key) or "").strip()
+        if value:
+            return value
+    return None
+
+
+def get_discord_hiring_webhook_url() -> Optional[str]:
+    for key in _HIRING_WEBHOOK_ENV_VARS:
         value = (os.getenv(key) or "").strip()
         if value:
             return value
@@ -79,6 +88,74 @@ def build_payment_webhook_payload(
                 "color": 0x2ECC71,  # green
                 "timestamp": _now_iso(),
                 "fields": fields,
+            }
+        ],
+    }
+
+
+def _truncate_text(value: Optional[str], limit: int = 900) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if not text:
+        return ""
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 3)] + "..."
+
+
+def build_hiring_webhook_payload(application: Dict[str, Any]) -> Dict[str, Any]:
+    role = str(application.get("role") or "").strip().upper() or "APPLICANT"
+    title = f"New {role} Application"
+
+    fields: list[Dict[str, Any]] = []
+
+    def add_field(name: str, value: Optional[str], inline: bool = True) -> None:
+        cleaned = _truncate_text(value)
+        if not cleaned:
+            return
+        fields.append({"name": name, "value": cleaned, "inline": inline})
+
+    add_field("Name", application.get("name"), True)
+    add_field("Email", application.get("email"), True)
+    add_field("Location", application.get("location"), True)
+    add_field("ID", application.get("application_id"), True)
+    add_field("University/Background", application.get("university_background"), True)
+    add_field("Major/Field", application.get("major_field"), True)
+    add_field("LinkedIn", application.get("linkedin_url"), False)
+    add_field("Socials (X/Instagram)", application.get("social_links"), False)
+
+    resume_value = (
+        application.get("resume_url")
+        or application.get("resume_filename")
+        or application.get("resume_storage_path")
+    )
+    resume_size = application.get("resume_size")
+    if resume_value and resume_size:
+        resume_value = f"{resume_value} ({resume_size} bytes)"
+    add_field("Resume", resume_value, False)
+    add_field("Why Gray", application.get("interest_reason"), False)
+    add_field("Alignment Vision", application.get("alignment_vision"), False)
+    add_field("Studies Balance", application.get("studies_balance"), False)
+
+    if role == "CTO":
+        add_field("GitHub", application.get("github_url"), False)
+        add_field("Hardest Build", application.get("hardest_build"), False)
+        add_field("Tech Stack", application.get("tech_stack"), False)
+    else:
+        add_field("Built/Grew", application.get("built_links"), False)
+        add_field("Growth Plan", application.get("growth_plan"), False)
+        add_field("Hot Take", application.get("growth_take"), False)
+    add_field("Equity Reason", application.get("equity_reason"), False)
+
+    return {
+        "content": None,
+        "embeds": [
+            {
+                "title": title,
+                "color": 0x5865F2,
+                "timestamp": _now_iso(),
+                "fields": fields[:25],
             }
         ],
     }
@@ -196,6 +273,18 @@ async def notify_alert(
         await _post_discord_webhook(url, payload)
     except Exception as exc:
         logger.warning("Discord alert notification failed", extra={"error": str(exc)})
+
+
+async def notify_hiring_submission(payload: Dict[str, Any]) -> None:
+    url = get_discord_hiring_webhook_url()
+    if not url:
+        return
+
+    try:
+        message = build_hiring_webhook_payload(payload)
+        await _post_discord_webhook(url, message)
+    except Exception as exc:
+        logger.warning("Discord hiring notification failed", extra={"error": str(exc)})
 
 
 def schedule_alert_if_possible(coro: "asyncio.Future[Any] | asyncio.coroutines.Coroutine[Any, Any, Any]") -> None:

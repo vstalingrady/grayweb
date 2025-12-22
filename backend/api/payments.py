@@ -278,7 +278,7 @@ async def _create_midtrans_charge(request: PaymentRequest, user: Dict[str, Any])
 
 
 async def _create_dodo_checkout(request: PaymentRequest, user: Dict[str, Any]) -> PaymentChargeResponse:
-    from backend.dodo_payments import get_dodo_client
+    from backend.dodo_payments import DodoPaymentsUnavailable, get_dodo_client
 
     app_logger = _get_logger()
     user_id = _row_get(user, "id")
@@ -339,6 +339,11 @@ async def _create_dodo_checkout(request: PaymentRequest, user: Dict[str, Any]) -
 
     try:
         client = get_dodo_client()
+    except DodoPaymentsUnavailable as exc:
+        app_logger.error("Dodo payments unavailable", extra={"error": str(exc)})
+        raise HTTPException(status_code=503, detail="Dodo payments are not configured")
+
+    try:
         session = client.checkout_sessions.create(**checkout_args)
     except Exception as e:
         app_logger.error(f"Dodo Payments API error: {e}")
@@ -576,7 +581,7 @@ async def handle_payment_notification(notification: MidtransNotification, backgr
 @router.post("/payment/dodo/webhook", include_in_schema=False)
 async def handle_dodo_webhook(request: Request, background_tasks: BackgroundTasks):
     """Handle Dodo Payments webhook events."""
-    from backend.dodo_payments import get_dodo_client
+    from backend.dodo_payments import DodoPaymentsUnavailable, get_dodo_client
 
     app_logger = _get_logger()
     invalidate_user_cache, invalidate_user_cache_redis = _get_cache_helpers()
@@ -597,6 +602,11 @@ async def handle_dodo_webhook(request: Request, background_tasks: BackgroundTask
 
     try:
         client = get_dodo_client()
+    except DodoPaymentsUnavailable as exc:
+        app_logger.error("Dodo payments unavailable", extra={"error": str(exc)})
+        raise HTTPException(status_code=503, detail="Dodo payments are not configured")
+
+    try:
         payload = client.webhooks.unwrap(raw_payload, headers=headers)
     except Exception as exc:
         app_logger.warning("Invalid Dodo webhook signature", extra={"error": str(exc)})

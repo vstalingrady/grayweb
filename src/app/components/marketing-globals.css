@@ -1824,7 +1824,8 @@ a:hover {
   letter-spacing: 0.32em;
   font-weight: 600;
   color: #ffffff;
-  font-family: var(--font-sans), "Plus Jakarta Sans", "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-mono), "IBM Plex Mono", "SFMono-Regular", Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
 }
 
 .site-footer__column-link {
@@ -1836,9 +1837,8 @@ a:hover {
   border-bottom: 1px solid transparent;
   padding-bottom: 0.1rem;
   transition: border-color 0.2s ease, color 0.2s ease;
-  font-family: var(--font-mono), "IBM Plex Mono", "SFMono-Regular", Menlo, Monaco, Consolas,
-    "Liberation Mono", "Courier New", monospace;
-  letter-spacing: 0.06em;
+  font-family: var(--font-sans), "Plus Jakarta Sans", "Helvetica Neue", Arial, sans-serif;
+  letter-spacing: 0.01em;
 }
 
 .site-footer__column-link:hover,
@@ -1857,8 +1857,8 @@ a:hover {
 .site-footer__column-note {
   color: rgba(255, 255, 255, 0.55);
   font-size: 0.95rem;
-  font-family: var(--font-mono), "IBM Plex Mono", "SFMono-Regular", Menlo, Monaco, Consolas,
-    "Liberation Mono", "Courier New", monospace;
+  font-family: var(--font-sans), "Plus Jakarta Sans", "Helvetica Neue", Arial, sans-serif;
+  letter-spacing: 0.01em;
 }
 
 .site-footer__social-row {
@@ -2433,6 +2433,7 @@ a:hover {
   pointer-events: auto;
   backdrop-filter: blur(24px);
   font-weight: 600;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 .nav-primary {
@@ -2440,6 +2441,40 @@ a:hover {
   align-items: center;
   margin-left: auto;
   gap: clamp(1rem, 2vw, 1.6rem);
+}
+
+.nav-reveal {
+  position: absolute;
+  top: calc(var(--nav-shell-pad-y) + 0.25rem);
+  left: 50%;
+  transform: translateX(-50%);
+  width: clamp(2.6rem, 8vw, 4.2rem);
+  height: 0.4rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.nav-shell--hidden .nav-bar {
+  opacity: 0;
+  transform: translateY(-120%);
+  pointer-events: none;
+}
+
+.nav-shell--hidden .nav-backdrop {
+  opacity: 0;
+}
+
+.nav-shell--hidden .nav-reveal {
+  opacity: 0.7;
+  pointer-events: auto;
+}
+
+.nav-reveal:hover {
+  opacity: 1;
 }
 
 .nav-logo {
@@ -3458,4 +3493,49 @@ a:hover {
 .clear-both+.text-base,
 .clear-both .text-base:first-child {
   margin-top: 0;
+}
+
+/* Hire form select styling */
+.hire-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  color-scheme: dark;
+  width: 100%;
+  padding: 1rem 2.75rem 1rem 1.25rem;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background-color: rgba(0, 0, 0, 0.4);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0%200%2020%2020' fill='none'%3E%3Cpath d='M6%208l4%204%204-4' stroke='%23e6e6e6' stroke-opacity='0.7' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 0.85rem;
+  color: rgba(244, 244, 244, 0.9);
+  font-family: inherit;
+  font-size: inherit;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.hire-select:focus-visible {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.35);
+  background-color: rgba(0, 0, 0, 0.55);
+}
+
+.hire-select:invalid {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.hire-select option {
+  background-color: rgba(10, 10, 12, 0.98);
+  color: rgba(235, 235, 235, 0.92);
+  font-size: 0.95rem;
+}
+
+.hire-select option:checked {
+  background-color: rgba(20, 20, 22, 0.98);
 }

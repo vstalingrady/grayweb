@@ -2936,7 +2936,7 @@
 }
 
 .mainContent[data-view="general"] {
-  --chat-column-max-width: 680px;
+  --chat-column-max-width: min(980px, 94vw);
 }
 
 .mainContent[data-view="chat"] {

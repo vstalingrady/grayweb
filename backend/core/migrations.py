@@ -120,6 +120,50 @@ def run_startup_migrations():
             FOREIGN KEY(user_id) REFERENCES users(id)
         )
     """)
+
+    _ensure_sqlite_table("hire_applications", """
+        CREATE TABLE hire_applications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            role TEXT NOT NULL,
+            full_name TEXT NOT NULL,
+            email TEXT NOT NULL,
+            location TEXT,
+            university_background TEXT,
+            major_field TEXT,
+            linkedin_url TEXT,
+            social_links TEXT,
+            interest_reason TEXT,
+            alignment_vision TEXT,
+            studies_balance TEXT,
+            resume_filename TEXT,
+            resume_mime TEXT,
+            resume_size INTEGER,
+            resume_storage_path TEXT,
+            github_url TEXT,
+            hardest_build TEXT,
+            tech_stack TEXT,
+            built_links TEXT,
+            growth_plan TEXT,
+            growth_take TEXT,
+            equity_reason TEXT,
+            user_agent TEXT,
+            ip_address TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    _ensure_sqlite_columns("hire_applications", [
+        ("university_background", "TEXT", None),
+        ("major_field", "TEXT", None),
+        ("linkedin_url", "TEXT", None),
+        ("social_links", "TEXT", None),
+        ("interest_reason", "TEXT", None),
+        ("alignment_vision", "TEXT", None),
+        ("studies_balance", "TEXT", None),
+        ("resume_filename", "TEXT", None),
+        ("resume_mime", "TEXT", None),
+        ("resume_size", "INTEGER", None),
+        ("resume_storage_path", "TEXT", None),
+    ])
     
     # Ensure reminders column for existing tables
     _ensure_sqlite_columns("general_chat_messages", [

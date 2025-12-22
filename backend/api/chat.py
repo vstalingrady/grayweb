@@ -569,7 +569,18 @@ async def chat_stream_route(
                     except Exception as e:
                         api_logger.error(f"Failed to finalize chat: {e}", extra={"user_id": uid})
 
-                background_tasks.add_task(_finalize_chat, conversation_id, chat_request.user_id, final_response, grounding_metadata_payload)
+                # Persist before ending the stream so the next request sees this reply.
+                try:
+                    await _finalize_chat(conversation_id, chat_request.user_id, final_response, grounding_metadata_payload)
+                except Exception as finalize_error:
+                    api_logger.error(
+                        "Streaming finalize failed; continuing without persistence",
+                        extra={
+                            "user_id": chat_request.user_id,
+                            "conversation_id": conversation_id,
+                            "error": str(finalize_error),
+                        },
+                    )
 
                 final_title = session_title
                 if chat_request.should_generate_title:

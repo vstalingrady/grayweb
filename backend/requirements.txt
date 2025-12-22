@@ -18,7 +18,7 @@ google-genai
 tiktoken
 anthropic
 pywebpush
-dodopayments[webhooks]
+dodopayments[webhooks]==1.68.0
 midtransclient
 slowapi
 python-dateutil

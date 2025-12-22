@@ -574,6 +574,11 @@ from backend.api.users import router as users_router
 
 app.include_router(users_router)
 
+# Hiring routes
+from backend.api.hire import router as hire_router
+
+app.include_router(hire_router)
+
 # Conversations routes
 from backend.api.conversations import router as conversations_router
 

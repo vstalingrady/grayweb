@@ -10,6 +10,7 @@ const ROUTES: Array<{
   { path: "", changeFrequency: "weekly", priority: 1 },
   { path: "/pricing", changeFrequency: "monthly", priority: 0.8 },
   { path: "/contact", changeFrequency: "yearly", priority: 0.5 },
+  { path: "/hire", changeFrequency: "monthly", priority: 0.6 },
   { path: "/policies", changeFrequency: "yearly", priority: 0.4 },
   { path: "/policies/privacy", changeFrequency: "yearly", priority: 0.3 },
   { path: "/policies/tos", changeFrequency: "yearly", priority: 0.3 },

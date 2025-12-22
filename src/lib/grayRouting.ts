@@ -1,5 +1,7 @@
 const GENERAL_PREFIX = "/g";
 const PROD_DOMAIN = "gray.alignment.id";
+const LOCAL_WORKSPACE_HOST = "gray.localhost";
+const LOCAL_MAIN_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1"]);
 
 const normalizeHostname = (value?: string | null): string => {
   if (!value) {
@@ -35,11 +37,6 @@ export const isGrayWorkspaceHost = (host?: string | null): boolean => {
   }
 
   if (normalized === PROD_DOMAIN) {
-    return true;
-  }
-
-  // Allow localhost for development
-  if (isLocalHostname(normalized)) {
     return true;
   }
 
@@ -203,6 +200,10 @@ export const resolveWorkspaceHost = (
 
   if (isGrayWorkspaceHost(hostOnly)) {
     return hostOnly;
+  }
+
+  if (LOCAL_MAIN_HOSTS.has(normalized)) {
+    return LOCAL_WORKSPACE_HOST;
   }
 
   if (isLocalHostname(hostOnly)) {

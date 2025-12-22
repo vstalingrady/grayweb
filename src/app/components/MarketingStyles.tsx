@@ -38,6 +38,7 @@ body {
   overflow-y: auto;
   padding: 0 !important;
   margin: 0;
+  color-scheme: dark;
   background-color: #000000;
   color: #fffefa;
   font-family: var(--font-sans), "Plus Jakarta Sans", "Helvetica Neue", Arial, sans-serif;
