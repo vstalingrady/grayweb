@@ -909,7 +909,8 @@ export default function HireHero() {
               <input
                 id="hire-linkedin"
                 name="linkedin"
-                type="url"
+                type="text"
+                inputMode="url"
                 required
                 placeholder="https://linkedin.com/in/username"
                 value={formState.linkedin}
@@ -928,7 +929,8 @@ export default function HireHero() {
               <input
                 id="hire-socials"
                 name="socials"
-                type="url"
+                type="text"
+                inputMode="url"
                 required
                 placeholder="https://x.com/username or https://instagram.com/username"
                 value={formState.socials}
@@ -1012,7 +1014,8 @@ export default function HireHero() {
                   <input
                     id="hire-github"
                     name="github"
-                    type="url"
+                    type="text"
+                    inputMode="url"
                     required
                     placeholder="https://github.com/username"
                     value={formState.github}
