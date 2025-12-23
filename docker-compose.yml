@@ -35,6 +35,7 @@ services:
     environment:
       - SQLITE_DB_PATH=/app/data/users.db
       - REDIS_URL=redis://redis:6379/0
+      - MEDIA_UPLOAD_DIR=/app/media_uploads
     volumes:
       # Persist SQLite database
       - ../data:/app/data
@@ -55,6 +56,7 @@ services:
     environment:
       - SQLITE_DB_PATH=/app/data/users.db
       - REDIS_URL=redis://redis:6379/0
+      - MEDIA_UPLOAD_DIR=/app/media_uploads
     volumes:
       - ../data:/app/data
     depends_on:
