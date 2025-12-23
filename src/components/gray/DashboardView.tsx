@@ -382,16 +382,20 @@ export function GrayDashboardView({
     />
   );
 
+  const shouldShowPulseHeader = hasCalendarAccess || showUpgradeButton;
+
   const pulseContent = (
     <div className={styles.dashboardViewScrollContainer}>
-      <DashboardHeader
-        activeTab={activeTab}
-        onSelectTab={onSelectTab}
-        className={headerClassName}
-        onUpgradeClick={onUpgradeClick}
-        showUpgradeButton={showUpgradeButton}
-        showTabs={hasCalendarAccess}
-      />
+      {shouldShowPulseHeader ? (
+        <DashboardHeader
+          activeTab={activeTab}
+          onSelectTab={onSelectTab}
+          className={headerClassName}
+          onUpgradeClick={onUpgradeClick}
+          showUpgradeButton={showUpgradeButton}
+          showTabs={hasCalendarAccess}
+        />
+      ) : null}
       <DashboardPulseGrid
         currentDate={currentDate}
         selectedDate={calendarSelectedDate ?? currentDate}
@@ -410,14 +414,16 @@ export function GrayDashboardView({
 
   const compactPulseContent = (
     <>
-      <DashboardHeader
-        activeTab={activeTab}
-        onSelectTab={onSelectTab}
-        className={headerClassName}
-        onUpgradeClick={onUpgradeClick}
-        showUpgradeButton={showUpgradeButton && !isCompactLayout}
-        showTabs={hasCalendarAccess}
-      />
+      {hasCalendarAccess ? (
+        <DashboardHeader
+          activeTab={activeTab}
+          onSelectTab={onSelectTab}
+          className={headerClassName}
+          onUpgradeClick={onUpgradeClick}
+          showUpgradeButton={showUpgradeButton && !isCompactLayout}
+          showTabs={hasCalendarAccess}
+        />
+      ) : null}
       <DashboardPulseGrid
         currentDate={currentDate}
         selectedDate={calendarSelectedDate ?? currentDate}
