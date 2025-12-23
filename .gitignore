@@ -33,6 +33,11 @@ yarn-error.log*
 # python
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+*.egg-info/
 
 # sqlite / local db artifacts
 *.db
@@ -67,6 +72,7 @@ next-env.d.ts
 plans-habits-server/node_modules
 .venv/
 venv/
+venv*/
 .env
 .env.production
 backend/logs/
