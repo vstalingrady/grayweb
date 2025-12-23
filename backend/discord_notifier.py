@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
@@ -15,6 +16,7 @@ logger = logging.getLogger("backend.discord_notifier")
 _PAYMENTS_WEBHOOK_ENV_VARS = ("DISCORD_PAYMENTS_WEBHOOK_URL", "DISCORD_WEBHOOK_URL")
 _ALERTS_WEBHOOK_ENV_VARS = ("DISCORD_ALERTS_WEBHOOK_URL", "DISCORD_WEBHOOK_URL")
 _HIRING_WEBHOOK_ENV_VARS = ("DISCORD_HIRING_WEBHOOK_URL", "DISCORD_WEBHOOK_URL")
+_HIRING_MENTION_ENV_VARS = ("DISCORD_HIRING_MENTION", "DISCORD_USER_ID")
 
 
 def get_discord_webhook_url() -> Optional[str]:
@@ -38,6 +40,16 @@ def get_discord_hiring_webhook_url() -> Optional[str]:
         value = (os.getenv(key) or "").strip()
         if value:
             return value
+    return None
+
+
+def get_discord_hiring_mention() -> Optional[str]:
+    explicit = (os.getenv(_HIRING_MENTION_ENV_VARS[0]) or "").strip()
+    if explicit:
+        return explicit
+    user_id = (os.getenv(_HIRING_MENTION_ENV_VARS[1]) or "").strip()
+    if user_id:
+        return f"<@{user_id}>"
     return None
 
 
@@ -104,9 +116,26 @@ def _truncate_text(value: Optional[str], limit: int = 900) -> str:
     return text[: max(0, limit - 3)] + "..."
 
 
+def _allowed_mentions_for_content(content: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not content:
+        return None
+    user_ids = re.findall(r"<@!?(\d+)>", content)
+    role_ids = re.findall(r"<@&(\d+)>", content)
+    if not user_ids and not role_ids:
+        return None
+    payload: Dict[str, Any] = {"parse": []}
+    if user_ids:
+        payload["users"] = list(dict.fromkeys(user_ids))
+    if role_ids:
+        payload["roles"] = list(dict.fromkeys(role_ids))
+    return payload
+
+
 def build_hiring_webhook_payload(application: Dict[str, Any]) -> Dict[str, Any]:
     role = str(application.get("role") or "").strip().upper() or "APPLICANT"
-    title = f"New {role} Application"
+    role_count = application.get("role_count")
+    count_suffix = f" #{role_count}" if isinstance(role_count, int) and role_count > 0 else ""
+    title = f"New {role} Application{count_suffix}"
 
     fields: list[Dict[str, Any]] = []
 
@@ -120,16 +149,28 @@ def build_hiring_webhook_payload(application: Dict[str, Any]) -> Dict[str, Any]:
     add_field("Email", application.get("email"), True)
     add_field("Location", application.get("location"), True)
     add_field("ID", application.get("application_id"), True)
+    cto_count = application.get("cto_count")
+    cmo_count = application.get("cmo_count")
+    total_count = application.get("total_count")
+    if isinstance(cto_count, int) or isinstance(cmo_count, int):
+        cto_value = cto_count if isinstance(cto_count, int) else 0
+        cmo_value = cmo_count if isinstance(cmo_count, int) else 0
+        counts_value = f"CTO {cto_value} / CMO {cmo_value}"
+        if isinstance(total_count, int) and total_count > 0:
+            counts_value = f"{counts_value} (Total {total_count})"
+        fields.append({"name": "Counts", "value": counts_value, "inline": True})
     add_field("University/Background", application.get("university_background"), True)
     add_field("Major/Field", application.get("major_field"), True)
     add_field("LinkedIn", application.get("linkedin_url"), False)
     add_field("Socials (X/Instagram)", application.get("social_links"), False)
 
-    resume_value = (
-        application.get("resume_url")
-        or application.get("resume_filename")
-        or application.get("resume_storage_path")
-    )
+    resume_url = application.get("resume_url")
+    resume_filename = application.get("resume_filename") or "resume.pdf"
+    resume_value = None
+    if resume_url:
+        resume_value = f"[{resume_filename}]({resume_url})"
+    else:
+        resume_value = resume_filename or application.get("resume_storage_path")
     resume_size = application.get("resume_size")
     if resume_value and resume_size:
         resume_value = f"{resume_value} ({resume_size} bytes)"
@@ -148,8 +189,16 @@ def build_hiring_webhook_payload(application: Dict[str, Any]) -> Dict[str, Any]:
         add_field("Hot Take", application.get("growth_take"), False)
     add_field("Equity Reason", application.get("equity_reason"), False)
 
-    return {
-        "content": None,
+    mention = get_discord_hiring_mention()
+    summary = None
+    if isinstance(cto_count, int) or isinstance(cmo_count, int):
+        summary = f"CTO {cto_count or 0} / CMO {cmo_count or 0}"
+    content_parts = [part for part in [mention, summary] if part]
+    content = " ".join(content_parts) if content_parts else None
+    allowed_mentions = _allowed_mentions_for_content(content)
+
+    payload: Dict[str, Any] = {
+        "content": content,
         "embeds": [
             {
                 "title": title,
@@ -159,6 +208,9 @@ def build_hiring_webhook_payload(application: Dict[str, Any]) -> Dict[str, Any]:
             }
         ],
     }
+    if allowed_mentions:
+        payload["allowed_mentions"] = allowed_mentions
+    return payload
 
 
 async def _post_discord_webhook(url: str, payload: Dict[str, Any]) -> None:

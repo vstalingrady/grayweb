@@ -9,11 +9,16 @@ import { readServerSession } from "@/lib/auth/server";
 import { GrayProviders } from "@/components/GrayProviders";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 
+const normalizeMetadataUrl = (value?: string): string | undefined => {
+  const trimmed = (value ?? "").trim();
+  return trimmed ? trimmed : undefined;
+};
+
 const resolveMetadataBase = (): URL | undefined => {
   const candidate =
-    process.env.NEXT_PUBLIC_MAIN_SITE_URL ??
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    process.env.SITE_URL ??
+    normalizeMetadataUrl(process.env.NEXT_PUBLIC_MAIN_SITE_URL) ??
+    normalizeMetadataUrl(process.env.NEXT_PUBLIC_SITE_URL) ??
+    normalizeMetadataUrl(process.env.SITE_URL) ??
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined) ??
     (process.env.NODE_ENV === "development" ? "http://localhost:3000" : "https://alignment.id");
 
@@ -43,6 +48,16 @@ export const metadata: Metadata = {
       {
         url: "/thumbnail.png",
         alt: "Gray",
+      },
+      {
+        url: "/thumbnail.webp",
+        alt: "Gray",
+        type: "image/webp",
+      },
+      {
+        url: "/thumbnail.avif",
+        alt: "Gray",
+        type: "image/avif",
       },
     ],
   },

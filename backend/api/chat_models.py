@@ -43,7 +43,7 @@ class ChatRequest(BaseModel):
     web_search_enabled: bool = False  # Disabled by default - adds ~7s latency to OpenRouter
     should_generate_title: bool = False
     reasoning_mode: bool = False
-    reminders_enabled: bool = False
+    reminders_enabled: bool = True
     timezone: Optional[str] = None
     conversation_memory_enabled: bool = True
     # Bring-your-own-key: map of provider id -> API key

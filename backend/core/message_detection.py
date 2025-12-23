@@ -14,8 +14,12 @@ from urllib.parse import urlparse
 # ==============================================================================
 
 REMINDER_KEYWORDS = frozenset({
-    "reminder", "remind", "ping", "nudge", "notify", "timer", "alarm", "alert",
-    "goal", "plan", "habit", "schedule", "deadline", "due", "task", "todo",
+    "reminder", "reminders", "remind", "reminds",
+    "ping", "pings", "nudge", "nudges", "notify", "notification", "notifications",
+    "timer", "timers", "alarm", "alarms", "alert", "alerts",
+    "goal", "goals", "plan", "plans", "habit", "habits",
+    "schedule", "schedules", "deadline", "deadlines", "due",
+    "task", "tasks", "todo", "todos", "to-do", "to-dos",
 })
 
 EVENT_KEYWORDS = frozenset({

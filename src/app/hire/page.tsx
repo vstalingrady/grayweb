@@ -19,6 +19,16 @@ export const metadata: Metadata = {
         url: "/thumbnail.png",
         alt: "Hire at Gray",
       },
+      {
+        url: "/thumbnail.webp",
+        alt: "Hire at Gray",
+        type: "image/webp",
+      },
+      {
+        url: "/thumbnail.avif",
+        alt: "Hire at Gray",
+        type: "image/avif",
+      },
     ],
   },
   twitter: {
