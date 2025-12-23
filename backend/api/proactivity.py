@@ -19,8 +19,12 @@ from pydantic import BaseModel
 
 # Import models
 from backend.models import (
-    ProactivityLog, ProactivityLogCreate, ProactivitySettings, 
-    ProactivitySettingsUpdate, DailyCheckIn,
+    ProactivityLog,
+    ProactivityLogCreate,
+    ProactivityNotification,
+    ProactivitySettings,
+    ProactivitySettingsUpdate,
+    DailyCheckIn,
 )
 
 # Import dependencies
