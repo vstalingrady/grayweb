@@ -48,16 +48,7 @@ export const metadata: Metadata = {
       {
         url: "/thumbnail.png",
         alt: "Gray",
-      },
-      {
-        url: "/thumbnail.webp",
-        alt: "Gray",
-        type: "image/webp",
-      },
-      {
-        url: "/thumbnail.avif",
-        alt: "Gray",
-        type: "image/avif",
+        type: "image/png",
       },
     ],
   },
