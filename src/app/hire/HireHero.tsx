@@ -563,36 +563,27 @@ export default function HireHero() {
       captcha_token: shouldUseCaptcha ? captchaToken : null,
     };
 
-    const shouldUseFormData = Boolean(resumeFile);
-    let body: BodyInit;
-    let headers: HeadersInit | undefined;
-
-    if (shouldUseFormData) {
-      const formData = new FormData();
-      Object.entries(payload).forEach(([key, value]) => {
-        if (value === null || value === undefined) return;
-        if (typeof value === "boolean") {
-          formData.append(key, value ? "true" : "false");
-          return;
-        }
-        formData.append(key, String(value));
-      });
-      if (resumeFile) {
-        formData.append("resume", resumeFile);
-      }
-      body = formData;
-    } else {
-      const cleanPayload = Object.fromEntries(
-        Object.entries(payload).filter(([, value]) => value !== null && value !== undefined)
-      );
-      headers = { "Content-Type": "application/json" };
-      body = JSON.stringify(cleanPayload);
+    const resumeCandidate = resumeFile ?? resumeInputRef.current?.files?.[0] ?? null;
+    if (!resumeCandidate) {
+      setFormStatus({ type: "error", message: "Resume/CV is required." });
+      return;
     }
+
+    const formData = new FormData();
+    Object.entries(payload).forEach(([key, value]) => {
+      if (value === null || value === undefined) return;
+      if (typeof value === "boolean") {
+        formData.append(key, value ? "true" : "false");
+        return;
+      }
+      formData.append(key, String(value));
+    });
+    formData.append("resume", resumeCandidate);
+    const body: BodyInit = formData;
 
     try {
       const response = await fetch("/api/p/api/hire/applications", {
         method: "POST",
-        headers,
         body,
       });
 
