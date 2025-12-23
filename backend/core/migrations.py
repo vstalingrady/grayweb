@@ -146,6 +146,7 @@ def run_startup_migrations():
             growth_plan TEXT,
             growth_take TEXT,
             equity_reason TEXT,
+            additional_notes TEXT,
             user_agent TEXT,
             ip_address TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -163,6 +164,7 @@ def run_startup_migrations():
         ("resume_mime", "TEXT", None),
         ("resume_size", "INTEGER", None),
         ("resume_storage_path", "TEXT", None),
+        ("additional_notes", "TEXT", None),
     ])
     
     # Ensure reminders column for existing tables

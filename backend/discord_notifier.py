@@ -188,6 +188,7 @@ def build_hiring_webhook_payload(application: Dict[str, Any]) -> Dict[str, Any]:
         add_field("Growth Plan", application.get("growth_plan"), False)
         add_field("Hot Take", application.get("growth_take"), False)
     add_field("Equity Reason", application.get("equity_reason"), False)
+    add_field("Additional Notes", application.get("additional_notes"), False)
 
     mention = get_discord_hiring_mention()
     summary = None

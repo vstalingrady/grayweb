@@ -36,6 +36,7 @@ type HireFormState = {
   interest: string;
   alignmentVision: string;
   studiesBalance: string;
+  additionalNotes: string;
 };
 
 type FormStatus = {
@@ -108,6 +109,7 @@ export default function HireHero() {
     interest: "",
     alignmentVision: "",
     studiesBalance: "",
+    additionalNotes: "",
   });
   const [formStatus, setFormStatus] = useState<FormStatus>({ type: "idle" });
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
@@ -560,6 +562,7 @@ export default function HireHero() {
       built_links: formState.role === "cmo" ? formState.cmoBuilt.trim() : "",
       growth_plan: formState.role === "cmo" ? formState.cmoPlan.trim() : "",
       growth_take: formState.role === "cmo" ? formState.cmoTake.trim() : "",
+      additional_notes: formState.additionalNotes.trim() || null,
       captcha_token: shouldUseCaptcha ? captchaToken : null,
     };
 
@@ -1162,6 +1165,23 @@ export default function HireHero() {
                 </div>
               </>
             )}
+            <div className="grid gap-2">
+              <label
+                className="text-sm sm:text-base font-mono uppercase tracking-normal text-white/60"
+                htmlFor="hire-additional-notes"
+              >
+                Anything else you&apos;d like us to know?
+              </label>
+              <textarea
+                id="hire-additional-notes"
+                name="additionalNotes"
+                rows={3}
+                placeholder="Optional context, links, or constraints."
+                value={formState.additionalNotes}
+                onChange={updateField("additionalNotes")}
+                className="w-full rounded-sm border border-white/15 bg-black/40 px-5 py-4 text-sm sm:text-base text-white placeholder:text-white/30 focus:border-white/40 focus:outline-none"
+              />
+            </div>
             {shouldUseCaptcha && (
               <div className="flex justify-center">
                 <Turnstile

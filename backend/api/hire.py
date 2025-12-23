@@ -46,6 +46,7 @@ class HireApplicationRequest(BaseModel):
     growth_plan: Optional[str] = None
     growth_take: Optional[str] = None
     equity_reason: Optional[str] = None
+    additional_notes: Optional[str] = None
     captcha_token: Optional[str] = None
 
 
@@ -199,6 +200,7 @@ async def create_hire_application(
     built_links = _normalize_text(payload.built_links)
     growth_plan = _normalize_text(payload.growth_plan)
     growth_take = _normalize_text(payload.growth_take)
+    additional_notes = _normalize_text(payload.additional_notes)
 
     _ensure_word_limit(interest_reason, 100, "Why Gray")
     _ensure_word_limit(alignment_vision, 100, "Alignment vision")
@@ -268,6 +270,7 @@ async def create_hire_application(
         growth_plan=growth_plan,
         growth_take=growth_take,
         equity_reason=equity_reason,
+        additional_notes=additional_notes,
         user_agent=user_agent,
         ip_address=remote_ip,
         created_at=utcnow(),
@@ -316,6 +319,7 @@ async def create_hire_application(
             "growth_plan": growth_plan,
             "growth_take": growth_take,
             "equity_reason": equity_reason,
+            "additional_notes": additional_notes,
         },
     )
 

@@ -582,6 +582,7 @@ hire_applications = sqlalchemy.Table(
     sqlalchemy.Column("growth_plan", sqlalchemy.Text, nullable=True),
     sqlalchemy.Column("growth_take", sqlalchemy.Text, nullable=True),
     sqlalchemy.Column("equity_reason", sqlalchemy.Text, nullable=True),
+    sqlalchemy.Column("additional_notes", sqlalchemy.Text, nullable=True),
     sqlalchemy.Column("user_agent", sqlalchemy.Text, nullable=True),
     sqlalchemy.Column("ip_address", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),

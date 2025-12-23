@@ -8,10 +8,10 @@ import HireHero from "./HireHero";
 
 export const metadata: Metadata = {
   title: { absolute: "Hire" },
-  description: "Gray is hiring for CTO and Marketing/Growth Co-Founder roles.",
+  description: "Alignment is hiring CTO and CMO co-founders to build Gray.",
   openGraph: {
     title: "Hire",
-    description: "Gray is hiring for CTO and Marketing/Growth Co-Founder roles.",
+    description: "Alignment is hiring CTO and CMO co-founders to build Gray.",
     url: "/hire",
     type: "website",
     images: [
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Hire",
-    description: "Gray is hiring for CTO and Marketing/Growth Co-Founder roles.",
+    description: "Alignment is hiring CTO and CMO co-founders to build Gray.",
     images: ["/thumbnail.png"],
   },
   alternates: {
