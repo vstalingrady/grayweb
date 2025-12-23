@@ -413,31 +413,19 @@ export function GrayDashboardView({
   );
 
   const compactPulseContent = (
-    <>
-      {hasCalendarAccess ? (
-        <DashboardHeader
-          activeTab={activeTab}
-          onSelectTab={onSelectTab}
-          className={headerClassName}
-          onUpgradeClick={onUpgradeClick}
-          showUpgradeButton={showUpgradeButton && !isCompactLayout}
-          showTabs={hasCalendarAccess}
-        />
-      ) : null}
-      <DashboardPulseGrid
-        currentDate={currentDate}
-        selectedDate={calendarSelectedDate ?? currentDate}
-        viewerName={user?.full_name ?? null}
-        proactivity={displayProactivity ?? null}
-        events={mergedEvents}
-        proactivityDeliveryKeys={proactivityDeliveryKeys}
-        canConfigureProactivity={Boolean(onProactivitySelect)}
-        onConfigureProactivity={handleOpenProactivityModal}
-        onSelectDate={(date) => onCalendarSelectedDateChange?.(date)}
-        isCompactLayout={isCompactLayout}
-        onAddEvent={(date) => openComposerAt(date)}
-      />
-    </>
+    <DashboardPulseGrid
+      currentDate={currentDate}
+      selectedDate={calendarSelectedDate ?? currentDate}
+      viewerName={user?.full_name ?? null}
+      proactivity={displayProactivity ?? null}
+      events={mergedEvents}
+      proactivityDeliveryKeys={proactivityDeliveryKeys}
+      canConfigureProactivity={Boolean(onProactivitySelect)}
+      onConfigureProactivity={handleOpenProactivityModal}
+      onSelectDate={(date) => onCalendarSelectedDateChange?.(date)}
+      isCompactLayout={isCompactLayout}
+      onAddEvent={(date) => openComposerAt(date)}
+    />
   );
 
   const calendarContent = (
