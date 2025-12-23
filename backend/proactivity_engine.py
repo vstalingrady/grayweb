@@ -19,6 +19,7 @@ import databases
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from backend.ai_message_generator import AIMessageGenerator
+from backend.core.serializers import row_get as _row_get
 from pywebpush import webpush, WebPushException
 
 logger = logging.getLogger(__name__)
@@ -269,6 +270,36 @@ class ProactivityEngine:
         if not should_send:
             return None
 
+        if not force:
+            inactive_days = self._inactive_days_threshold()
+            if inactive_days > 0:
+                last_user_message_at = await self._last_user_message_timestamp(user_id)
+                if not last_user_message_at:
+                    logger.debug(
+                        "Skipping proactivity send (no recent user activity)",
+                        extra={
+                            "event_type": "proactivity_inactivity_skip",
+                            "user_id": user_id,
+                            "inactive_days": inactive_days,
+                            "reason": "no_user_messages",
+                        },
+                    )
+                    return None
+
+                cutoff = datetime.now(dt_timezone.utc) - timedelta(days=inactive_days)
+                if last_user_message_at < cutoff:
+                    logger.debug(
+                        "Skipping proactivity send (user inactive)",
+                        extra={
+                            "event_type": "proactivity_inactivity_skip",
+                            "user_id": user_id,
+                            "inactive_days": inactive_days,
+                            "last_user_message_at": last_user_message_at.isoformat(),
+                            "reason": "stale_user_messages",
+                        },
+                    )
+                    return None
+
         # Generate delivery_key FIRST - this is our deduplication key
         delivery_key = None
         if current_window:
@@ -371,16 +402,63 @@ class ProactivityEngine:
             value = record[0]
         return self._normalize_timestamp(value)
 
+    async def _last_user_message_timestamp(self, user_id: int) -> Optional[datetime]:
+        """Return the timestamp of the latest user-authored message across chat stores."""
+        await self._ensure_connection()
+
+        general_query = """
+            SELECT created_at
+            FROM general_chat_messages
+            WHERE user_id = :user_id AND role = :role
+            ORDER BY created_at DESC
+            LIMIT 1
+        """
+        record = await self.db.fetch_one(general_query, {"user_id": user_id, "role": "user"})
+        value = _row_get(record, "created_at") if record else None
+        timestamp = self._normalize_timestamp(value)
+        if timestamp:
+            return self._normalize_to_utc(timestamp)
+
+        thread_query = """
+            SELECT m.created_at
+            FROM user_chat_messages m
+            JOIN user_chat_threads t ON m.thread_id = t.id
+            WHERE t.user_identifier = :user_id AND m.role = :role
+            ORDER BY m.created_at DESC
+            LIMIT 1
+        """
+        record = await self.db.fetch_one(thread_query, {"user_id": user_id, "role": "user"})
+        value = _row_get(record, "created_at") if record else None
+        timestamp = self._normalize_timestamp(value)
+        if timestamp:
+            return self._normalize_to_utc(timestamp)
+
+        return None
+
     @staticmethod
     def _normalize_timestamp(value: Any) -> Optional[datetime]:
         if isinstance(value, datetime):
             return value
         if isinstance(value, str):
             try:
-                return datetime.fromisoformat(value)
+                return datetime.fromisoformat(value.replace("Z", "+00:00"))
             except ValueError:
                 return None
         return None
+
+    @staticmethod
+    def _normalize_to_utc(value: datetime) -> datetime:
+        if value.tzinfo is None:
+            return value.replace(tzinfo=dt_timezone.utc)
+        return value.astimezone(dt_timezone.utc)
+
+    @staticmethod
+    def _inactive_days_threshold() -> int:
+        raw = os.getenv("PROACTIVITY_INACTIVE_DAYS", "7")
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return 7
 
     def _already_sent_in_window(
         self,
