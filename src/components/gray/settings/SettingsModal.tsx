@@ -2,6 +2,7 @@
 
 import {
   Fragment,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -20,8 +21,11 @@ import {
   Database,
   Bell,
   Brain,
+  CreditCard,
   KeyRound,
+  LogOut,
   Pencil,
+  Trash2,
 } from "lucide-react";
 import railNavStyles from "../sidebar/RailNav.module.css";
 import styles from "./SettingsStyles.module.css";
@@ -33,6 +37,9 @@ import { clampPercent, getContextUsageUsedTokens, getContextUsageVisualizationLi
 import { utilityService, chatService } from "@/lib/api";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
 import { clearGrayLocalCache } from "@/lib/localCache";
+import { clearAuthCookies } from "@/lib/auth/cookies";
+import { clearSupabaseAuthStorage } from "@/lib/supabaseStorage";
+import { getSupabaseClient } from "@/lib/supabaseClient";
 import { AccountSection } from "./sections/AccountSection";
 import { ApiKeysSection } from "./sections/ApiKeysSection";
 import { DataControlsSection } from "./sections/DataControlsSection";
@@ -40,7 +47,7 @@ import { ModelsSection } from "./sections/ModelsSection";
 import { NotificationsSection } from "./sections/NotificationsSection";
 import { PersonalizationSection } from "./sections/PersonalizationSection";
 import { PreferencesSection } from "./sections/PreferencesSection";
-import { normalizePlanTier, PLAN_TIER_LEVELS } from "@/components/gray/utils/helperFunctions";
+import { derivePlanTierLabel, normalizePlanTier, PLAN_TIER_LEVELS } from "@/components/gray/utils/helperFunctions";
 import {
   API_KEY_PROVIDERS,
   type SettingsModalProps,
@@ -163,6 +170,7 @@ export function SettingsModal({
     const normalized = normalizePlanTier(user);
     return PLAN_TIER_LEVELS[normalized] ?? 0;
   }, [user]);
+  const planLabel = useMemo(() => derivePlanTierLabel(user), [user]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -428,6 +436,27 @@ export function SettingsModal({
     router.push("/delete-account");
   };
 
+  const handleNavigateToPricing = useCallback(() => {
+    onClose();
+    router.push("/pricing");
+  }, [onClose, router]);
+
+  const handleLogOut = useCallback(async () => {
+    try {
+      const supabase = getSupabaseClient();
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
+    } catch (error) {
+      console.error("Failed to log out:", error);
+    } finally {
+      clearAuthCookies();
+      clearSupabaseAuthStorage();
+      onClose();
+      router.push("/login");
+    }
+  }, [onClose, router]);
+
   const handleToggleDeviceNotifications = async () => {
     const wantsEnabled = !notificationPreferences.device;
     if (!wantsEnabled) {
@@ -671,6 +700,38 @@ export function SettingsModal({
               </button>
             </div>
 
+            <div className={styles.mobileGroupLabel}>{t("Account")}</div>
+            <div className={styles.mobileGroup}>
+              <button
+                className={styles.mobileGroupItem}
+                onClick={handleNavigateToPricing}
+              >
+                <CreditCard className={styles.mobileGroupItemIcon} size={20} />
+                <div style={{ flex: 1 }}>
+                  <span className={styles.mobileGroupItemLabel} style={{ display: "block" }}>{t("Plan")}</span>
+                  <span className={styles.mobileGroupItemValue} style={{ fontSize: "0.85rem", color: "#888" }}>
+                    {planLabel}
+                  </span>
+                </div>
+                <ChevronRight className={styles.mobileGroupItemArrow} size={16} />
+              </button>
+              <button
+                className={styles.mobileGroupItem}
+                onClick={handleLogOut}
+              >
+                <LogOut className={styles.mobileGroupItemIcon} size={20} />
+                <span className={styles.mobileGroupItemLabel}>{t("Sign out")}</span>
+              </button>
+              <button
+                className={styles.mobileGroupItem}
+                data-variant="danger"
+                onClick={handleDeleteAccount}
+              >
+                <Trash2 className={styles.mobileGroupItemIcon} size={20} />
+                <span className={styles.mobileGroupItemLabel}>{t("Delete account")}</span>
+              </button>
+            </div>
+
             <div className={styles.mobileGroupLabel}>{t("Data & Information")}</div>
             <div className={styles.mobileGroup}>
               <button
@@ -779,7 +840,10 @@ export function SettingsModal({
 
 
         {/* Right Content */}
-        <main className={styles.settingsContent}>
+        <main
+          className={styles.settingsContent}
+          data-has-mobile-header={isMobile && mobileView === "detail" ? "true" : "false"}
+        >
           {/* Mobile Detail Header */}
           {isMobile && mobileView === "detail" && (
             <div className={styles.mobileSettingsHeader} style={{ marginBottom: 0 }}>
@@ -807,14 +871,13 @@ export function SettingsModal({
               t={t}
               user={user}
               tierLevel={tierLevel}
+              isCompactLayout={isMobile}
+              showAccountActions={!isMobile}
               avatarFileInputRef={avatarFileInputRef}
               avatarUploadState={avatarUploadState}
               avatarUploadError={avatarUploadError}
               onAvatarFileChange={handleAvatarFileChange}
-              onNavigateToPricing={() => {
-                onClose();
-                router.push("/pricing");
-              }}
+              onNavigateToPricing={handleNavigateToPricing}
               onDeleteAccount={handleDeleteAccount}
             />
           )}

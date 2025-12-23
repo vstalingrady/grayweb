@@ -200,6 +200,10 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.settingsContent[data-has-mobile-header="true"] .settingsPageHeader {
+  display: none;
+}
+
 .settingsPageTitle {
   font-size: 1.1rem;
   font-weight: 600;
@@ -574,6 +578,10 @@
     padding: 24px;
   }
 
+  .settingsPageHeader {
+    display: none;
+  }
+
   .settingsContainer[data-mobile-view="root"] .settingsContent {
     display: none;
   }
@@ -590,6 +598,10 @@
   cursor: pointer;
   transition: all 0.2s ease;
   padding: 2px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 24px;
 }
 
 .settingsToggle[aria-checked="true"] {
@@ -1031,6 +1043,19 @@ button.mobileGroupItem {
   height: 16px;
   color: rgba(245, 245, 245, 0.45);
   flex-shrink: 0;
+}
+
+.mobileGroupItem[data-variant="danger"] {
+  color: rgba(248, 113, 113, 0.95);
+}
+
+.mobileGroupItem[data-variant="danger"] .mobileGroupItemIcon,
+.mobileGroupItem[data-variant="danger"] .mobileGroupItemLabel {
+  color: rgba(248, 113, 113, 0.95);
+}
+
+.mobileGroupItem[data-variant="danger"] .mobileGroupItemArrow {
+  color: rgba(248, 113, 113, 0.65);
 }
 
 .mobileThemeGrid {
