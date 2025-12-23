@@ -26,7 +26,9 @@ const coexistenceOverrides = `
 }
 
 /* Ensure marketing layout isn't affected by Gray dashboard globals */
-html {
+html,
+body {
+  position: static;
   height: auto;
 }
 
@@ -48,6 +50,7 @@ body {
 #__next,
 #root {
   height: auto;
+  overflow: visible;
 }
 
 .page-root {
