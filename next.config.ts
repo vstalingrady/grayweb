@@ -11,6 +11,11 @@ const normalizeProxyTarget = (value: string) => value.replace(/\/+$/, "");
 const proxyTarget = normalizeProxyTarget(rawProxyTarget);
 console.log('Proxy Target:', proxyTarget);
 
+const isProduction = process.env.NODE_ENV === "production";
+const devConnectSrc = isProduction
+  ? ""
+  : " http://localhost:8000 http://127.0.0.1:8000 http://localhost:8001 http://127.0.0.1:8001 ws://localhost:3000 ws://127.0.0.1:3000";
+
 const nextConfig: NextConfig = {
   // Enable standalone output for Docker builds
   output: 'standalone',
@@ -151,7 +156,7 @@ const nextConfig: NextConfig = {
               // Fonts: self + Google Fonts
               "font-src 'self' https://fonts.gstatic.com",
               // XHR/Fetch: self + trusted APIs
-              "connect-src 'self' https://*.supabase.co https://*.googleusercontent.com https://www.youtube.com https://challenges.cloudflare.com wss://*.supabase.co https://api.midtrans.com https://api.sandbox.midtrans.com https://app.midtrans.com https://simulator.sandbox.midtrans.com https://gray.alignment.id",
+              `connect-src 'self' https://*.supabase.co https://*.googleusercontent.com https://www.youtube.com https://challenges.cloudflare.com wss://*.supabase.co https://api.midtrans.com https://api.sandbox.midtrans.com https://app.midtrans.com https://simulator.sandbox.midtrans.com https://gray.alignment.id${devConnectSrc}`,
               // Frames: limited to YouTube and Cloudflare
               "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://challenges.cloudflare.com https://api.midtrans.com https://api.sandbox.midtrans.com https://app.midtrans.com https://simulator.sandbox.midtrans.com https://gray.alignment.id",
               // Ancestors: prevent embedding

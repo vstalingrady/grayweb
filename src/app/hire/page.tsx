@@ -7,8 +7,26 @@ import { resolveTryGrayUrl } from "@/lib/grayCta";
 import HireHero from "./HireHero";
 
 export const metadata: Metadata = {
-  title: "Hire",
+  title: { absolute: "Hire" },
   description: "Gray is hiring for CTO and Marketing/Growth Co-Founder roles.",
+  openGraph: {
+    title: "Hire",
+    description: "Gray is hiring for CTO and Marketing/Growth Co-Founder roles.",
+    url: "/hire",
+    type: "website",
+    images: [
+      {
+        url: "/thumbnail.png",
+        alt: "Hire at Gray",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Hire",
+    description: "Gray is hiring for CTO and Marketing/Growth Co-Founder roles.",
+    images: ["/thumbnail.png"],
+  },
   alternates: {
     canonical: "/hire",
   },
@@ -22,7 +40,7 @@ export default async function HirePage() {
     <>
       <MarketingStyles />
       <div className="page-root">
-        <Navigation />
+        <Navigation defaultHidden />
         <main>
           <HireHero />
         </main>

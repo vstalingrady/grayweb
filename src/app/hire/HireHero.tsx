@@ -232,12 +232,7 @@ export default function HireHero() {
         ctx.beginPath();
         ctx.arc(moonX, moonY, moonSize / 2, 0, Math.PI * 2);
         ctx.clip();
-        ctx.filter = "contrast(1.75) brightness(1.05)";
         ctx.drawImage(moon, moonX - moonSize / 2, moonY - moonSize / 2, moonSize, moonSize);
-        ctx.filter = "none";
-        ctx.globalCompositeOperation = "multiply";
-        ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
-        ctx.fillRect(moonX - moonSize / 2, moonY - moonSize / 2, moonSize, moonSize);
         ctx.restore();
       }
 

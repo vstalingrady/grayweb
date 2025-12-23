@@ -65,13 +65,22 @@ export const PIONEER_GROUPS: ModelGroup[] = [
     id: "moonshot",
     label: "Moonshot AI",
     iconPath: "/logos/whitekimi.svg",
-    models: [{ id: "moonshotai/kimi-k2-thinking", label: "Kimi K2", cost: "$$", tierRequired: "pathfinder" }],
+    models: [
+      { id: "moonshotai/kimi-k2-0905", label: "Kimi K2", cost: "$$", tierRequired: "pathfinder" },
+      { id: "moonshotai/kimi-k2-fast", label: "Kimi K2 (Fast)", cost: "$$$", tierRequired: "pathfinder" },
+    ],
   },
   {
     id: "xiaomi",
     label: "Xiaomi",
     iconPath: "/logos/xiaomi.svg",
     models: [{ id: "xiaomi/mimo-v2-flash:free", label: "MiMo V2 Flash", cost: "$", tierRequired: "pathfinder" }],
+  },
+  {
+    id: "z-ai",
+    label: "Z.ai",
+    iconPath: "/logos/zaiwhite.svg",
+    models: [{ id: "z-ai/glm-4.7-2025", label: "GLM 4.7", cost: "$$", tierRequired: "pathfinder" }],
   },
 ];
 

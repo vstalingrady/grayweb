@@ -18,6 +18,25 @@ from backend.core.function_call_helpers import format_tool_results_for_context
 from backend.core.ai_utils import materialize_structured_reminders
 
 
+def _coerce_int(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _extract_usage_counts(usage: Dict[str, Any]) -> Tuple[int, int, int]:
+    prompt_tokens = _coerce_int(usage.get("prompt_tokens") or usage.get("input_tokens"))
+    completion_tokens = _coerce_int(usage.get("completion_tokens") or usage.get("output_tokens"))
+    cached_tokens = _coerce_int(usage.get("cached_tokens") or usage.get("cache_read_input_tokens"))
+
+    details = usage.get("prompt_tokens_details") or usage.get("input_tokens_details")
+    if isinstance(details, dict):
+        cached_tokens = max(cached_tokens, _coerce_int(details.get("cached_tokens")))
+
+    return prompt_tokens, completion_tokens, cached_tokens
+
+
 async def stream_openrouter_response(
     openrouter_service,
     message: str,
@@ -117,6 +136,15 @@ async def _stream_openrouter_response_impl(
         return
     
     t0_provider = time.perf_counter()
+    resolved_model = model
+    if hasattr(openrouter_service, "_resolve_model"):
+        try:
+            resolved_model = openrouter_service._resolve_model(model, reasoning_mode=reasoning_mode)
+        except Exception:
+            resolved_model = model
+    total_prompt_tokens = 0
+    total_completion_tokens = 0
+    total_cached_tokens = 0
     
     # Apply hybrid tool results to workspace context if provided
     hybrid_workspace_context = workspace_context
@@ -146,6 +174,7 @@ async def _stream_openrouter_response_impl(
         accumulated = ""
         t0_first_token = time.perf_counter()
         got_first_token = False
+        turn_usage: Optional[Dict[str, Any]] = None
         
         # Native tool call accumulator
         pending_tool_calls: Dict[int, Dict[str, Any]] = {}
@@ -167,8 +196,7 @@ async def _stream_openrouter_response_impl(
                     await tracker.track_cost(user_id, 0.01, "web_search")
                 except Exception as e:
                     api_logger.warning(f"Failed to track search cost: {e}")
-            
-            run_system_prompt = (run_system_prompt or "") + "\n\nYou have access to Google Search. You must use it for current events, news, or factual queries where your knowledge might be outdated."
+            # Search guidance is injected into runtime context to keep the system prompt stable for caching.
         
         # Stream from OpenRouter
         async for chunk in openrouter_service.stream(
@@ -191,6 +219,7 @@ async def _stream_openrouter_response_impl(
             if isinstance(chunk, dict):
                 # Handle usage statistics
                 if "usage" in chunk:
+                    turn_usage = chunk["usage"]
                     yield ("usage", chunk["usage"])
                     continue
                 
@@ -301,6 +330,12 @@ async def _stream_openrouter_response_impl(
                 accumulated += chunk
                 yielded_any_tokens = True
                 yield ("delta", chunk)
+
+        if turn_usage:
+            prompt_tokens, completion_tokens, cached_tokens = _extract_usage_counts(turn_usage)
+            total_prompt_tokens += prompt_tokens
+            total_completion_tokens += completion_tokens
+            total_cached_tokens += cached_tokens
         
         # Check for break due to legacy tool call interception
         if intercepted_legacy_tool_call:
@@ -374,6 +409,20 @@ async def _stream_openrouter_response_impl(
         break
     
     # Final response
+    if usage_tracker_cls and user_id and db and (total_prompt_tokens or total_completion_tokens or total_cached_tokens):
+        try:
+            cached_tokens = min(total_cached_tokens, total_prompt_tokens)
+            billable_prompt_tokens = max(total_prompt_tokens - cached_tokens, 0)
+            tracker = usage_tracker_cls(db)
+            await tracker.track_usage(
+                user_id,
+                billable_prompt_tokens,
+                total_completion_tokens,
+                cached_tokens=cached_tokens,
+                model=resolved_model,
+            )
+        except Exception as error:
+            api_logger.warning(f"Failed to track OpenRouter usage: {error}", extra={"user_id": user_id})
     if response_format:
         text, structured_reminders = materialize_structured_reminders(total_accumulated)
         yield ("final", {

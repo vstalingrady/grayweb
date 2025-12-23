@@ -544,6 +544,8 @@ async def chat_stream_route(
                         yield _sse_event("tool_card", payload)
                     elif kind == "reminders":
                         yield _sse_event("reminders", {"reminders": payload})
+                    elif kind == "usage":
+                        yield _sse_event("usage", {"usage": payload})
                     elif kind == "final":
                         reminders_payload = None
                         if isinstance(payload, dict):

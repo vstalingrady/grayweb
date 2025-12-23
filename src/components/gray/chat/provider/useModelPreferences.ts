@@ -97,6 +97,18 @@ export const useModelPreferences = ({
   useEffect(() => {
     const normalizedTier = normalizePlanTier(user);
 
+    if (selectedModelId === "moonshotai/kimi-k2-thinking") {
+      setSelectedModelId("moonshotai/kimi-k2-0905");
+      if (!reasoningMode) {
+        setReasoningMode(true);
+      }
+      return;
+    }
+
+    if (selectedModelId === "moonshotai/kimi-k2-fast" && reasoningMode) {
+      setReasoningMode(false);
+    }
+
     if (normalizedTier === "scout") {
       if (modelTier !== "lite") {
         setModelTier("lite");

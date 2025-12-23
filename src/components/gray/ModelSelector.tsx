@@ -47,6 +47,8 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
   const currentTier = normalizePlanTier(user);
   const currentLevel = PLAN_TIER_LEVELS[currentTier] ?? 0;
   const isReasoningLocked = currentTier === "scout";
+  const isReasoningLockedByModel = selectedModelId === "moonshotai/kimi-k2-fast";
+  const isReasoningToggleDisabled = isReasoningLocked || isReasoningLockedByModel;
 
   const filteredPioneerGroups = useMemo(() => {
     const isVisible = (modelId: string) =>
@@ -268,12 +270,12 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                   <div className={styles.groupModels}>
                     {/* Reasoning Toggle */}
                     <button
-                      className={`${styles.menuItem} ${styles.subMenuItem} ${isReasoningLocked ? styles.menuItemLocked : ""}`}
+                      className={`${styles.menuItem} ${styles.subMenuItem} ${isReasoningToggleDisabled ? styles.menuItemLocked : ""}`}
                       onClick={() => {
-                        if (isReasoningLocked) return;
+                        if (isReasoningToggleDisabled) return;
                         setReasoningMode(!reasoningMode);
                       }}
-                      disabled={isReasoningLocked}
+                      disabled={isReasoningToggleDisabled}
                       type="button"
                     >
                       <div className={styles.itemIconWrapper}>
@@ -287,7 +289,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                           </div>
                         )}
                       </div>
-                      {isReasoningLocked ? (
+                      {isReasoningToggleDisabled ? (
                         <Lock size={16} className={styles.actionLock} aria-hidden="true" />
                       ) : (
                         <div className={`${styles.toggle} ${reasoningMode ? styles.toggleOn : ""}`}>

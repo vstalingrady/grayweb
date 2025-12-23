@@ -21,8 +21,10 @@ PATHFINDER_MODEL_IDS = {
     "deepseek/deepseek-v3.2",
     "deepseek/deepseek-v3.2-speciale",
     "x-ai/grok-4.1-fast",
-    "moonshotai/kimi-k2-thinking",
+    "moonshotai/kimi-k2-0905",
+    "moonshotai/kimi-k2-fast",
     "xiaomi/mimo-v2-flash:free",
+    "z-ai/glm-4.7-2025",
 }
 
 # Voyager: All mid-tier models including Sonnet, Gemini Pro, GPT 5.2
@@ -82,6 +84,8 @@ def coerce_model_for_tier(requested_model: Optional[str], plan_tier: Optional[st
         return "lite", model != model_raw
     if model == "pioneer":
         return "pioneer", model != model_raw
+    if model in {"moonshotai/kimi-k2-thinking", "kimi-k2-thinking"}:
+        return "moonshotai/kimi-k2-0905", True
 
     # Enforce OpenRouter allowlists for explicit model IDs.
     # The frontend sends model IDs like `anthropic/claude-sonnet-4.5`.

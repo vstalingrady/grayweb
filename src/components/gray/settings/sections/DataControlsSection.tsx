@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState, type ChangeEvent, type Dispatch, type SetStateAction } from "react";
-import { ChevronRight } from "lucide-react";
 import styles from "../SettingsStyles.module.css";
 import { chatService, utilityService, type UserUpdate } from "@/lib/api";
 import { SettingsLogo } from "@/components/gray/settings/components/SettingsLogo";
@@ -104,12 +103,9 @@ export function DataControlsSection({
           <div className={styles.settingsLabelGroup}>
             <span className={styles.settingsLabel}>{t("Improve the model for everyone")}</span>
           </div>
-          <button
-            type="button"
-            className={styles.settingsRowLink}
-            aria-pressed={modelImprovementEnabled}
-            aria-label={t("Toggle Improve the model for everyone")}
-            onClick={() => {
+          <SettingsToggle
+            checked={modelImprovementEnabled}
+            onChange={() => {
               const previous = modelImprovementEnabled;
               const next = !previous;
               setModelImprovementEnabled(next);
@@ -128,10 +124,8 @@ export function DataControlsSection({
                 setModelImprovementEnabled(previous);
               });
             }}
-          >
-            <span className={styles.settingsValue}>{modelImprovementEnabled ? t("On") : t("Off")}</span>
-            <ChevronRight size={16} aria-hidden="true" />
-          </button>
+            label={t("Toggle Improve the model for everyone")}
+          />
         </div>
 
         <div className={styles.settingsRow}>

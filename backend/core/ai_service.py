@@ -200,6 +200,10 @@ async def stream_ai_response(
     runtime_context_parts: List[str] = []
     if provider == "openrouter" and isinstance(time_context, str) and time_context.strip():
         runtime_context_parts.append(time_context.strip())
+    if provider == "openrouter" and search_enabled:
+        runtime_context_parts.append(
+            "You have access to Google Search. You must use it for current events, news, or factual queries where your knowledge might be outdated."
+        )
 
     workspace_with_cache = workspace_context
     cache_record = None
@@ -229,10 +233,14 @@ async def stream_ai_response(
 
     effective_system_prompt = system_prompt
     if not reminders_enabled:
-        effective_system_prompt = (effective_system_prompt or "") + "\n\n" + (
+        reminders_note = (
             "CAPABILITY NOTE:\n"
             "- Reminders & plans are disabled for this session unless explicitly enabled.\n"
         )
+        if provider == "openrouter":
+            runtime_context_parts.append(reminders_note)
+        else:
+            effective_system_prompt = (effective_system_prompt or "") + "\n\n" + reminders_note
 
     media_attachments = await deps["_resolve_media_attachments"](db, attachments, user_id)
     

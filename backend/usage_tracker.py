@@ -54,7 +54,9 @@ FALLBACK_PRICING: Dict[str, Dict[str, float]] = {
     "deepseek/deepseek-v3.2-speciale": {"prompt": 2.7e-07, "completion": 4.1e-07, "cached": 2.7e-08},
     
     # Moonshot Kimi (Pioneer)
-    "moonshotai/kimi-k2-thinking": {"prompt": 4.5e-07, "completion": 2.35e-06, "cached": 4.5e-08},
+    "moonshotai/kimi-k2-0905": {"prompt": 3.9e-07, "completion": 1.9e-06, "cached": 3.9e-07},
+    "moonshotai/kimi-k2-fast": {"prompt": 1.0e-06, "completion": 3.0e-06, "cached": 5.0e-07},
+    "moonshotai/kimi-k2-thinking": {"prompt": 4.8e-07, "completion": 2.0e-06, "cached": 1.5e-07},
     
     # Xiaomi MiMo (Pioneer)
     "xiaomi/mimo-v2-flash:free": {"prompt": 1.0e-07, "completion": 3.0e-07, "cached": 1.0e-08},

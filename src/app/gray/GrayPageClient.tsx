@@ -211,7 +211,6 @@ function GrayPageClientInner({
     pinSession,
     remoteConversationsLoaded,
   } = useChatStore();
-  const supportsInlineChat = variant !== "chat";
   const [currentChatId, setCurrentChatId] = useState<string | null>(() => activeChatId ?? null);
   const ensureSessionRef = useRef(ensureSession);
   const generalOnboardingKickoffRef = useRef(false);
@@ -333,13 +332,16 @@ function GrayPageClientInner({
     defaultSidebarExpandedDesktop,
   });
 
+  const supportsInlineChat = variant !== "chat";
+  const shouldUseInlineChat = supportsInlineChat && isMobileViewport;
+
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
   useEffect(() => {
-    if (supportsInlineChat) {
+    if (shouldUseInlineChat) {
       return;
     }
     const chatId = activeChatId ?? null;
@@ -375,7 +377,7 @@ function GrayPageClientInner({
     } catch {
       // Ignore storage errors (e.g. disabled cookies).
     }
-  }, [activeChatId, lastDeletedChatIdStorageKey, router, supportsInlineChat]);
+  }, [activeChatId, lastDeletedChatIdStorageKey, router, shouldUseInlineChat]);
 
   const [dashboardTab, setDashboardTab] = useState<"pulse" | "calendar">(() => initialDashboardTab);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -479,7 +481,7 @@ function GrayPageClientInner({
   const shouldShowUpgradeButton = pathname === "/";
 
   const [manualViewMode, setManualViewMode] = useState<ViewMode | null>(() => {
-    if (supportsInlineChat && (activeChatId ?? null)) {
+    if (shouldUseInlineChat && (activeChatId ?? null)) {
       return "chat";
     }
     return activeNav === "history" && baseViewMode !== "chat" ? "history" : null;
@@ -1231,11 +1233,8 @@ function GrayPageClientInner({
           void markHasSeenGeneralChat();
           setCurrentChatId(session.id);
 
-          if (supportsInlineChat) {
+          if (shouldUseInlineChat) {
             setManualViewMode("chat");
-            if (typeof window !== "undefined") {
-              router.push(`/c/${session.id}`);
-            }
           } else {
             router.push(`/c/${session.id}`);
           }
@@ -1249,11 +1248,8 @@ function GrayPageClientInner({
         const generalId = generalSessionId ?? GENERAL_CHAT_SESSION_ID;
         const isGeneralSession = sessionId === generalId;
 
-        if (supportsInlineChat) {
+        if (shouldUseInlineChat) {
           setManualViewMode("chat");
-          if (!isGeneralSession && typeof window !== "undefined") {
-            router.push(`/c/${sessionId}`);
-          }
         } else if (isGeneralSession) {
           router.push("/g");
         } else if (activeChatId !== sessionId) {
@@ -1274,7 +1270,7 @@ function GrayPageClientInner({
       markHasSeenGeneralChat,
       router,
       sendGeneralMessage,
-      supportsInlineChat,
+      shouldUseInlineChat,
     ]
   );
 
@@ -1294,7 +1290,7 @@ function GrayPageClientInner({
   );
 
   useEffect(() => {
-    if (!supportsInlineChat || typeof window === "undefined") {
+    if (!shouldUseInlineChat || typeof window === "undefined") {
       return;
     }
     if (manualViewMode !== "chat" || !currentChatId) {
@@ -1319,7 +1315,7 @@ function GrayPageClientInner({
     if (currentPathname !== targetPath) {
       window.history.replaceState(null, "", targetPath);
     }
-  }, [currentChatId, generalSessionId, manualViewMode, sessions, supportsInlineChat]);
+  }, [currentChatId, generalSessionId, manualViewMode, sessions, shouldUseInlineChat]);
 
   useEffect(() => {
     if (variant !== "chat") {
@@ -1347,7 +1343,7 @@ function GrayPageClientInner({
     if (!entry.href || entry.href === "#") {
       return;
     }
-    if (supportsInlineChat) {
+    if (shouldUseInlineChat) {
       setCurrentChatId(entry.id);
       setManualViewMode("chat");
       // Keep the URL in sync so the current conversation can be refreshed or shared.
@@ -1415,7 +1411,7 @@ function GrayPageClientInner({
         return;
       }
 
-      if (supportsInlineChat) {
+      if (shouldUseInlineChat) {
         setManualViewMode(null);
         return;
       }
@@ -1430,7 +1426,7 @@ function GrayPageClientInner({
       lastDeletedChatIdStorageKey,
       router,
       sessions,
-      supportsInlineChat,
+      shouldUseInlineChat,
     ]
   );
 

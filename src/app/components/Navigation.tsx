@@ -8,12 +8,16 @@ import { useHasHydrated } from "@/components/gray/hooks/useHasHydrated";
 import { resolveTryGrayUrl } from "@/lib/grayCta";
 import { useI18n } from "@/contexts/I18nContext";
 
-const Navigation = () => {
+type NavigationProps = {
+  defaultHidden?: boolean;
+};
+
+const Navigation = ({ defaultHidden = false }: NavigationProps) => {
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const drawerId = "mobile-navigation";
   const [menuOpen, setMenuOpen] = useState(false);
-  const [navHidden, setNavHidden] = useState(true);
+  const [navHidden, setNavHidden] = useState(defaultHidden);
   const hasHydrated = useHasHydrated();
   const tryGrayUrl = useMemo(() => {
     if (!hasHydrated) {

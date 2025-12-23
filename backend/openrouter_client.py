@@ -67,7 +67,9 @@ class OpenRouterService:
         "deepseek-r1": "deepseek/deepseek-r1",
         # Moonshot / Kimi models
         "kimi-k2": "moonshotai/kimi-k2-0905",  # Non-reasoning variant
+        "kimi-k2-fast": "moonshotai/kimi-k2-0905",
         "kimi-k2-thinking": "moonshotai/kimi-k2-thinking",  # Always-reasoning variant
+        "moonshotai/kimi-k2-fast": "moonshotai/kimi-k2-0905",
         # xAI Grok models
         "grok-4": "x-ai/grok-4.1-fast",
         "grok-4.1": "x-ai/grok-4.1-fast",
@@ -133,6 +135,7 @@ class OpenRouterService:
         # Kimi models (262k context)
         "moonshotai/kimi-k2-0905": 262_144,
         "moonshotai/kimi-k2-thinking": 262_144,
+        "moonshotai/kimi-k2-fast": 262_144,
         # xAI Grok models
         "x-ai/grok-4.1-fast": 2_000_000,  # 2M context
         "x-ai/grok-3": 131_072,
@@ -206,6 +209,7 @@ class OpenRouterService:
             reasoning_mode: If True, return the reasoning variant for models that have one.
                            If False, downgrade from reasoning variants to base models.
         """
+        effective_reasoning_mode = self._normalize_reasoning_mode(model, reasoning_mode)
         if not model:
             base_model = self._default_model
         else:
@@ -226,15 +230,25 @@ class OpenRouterService:
                 base_model = model
         
         # If reasoning mode is enabled, check if this model has a reasoning variant
-        if reasoning_mode and base_model in self.REASONING_MODEL_VARIANTS:
+        if effective_reasoning_mode and base_model in self.REASONING_MODEL_VARIANTS:
             return self.REASONING_MODEL_VARIANTS[base_model]
         
         # If reasoning mode is disabled but user selected a thinking variant,
         # downgrade to the non-reasoning base model
-        if not reasoning_mode and base_model in self.REVERSE_REASONING_VARIANTS:
+        if not effective_reasoning_mode and base_model in self.REVERSE_REASONING_VARIANTS:
             return self.REVERSE_REASONING_VARIANTS[base_model]
         
         return base_model
+
+    def _normalize_reasoning_mode(self, model: Optional[str], reasoning_mode: bool) -> bool:
+        if not model:
+            return reasoning_mode
+        model_lower = model.strip().lower()
+        if model_lower in {"moonshotai/kimi-k2-fast", "kimi-k2-fast"}:
+            return False
+        if model_lower in self.ALWAYS_REASONING_MODELS:
+            return True
+        return reasoning_mode
 
     def _history_window_for_model(self, resolved_model: str) -> int:
         """Pick an appropriate history window based on the target model."""
@@ -570,7 +584,8 @@ class OpenRouterService:
 
         # Resolve model with reasoning mode to get the correct variant
         # e.g., openai/gpt-5.2-chat -> openai/gpt-5.2 when reasoning_mode=True
-        resolved_model = self._resolve_model(model, reasoning_mode=reasoning_mode)
+        effective_reasoning_mode = self._normalize_reasoning_mode(model, reasoning_mode)
+        resolved_model = self._resolve_model(model, reasoning_mode=effective_reasoning_mode)
         history_limit = self._history_window_for_model(resolved_model)
         runtime_context = self._build_runtime_context(time_context)
         messages = self._build_messages(
@@ -592,10 +607,14 @@ class OpenRouterService:
         }
         
         # Apply provider routing overrides
+        requested_lower = (model or "").strip().lower()
         resolved_lower = resolved_model.lower()
-        if "kimi" in resolved_lower or "moonshot" in resolved_lower:
-            # Route Kimi through Groq for maximum speed
+        if requested_lower in {"moonshotai/kimi-k2-fast", "kimi-k2-fast"}:
             provider_preferences["order"] = ["Groq"]
+        elif resolved_lower == "moonshotai/kimi-k2-thinking":
+            provider_preferences["order"] = ["NovitaAI"]
+        elif requested_lower in {"moonshotai/kimi-k2-0905", "kimi-k2"}:
+            provider_preferences["order"] = ["Chutes"]
         elif "deepseek" in resolved_lower:
             provider_preferences["order"] = ["DeepSeek"]
 
@@ -636,7 +655,7 @@ class OpenRouterService:
         # Add reasoning mode if enabled
         # Note: Per xAI docs, grok-4 and grok-4-fast don't support reasoning_effort param
         # Only grok-3-mini supports it. Grok-4 has reasoning built-in.
-        if reasoning_mode:
+        if effective_reasoning_mode:
             # Skip for grok-4 models which error on reasoning param
             is_grok4 = "grok-4" in resolved_model.lower() or "grok4" in resolved_model.lower()
             if not is_grok4:
@@ -723,12 +742,12 @@ class OpenRouterService:
                                         if txt:
                                             reasoning_pieces.append(txt)
 
-                                # If reasoning is disabled and content is empty, fall back to reasoning text.
+                                # If reasoning is disabled and content is empty, avoid leaking thought text.
                                 if not allow_reasoning and not content:
-                                    if reasoning:
-                                        content = reasoning
-                                    elif reasoning_pieces:
-                                        content = "".join(reasoning_pieces)
+                                    if reasoning or reasoning_pieces:
+                                        _logger.info(
+                                            "[OpenRouter] Dropped reasoning-only chunk because reasoning_mode is disabled"
+                                        )
 
                                 # Only yield content if we didn't already yield reasoning from this delta.
                                 # This prevents DeepSeek v3.2 from doubling text when it sends both
