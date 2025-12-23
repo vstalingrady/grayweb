@@ -22,7 +22,6 @@ import {
   Bell,
   Brain,
   CreditCard,
-  KeyRound,
   LogOut,
   Pencil,
   Trash2,
@@ -685,17 +684,6 @@ export function SettingsModal({
               >
                 <Palette className={styles.mobileGroupItemIcon} size={20} />
                 <span className={styles.mobileGroupItemLabel}>{t("Personalization")}</span>
-                <ChevronRight className={styles.mobileGroupItemArrow} size={16} />
-              </button>
-              <button
-                className={styles.mobileGroupItem}
-                onClick={() => {
-                  setActiveSection("api_keys");
-                  setMobileView("detail");
-                }}
-              >
-                <KeyRound className={styles.mobileGroupItemIcon} size={20} />
-                <span className={styles.mobileGroupItemLabel}>{t("Apps & connectors")}</span>
                 <ChevronRight className={styles.mobileGroupItemArrow} size={16} />
               </button>
             </div>
