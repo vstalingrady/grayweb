@@ -2,8 +2,9 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 import databases
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, ValidationError
+from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from backend.core.file_utils import (
     DOCUMENT_MIME_TYPES,
@@ -73,19 +74,19 @@ def _ensure_word_limit(value: Optional[str], limit: int, label: str) -> None:
 
 async def _parse_request_payload(
     request: Request,
-) -> Tuple[HireApplicationRequest, Optional[UploadFile]]:
+) -> Tuple[HireApplicationRequest, Optional[StarletteUploadFile]]:
     content_type = (request.headers.get("content-type") or "").lower()
-    resume_file: Optional[UploadFile] = None
+    resume_file: Optional[StarletteUploadFile] = None
 
     if "multipart/form-data" in content_type or "application/x-www-form-urlencoded" in content_type:
         form = await request.form()
         raw_data: Dict[str, Any] = {}
         for key, value in form.multi_items():
-            if isinstance(value, UploadFile):
+            if isinstance(value, StarletteUploadFile):
                 continue
             raw_data[key] = value
         candidate = form.get("resume")
-        if isinstance(candidate, UploadFile):
+        if isinstance(candidate, StarletteUploadFile):
             resume_file = candidate
     else:
         try:
