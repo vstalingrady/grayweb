@@ -17,8 +17,6 @@ import {
   UserCircle,
   Settings as SettingsIcon,
   Palette,
-  Moon,
-  Sun,
   Database,
   Bell,
   Brain,
@@ -673,73 +671,6 @@ export function SettingsModal({
               </button>
             </div>
 
-            <div className={styles.mobileGroup}>
-              <div className={styles.mobileGroupItem}>
-                <Database className={styles.mobileGroupItemIcon} size={20} />
-                <div style={{ flex: 1 }}>
-                  <span className={styles.mobileGroupItemLabel} style={{ display: "block" }}>{t("Workspace")}</span>
-                  <span className={styles.mobileGroupItemValue} style={{ fontSize: "0.85rem", color: "#888" }}>Personal</span>
-                </div>
-              </div>
-              <button
-                className={styles.mobileGroupItem}
-                onClick={() => {
-                  // Navigate to pro/pricing? For now just account section
-                  setActiveSection("account");
-                  setMobileView("detail");
-                }}
-              >
-                <div className={styles.mobileGroupItemIcon} style={{ width: 20, height: 20, borderRadius: "50%", border: "1px solid #fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <span style={{ fontSize: 10, fontWeight: "bold" }}>+</span>
-                </div>
-                <span className={styles.mobileGroupItemLabel}>{t("Upgrade to Pro")}</span>
-                <ChevronRight className={styles.mobileGroupItemArrow} size={16} />
-              </button>
-              <div className={styles.mobileGroupItem}>
-                <UserCircle className={styles.mobileGroupItemIcon} size={20} />
-                <div style={{ flex: 1 }}>
-                  <span className={styles.mobileGroupItemLabel} style={{ display: "block" }}>{t("Email")}</span>
-                  <span className={`${styles.mobileGroupItemMono} ${styles.mobileMonoText}`}>{user?.email}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className={styles.mobileGroupLabel}>{t("Appearance")}</div>
-            <div className={styles.mobileGroup} style={{ background: "transparent", margin: "0 16px 24px" }}>
-              <div className={styles.mobileThemeGrid}>
-                <button
-                  className={styles.mobileThemeOption}
-                  data-active={theme === "system"}
-                  onClick={() => applyTheme("system")}
-                >
-                  <div className={styles.mobileThemePreview}>
-                    <div style={{ width: "50%", height: "50%", background: "#444", borderRadius: "50%" }} />
-                  </div>
-                  <span style={{ fontSize: "0.8rem" }}>System</span>
-                </button>
-                <button
-                  className={styles.mobileThemeOption}
-                  data-active={theme === "dark"}
-                  onClick={() => applyTheme("dark")}
-                >
-                  <div className={styles.mobileThemePreview} style={{ background: "#000" }}>
-                    <Moon size={16} color="#fff" />
-                  </div>
-                  <span style={{ fontSize: "0.8rem" }}>Dark</span>
-                </button>
-                <button
-                  className={styles.mobileThemeOption}
-                  data-active={theme === "light"}
-                  onClick={() => applyTheme("light")}
-                >
-                  <div className={styles.mobileThemePreview} style={{ background: "#eee" }}>
-                    <Sun size={16} color="#000" />
-                  </div>
-                  <span style={{ fontSize: "0.8rem" }}>Light</span>
-                </button>
-              </div>
-            </div>
-
             <div className={styles.mobileGroupLabel}>{t("Data & Information")}</div>
             <div className={styles.mobileGroup}>
               <button
@@ -903,6 +834,9 @@ export function SettingsModal({
           {activeSection === "personalization" && (
             <PersonalizationSection
               t={t}
+              theme={theme}
+              onThemeChange={applyTheme}
+              showAppearanceControls={isMobile}
               autoWebSearchEnabled={autoWebSearchEnabled}
               onToggleAutoWebSearch={() => setAutoWebSearchEnabled(!autoWebSearchEnabled)}
               nickname={nickname}

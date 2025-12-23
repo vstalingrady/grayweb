@@ -1,14 +1,18 @@
 "use client";
 
-import { Check, Trash2 } from "lucide-react";
+import { Check, Moon, Sun, Trash2 } from "lucide-react";
 import styles from "../SettingsStyles.module.css";
 import { SettingsToggle } from "@/components/gray/settings/components/SettingsToggle";
 import { SettingsSelect } from "@/components/gray/settings/components/SettingsSelect";
+import type { ThemeMode } from "@/components/gray/settings/types";
 
 type Translator = (message: string, vars?: Record<string, string | number>) => string;
 
 export type PersonalizationSectionProps = {
   t: Translator;
+  theme?: ThemeMode;
+  onThemeChange?: (mode: ThemeMode) => void;
+  showAppearanceControls?: boolean;
   autoWebSearchEnabled: boolean;
   onToggleAutoWebSearch: () => void;
   nickname: string;
@@ -37,6 +41,9 @@ export type PersonalizationSectionProps = {
 
 export function PersonalizationSection({
   t,
+  theme,
+  onThemeChange,
+  showAppearanceControls = false,
   autoWebSearchEnabled,
   onToggleAutoWebSearch,
   nickname,
@@ -62,11 +69,54 @@ export function PersonalizationSection({
   onClearCustomInstructions,
   onSaveCustomInstructions,
 }: PersonalizationSectionProps) {
+  const showAppearance = Boolean(showAppearanceControls && theme && onThemeChange);
+
   return (
     <>
       <div className={styles.settingsPageHeader}>
         <h2 className={styles.settingsPageTitle}>{t("Personalization")}</h2>
       </div>
+
+      {showAppearance ? (
+        <div className={styles.settingsSection}>
+          <h3 className={styles.settingsSectionTitle}>{t("Appearance")}</h3>
+          <div className={styles.mobileThemeGrid}>
+            <button
+              type="button"
+              className={styles.mobileThemeOption}
+              data-active={theme === "system"}
+              onClick={() => onThemeChange?.("system")}
+            >
+              <div className={styles.mobileThemePreview}>
+                <div style={{ width: "50%", height: "50%", background: "#444", borderRadius: "50%" }} />
+              </div>
+              <span style={{ fontSize: "0.8rem" }}>{t("System")}</span>
+            </button>
+            <button
+              type="button"
+              className={styles.mobileThemeOption}
+              data-active={theme === "dark"}
+              onClick={() => onThemeChange?.("dark")}
+            >
+              <div className={styles.mobileThemePreview} style={{ background: "#000" }}>
+                <Moon size={16} color="#fff" />
+              </div>
+              <span style={{ fontSize: "0.8rem" }}>{t("Dark")}</span>
+            </button>
+            <button
+              type="button"
+              className={styles.mobileThemeOption}
+              data-active={theme === "light"}
+              onClick={() => onThemeChange?.("light")}
+            >
+              <div className={styles.mobileThemePreview} style={{ background: "#eee" }}>
+                <Sun size={16} color="#000" />
+              </div>
+              <span style={{ fontSize: "0.8rem" }}>{t("Light")}</span>
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <div className={styles.settingsSection}>
         <h3 className={styles.settingsSectionTitle}>{t("Quick toggles")}</h3>
