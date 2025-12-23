@@ -460,15 +460,15 @@ export const buildPersonalizedSystemPrompt = (
             if (profileLines.length > 0) {
                 sections.push(["USER PROFILE (ONLY FROM EXPLICIT PERSONALIZATION FIELDS)", ...profileLines].join("\n"));
             }
+        }
 
-            if (customInstructions) {
-                sections.push(
-                    [
-                        "CUSTOM INSTRUCTIONS FROM USER (SOURCE OF TRUTH)",
-                        customInstructions,
-                    ].join("\n")
-                );
-            }
+        if (customInstructions) {
+            sections.push(
+                [
+                    "CUSTOM INSTRUCTIONS FROM USER (SOURCE OF TRUTH)",
+                    customInstructions,
+                ].join("\n")
+            );
         }
 
         // Always include identity boundary so AI knows the nickname
