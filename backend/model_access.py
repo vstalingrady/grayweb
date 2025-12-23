@@ -13,6 +13,11 @@ TIER_LEVELS = {
     "pioneer": 3,
 }
 
+# Backward-compatible model ID aliases.
+MODEL_ALIASES = {
+    "z-ai/glm-4.7-2025": "z-ai/glm-4.7",
+}
+
 # Keep this list in sync with `src/components/gray/modelCatalog.ts`.
 # Pathfinder: Budget models only (no Sonnet, Gemini Pro, GPT 5.2)
 PATHFINDER_MODEL_IDS = {
@@ -24,7 +29,8 @@ PATHFINDER_MODEL_IDS = {
     "moonshotai/kimi-k2-0905",
     "moonshotai/kimi-k2-fast",
     "xiaomi/mimo-v2-flash:free",
-    "z-ai/glm-4.7-2025",
+    "z-ai/glm-4.7",
+    "minimax/minimax-m2.1",
 }
 
 # Voyager: All mid-tier models including Sonnet, Gemini Pro, GPT 5.2
@@ -74,6 +80,9 @@ def coerce_model_for_tier(requested_model: Optional[str], plan_tier: Optional[st
 
     if not model:
         return None, False
+
+    if model in MODEL_ALIASES:
+        return MODEL_ALIASES[model], True
 
     # Removed tier alias support: treat Pro as Lite.
     if model in {"pro", "gray-pro"}:

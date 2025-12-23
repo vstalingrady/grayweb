@@ -112,8 +112,8 @@
   .layout[data-mobile-sidebar="true"] {
     display: flex;
     overflow-x: hidden;
-    height: 100dvh;
     height: 100vh;
+    height: 100dvh;
   }
 
   .layout[data-mobile-sidebar="true"] .main {
@@ -125,8 +125,8 @@
     flex-shrink: 0;
     padding-top: 48px;
     padding-top: calc(48px + env(safe-area-inset-top));
-    height: 100dvh;
     height: 100vh;
+    height: 100dvh;
   }
 
   .layout[data-mobile-sidebar="true"][data-sidebar-expanded="true"] .main {
@@ -244,6 +244,12 @@
 .main[data-compact="true"][data-view="general"] {
   padding-top: 0;
   padding-bottom: 0;
+}
+
+.main[data-compact="true"][data-view="chat"],
+.main[data-compact="true"][data-view="general"] {
+  padding-left: max(env(safe-area-inset-left, 0px), 0px);
+  padding-right: max(env(safe-area-inset-right, 0px), 0px);
 }
 
 .mainContent {

@@ -164,6 +164,10 @@ def build_hiring_webhook_payload(application: Dict[str, Any]) -> Dict[str, Any]:
     add_field("LinkedIn", application.get("linkedin_url"), False)
     add_field("Socials (X/Instagram)", application.get("social_links"), False)
 
+    resume_preview_url = application.get("resume_preview_url")
+    if resume_preview_url:
+        add_field("Resume Preview", f"[Preview]({resume_preview_url})", False)
+
     resume_url = application.get("resume_url")
     resume_filename = application.get("resume_filename") or "resume.pdf"
     resume_value = None

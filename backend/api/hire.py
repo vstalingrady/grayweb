@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import databases
 import sqlalchemy
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, EmailStr, ValidationError
 from starlette.datastructures import UploadFile as StarletteUploadFile
@@ -16,6 +16,10 @@ from backend.core.file_utils import (
     STORAGE_BASE_URL,
     persist_upload_file,
     resolve_storage_path_from_record,
+)
+from backend.core.pdf_previews import (
+    generate_pdf_previews,
+    preview_paths_for_pdf,
 )
 from backend.core.rate_limit import limiter
 from backend.core.turnstile import verify_turnstile_token
@@ -103,6 +107,28 @@ def _build_resume_url(*, application_id: int, storage_name: str) -> Optional[str
     return None
 
 
+def _build_resume_preview_url(*, application_id: int) -> Optional[str]:
+    backend_api_url = (os.getenv("BACKEND_API_URL") or "").strip()
+    if backend_api_url:
+        return (
+            f"{backend_api_url.rstrip('/')}/api/hire/applications/"
+            f"{application_id}/resume-preview{_resume_token_suffix()}"
+        )
+
+    site_url = (
+        os.getenv("NEXT_PUBLIC_SITE_URL")
+        or os.getenv("SITE_URL")
+        or os.getenv("NEXT_PUBLIC_MAIN_SITE_URL")
+        or ""
+    ).strip()
+    if site_url:
+        return (
+            f"{site_url.rstrip('/')}/api/p/api/hire/applications/"
+            f"{application_id}/resume-preview{_resume_token_suffix()}"
+        )
+    return None
+
+
 async def _parse_request_payload(
     request: Request,
 ) -> Tuple[HireApplicationRequest, Optional[StarletteUploadFile]]:
@@ -158,12 +184,108 @@ async def get_hire_resume(
 
     filename = record["resume_filename"] or "resume.pdf"
     mime_type = record["resume_mime"] or "application/octet-stream"
+    headers = {
+        "Cache-Control": "private, max-age=86400",
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "X-Content-Type-Options": "nosniff",
+    }
     return FileResponse(
         path=str(storage_path),
         media_type=mime_type,
         filename=filename,
-        headers={"Cache-Control": "private, max-age=86400"},
+        headers=headers,
     )
+
+
+@router.get("/api/hire/applications/{application_id}/resume-preview")
+async def get_hire_resume_preview(
+    application_id: int,
+    token: Optional[str] = Query(None),
+    page: Optional[int] = Query(None, ge=1),
+    db: databases.Database = Depends(get_database),
+) -> Response:
+    if _HIRING_RESUME_TOKEN and token != _HIRING_RESUME_TOKEN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid resume token.")
+
+    record = await db.fetch_one(hire_applications.select().where(hire_applications.c.id == application_id))
+    if not record or not record["resume_storage_path"]:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found.")
+
+    storage_path = resolve_storage_path_from_record(record["resume_storage_path"])
+    if not storage_path.exists():
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Resume no longer available.")
+
+    preview_map = preview_paths_for_pdf(storage_path)
+    if not preview_map:
+        generated = generate_pdf_previews(storage_path)
+        preview_map = {idx + 1: path for idx, path in enumerate(generated or [])}
+    if not preview_map:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Resume preview not available.",
+        )
+
+    if page is not None:
+        preview_path = preview_map.get(page)
+        if not preview_path or not preview_path.exists():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Resume preview page not found.",
+            )
+        resume_name = record["resume_filename"] or "resume.pdf"
+        preview_name = f"{Path(resume_name).stem or 'resume'}-page-{page}.png"
+        headers = {
+            "Cache-Control": "private, max-age=86400",
+            "Content-Disposition": f'inline; filename="{preview_name}"',
+            "X-Content-Type-Options": "nosniff",
+        }
+        return FileResponse(
+            path=str(preview_path),
+            media_type="image/png",
+            filename=preview_name,
+            headers=headers,
+        )
+
+    from fastapi.responses import HTMLResponse
+    from urllib.parse import urlencode
+
+    page_items = []
+    for page_number in preview_map:
+        params = {"page": page_number}
+        if token:
+            params["token"] = token
+        page_url = f"/api/hire/applications/{application_id}/resume-preview?{urlencode(params)}"
+        page_items.append((page_number, page_url))
+
+    html_parts = [
+        "<!doctype html>",
+        "<html>",
+        "<head>",
+        "<meta charset=\"utf-8\">",
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
+        "<title>Resume Preview</title>",
+        "<style>",
+        "body{margin:0;background:#0b0b0b;color:#f7f7f7;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}",
+        "header{padding:16px 20px;border-bottom:1px solid #1f1f1f;position:sticky;top:0;background:#0b0b0b;}",
+        "main{padding:20px;display:flex;flex-direction:column;gap:24px;}",
+        "img{width:100%;max-width:900px;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.4);align-self:center;}",
+        ".page-label{font-size:13px;color:#b3b3b3;text-align:center;}",
+        "</style>",
+        "</head>",
+        "<body>",
+        "<header>Resume Preview</header>",
+        "<main>",
+    ]
+    for page_number, page_url in page_items:
+        html_parts.append(f"<div class=\"page-label\">Page {page_number}</div>")
+        html_parts.append(f"<img src=\"{page_url}\" alt=\"Resume page {page_number}\" loading=\"lazy\">")
+    html_parts.extend(["</main>", "</body>", "</html>"])
+
+    headers = {
+        "Cache-Control": "private, max-age=86400",
+        "X-Content-Type-Options": "nosniff",
+    }
+    return HTMLResponse("".join(html_parts), headers=headers)
 
 
 @router.post("/api/hire/applications", status_code=status.HTTP_201_CREATED)
@@ -287,7 +409,9 @@ async def create_hire_application(
     cmo_total = int(cmo_count or 0)
     role_count = cto_total if role == "cto" else cmo_total
     resume_url = _build_resume_url(application_id=application_id, storage_name=storage_name)
+    resume_preview_url = _build_resume_preview_url(application_id=application_id)
 
+    background_tasks.add_task(generate_pdf_previews, storage_path)
     background_tasks.add_task(
         notify_hiring_submission,
         {
@@ -308,6 +432,7 @@ async def create_hire_application(
             "resume_size": resume_size,
             "resume_storage_path": resume_storage_path,
             "resume_url": resume_url,
+            "resume_preview_url": resume_preview_url,
             "role_count": role_count,
             "cto_count": cto_total,
             "cmo_count": cmo_total,

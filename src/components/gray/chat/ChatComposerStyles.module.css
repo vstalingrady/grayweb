@@ -278,6 +278,21 @@
   pointer-events: auto;
 }
 
+[data-compact="true"] .chatComposerDock .generalChatComposer {
+  width: 100%;
+  max-width: none;
+}
+
+[data-compact="true"] .chatComposerDock .generalChatBarRow {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+[data-compact="true"] .chatComposerDock .chatBarRounded {
+  width: 100%;
+  max-width: 100%;
+}
+
 .chatComposerSkirt {
   display: none;
   height: 0;
@@ -589,7 +604,7 @@
 
   .chatBarRounded {
     gap: 8px !important;
-    padding: 8px !important;
+    padding: 10px 12px !important;
     border-radius: 26px !important;
     width: 100% !important;
     max-width: 100% !important;
@@ -619,8 +634,8 @@
   .chatInput {
     padding-top: 2px !important;
     padding-bottom: 2px !important;
-    padding-left: 4px !important;
-    padding-right: 4px !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
     font-size: 16px !important;
     min-height: 24px;
   }

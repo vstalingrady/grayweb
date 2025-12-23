@@ -1859,7 +1859,10 @@
 }
 
 @media (max-width: 768px) {
-  .chatBubbleUser,
+  .chatBubbleUser {
+    max-width: 100%;
+  }
+
   .chatBubbleUser:has(.chatEditContainer) {
     max-width: 100%;
     width: 100%;

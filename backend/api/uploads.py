@@ -146,9 +146,14 @@ async def get_upload_file(
 
     filename = record["filename"] or "upload"
     mime_type = record["mime_type"] or "application/octet-stream"
+    headers = {
+        "Cache-Control": "private, max-age=86400",
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "X-Content-Type-Options": "nosniff",
+    }
     return FileResponse(
         path=str(storage_path),
         media_type=mime_type,
         filename=filename,
-        headers={"Cache-Control": "private, max-age=86400"},
+        headers=headers,
     )

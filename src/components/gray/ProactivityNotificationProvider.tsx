@@ -12,10 +12,15 @@ import {
 import { useUser } from "@/contexts/UserContext";
 import { useChatStore } from "./ChatProvider";
 import { GENERAL_CHAT_SESSION_ID } from "./chat/constants";
-import { resolveApiBaseUrl } from "@/lib/api";
+import { resolveApiBaseUrl, workspaceService } from "@/lib/api";
 import { useI18n } from "@/contexts/I18nContext";
 import { useNotificationPreferences } from "@/contexts/NotificationPreferencesContext";
-import { buildGeneralConversationId, normalizeAssistantMessage, parseGrayTitleMarkers } from "./chat/utils";
+import {
+  buildGeneralConversationId,
+  normalizeAssistantMessage,
+  parseGrayTitleMarkers,
+  resolveClientTimezone,
+} from "./chat/utils";
 import { getSupabaseAccessToken } from "@/lib/auth/supabaseAccessToken";
 
 type ProactivityNotificationContextValue = {
@@ -27,12 +32,14 @@ const ProactivityNotificationContext = createContext<ProactivityNotificationCont
 });
 
 const MAX_RECENT_PROACTIVITY_EVENTS = 50;
+const PROACTIVITY_POLL_INTERVAL_MS = 60_000;
 
 type ProactivityPayload = {
   session_id?: string;
   message?: string;
   delivery_key?: string;
   sent_at?: string;
+  timezone?: string;
 };
 
 const buildProactivityEventKey = (payload: ProactivityPayload): string | null => {
@@ -46,6 +53,55 @@ const buildProactivityEventKey = (payload: ProactivityPayload): string | null =>
     return `message:${payload.message}`;
   }
   return null;
+};
+
+const CHECK_IN_DELIVERY_REGEX = /^check_in:\d+:(\d{8})T(\d{4})$/;
+
+const formatDateTimeKey = (date: Date, timeZone: string): string | null => {
+  try {
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(date);
+    const get = (type: Intl.DateTimeFormatPartTypes) =>
+      parts.find((part) => part.type === type)?.value ?? "";
+    const year = get("year");
+    const month = get("month");
+    const day = get("day");
+    const hour = get("hour");
+    const minute = get("minute");
+    if (!year || !month || !day || !hour || !minute) {
+      return null;
+    }
+    return `${year}-${month}-${day}T${hour}:${minute}`;
+  } catch {
+    return null;
+  }
+};
+
+const buildScheduleKeyFromDeliveryKey = (deliveryKey: string, timezone: string): string | null => {
+  const match = CHECK_IN_DELIVERY_REGEX.exec(deliveryKey);
+  if (!match) {
+    return null;
+  }
+  const datePart = match[1];
+  const timePart = match[2];
+  const year = Number.parseInt(datePart.slice(0, 4), 10);
+  const month = Number.parseInt(datePart.slice(4, 6), 10);
+  const day = Number.parseInt(datePart.slice(6, 8), 10);
+  const hour = Number.parseInt(timePart.slice(0, 2), 10);
+  const minute = Number.parseInt(timePart.slice(2, 4), 10);
+  if ([year, month, day, hour, minute].some((value) => Number.isNaN(value))) {
+    return null;
+  }
+  const utcDate = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  return formatDateTimeKey(utcDate, timezone);
 };
 
 const urlBase64ToUint8Array = (base64String: string): Uint8Array => {
@@ -90,16 +146,27 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
   const { notificationPreferences } = useNotificationPreferences();
   const [deliveredKeys, setDeliveredKeys] = useState<Set<string>>(new Set());
   const pushSetupRef = useRef<Promise<void> | null>(null);
+  const pushRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sseRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sseConnectionRef = useRef<EventSource | null>(null);
+  const sseAttemptRef = useRef(0);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollInFlightRef = useRef(false);
   const sessionsRef = useRef(sessions);
   const isHydratingHistoryRef = useRef(false);
   const recentEventKeysRef = useRef<string[]>([]);
   const recentEventSetRef = useRef<Set<string>>(new Set());
+  const clientTimezoneRef = useRef(resolveClientTimezone());
 
   useEffect(() => {
     sessionsRef.current = sessions;
   }, [sessions]);
   const getAuthToken = useCallback(async (): Promise<string | null> => {
-    return getSupabaseAccessToken();
+    const token = await getSupabaseAccessToken();
+    if (token) {
+      return token;
+    }
+    return getSupabaseAccessToken({ forceRefresh: true });
   }, []);
 
   const hydrateGeneralHistory = useCallback(async () => {
@@ -188,74 +255,180 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
   useEffect(() => {
     if (!userId || typeof window === "undefined" || typeof EventSource === "undefined") return;
 
-    const setupProactivity = async () => {
+    let cancelled = false;
+
+    const clearRetry = () => {
+      if (sseRetryTimerRef.current) {
+        clearTimeout(sseRetryTimerRef.current);
+        sseRetryTimerRef.current = null;
+      }
+    };
+
+    const closeEventSource = () => {
+      if (sseConnectionRef.current) {
+        sseConnectionRef.current.close();
+        sseConnectionRef.current = null;
+      }
+    };
+
+    const scheduleRetry = () => {
+      if (cancelled || sseRetryTimerRef.current) {
+        return;
+      }
+      sseAttemptRef.current += 1;
+      const delayMs = Math.min(30_000, 1000 * Math.pow(2, sseAttemptRef.current - 1));
+      sseRetryTimerRef.current = setTimeout(() => {
+        sseRetryTimerRef.current = null;
+        void connect();
+      }, delayMs);
+    };
+
+    const handleEvent = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data) as ProactivityPayload;
+        const eventKey = buildProactivityEventKey(data);
+        if (eventKey && !rememberEventKey(eventKey)) {
+          return;
+        }
+        handleProactivityMessage(data);
+
+        const key = data.delivery_key;
+        if (key) {
+          setDeliveredKeys((prev) => {
+            const next = new Set(prev);
+            next.add(key);
+            const timezone = data.timezone || clientTimezoneRef.current;
+            const scheduleKey = buildScheduleKeyFromDeliveryKey(key, timezone);
+            if (scheduleKey) {
+              next.add(scheduleKey);
+            }
+            return next;
+          });
+        }
+      } catch (err) {
+        console.error("[Proactivity] Failed to parse message:", err);
+      }
+    };
+
+    const connect = async () => {
+      clearRetry();
+      closeEventSource();
+
       const token = await getAuthToken();
       if (!token) {
-        console.warn('[Proactivity] No auth token available');
+        console.warn("[Proactivity] No auth token available; retrying.");
+        scheduleRetry();
         return;
       }
 
       const url = resolveProactivityApiBase();
-      // EventSource doesn't support custom headers, so we pass the token as a query parameter
-      let eventSource: EventSource | null = null;
+      let eventSource: EventSource;
       try {
         eventSource = new EventSource(`${url}/users/${userId}/proactivity/stream?token=${encodeURIComponent(token)}`);
       } catch (err) {
         console.warn("[Proactivity] SSE init failed:", err);
+        scheduleRetry();
         return;
       }
 
+      sseConnectionRef.current = eventSource;
+
       eventSource.onopen = () => {
-        // console.log("[Proactivity] SSE Connected");
+        sseAttemptRef.current = 0;
       };
 
       eventSource.addEventListener("ping", () => {
         // Keep-alive, ignore
       });
 
-      const handleEvent = (event: MessageEvent) => {
-        try {
-          const data = JSON.parse(event.data) as ProactivityPayload;
-          // console.log("[Proactivity] Message received:", data);
-          const eventKey = buildProactivityEventKey(data);
-          if (eventKey && !rememberEventKey(eventKey)) {
-            return;
-          }
-          handleProactivityMessage(data);
-
-          // Track delivery to avoid re-showing
-          const key = data.delivery_key;
-          if (key) {
-            setDeliveredKeys(prev => {
-              const next = new Set(prev);
-              next.add(key);
-              return next;
-            });
-          }
-        } catch (err) {
-          console.error("[Proactivity] Failed to parse message:", err);
-        }
-      };
-
       eventSource.addEventListener("message", handleEvent);
       eventSource.addEventListener("proactivity_message", handleEvent);
 
       eventSource.onerror = (err) => {
-        // Avoid noisy empty error objects; log once and close.
-        console.warn("[Proactivity] SSE disconnected; will close the stream.", err);
-        eventSource?.close();
-      };
-
-      return () => {
-        eventSource?.close();
+        console.warn("[Proactivity] SSE disconnected; retrying.", err);
+        closeEventSource();
+        scheduleRetry();
       };
     };
 
-    const cleanup = setupProactivity();
+    void connect();
     return () => {
-      cleanup.then(fn => fn?.());
+      cancelled = true;
+      clearRetry();
+      closeEventSource();
     };
   }, [getAuthToken, userId, handleProactivityMessage, rememberEventKey]);
+
+  useEffect(() => {
+    if (!userId || typeof window === "undefined") {
+      return;
+    }
+
+    let cancelled = false;
+
+    const pollNotifications = async () => {
+      if (pollInFlightRef.current) {
+        return;
+      }
+      pollInFlightRef.current = true;
+      try {
+        const notifications = await workspaceService.getProactivityNotifications(userId, {
+          unreadOnly: true,
+          limit: 10,
+        });
+        if (cancelled || notifications.length === 0) {
+          return;
+        }
+
+        for (const notification of notifications) {
+          const metadata = notification.metadata ?? {};
+          const deliveryKey =
+            typeof metadata.delivery_key === "string" ? metadata.delivery_key : undefined;
+          const payload: ProactivityPayload = {
+            message: notification.message,
+            delivery_key: deliveryKey,
+            sent_at: notification.sent_at,
+            timezone: typeof metadata.timezone === "string" ? metadata.timezone : undefined,
+          };
+          const eventKey = buildProactivityEventKey(payload);
+          if (!eventKey || rememberEventKey(eventKey)) {
+            handleProactivityMessage(payload);
+            if (deliveryKey) {
+              setDeliveredKeys((prev) => {
+                const next = new Set(prev);
+                next.add(deliveryKey);
+                const timezone = payload.timezone || clientTimezoneRef.current;
+                const scheduleKey = buildScheduleKeyFromDeliveryKey(deliveryKey, timezone);
+                if (scheduleKey) {
+                  next.add(scheduleKey);
+                }
+                return next;
+              });
+            }
+          }
+          await workspaceService.markProactivityNotificationRead(userId, notification.id);
+        }
+      } catch (error) {
+        console.warn("[Proactivity] Failed to poll notifications:", error);
+      } finally {
+        pollInFlightRef.current = false;
+      }
+    };
+
+    void pollNotifications();
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+    }
+    pollTimerRef.current = setInterval(pollNotifications, PROACTIVITY_POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+  }, [handleProactivityMessage, rememberEventKey, userId]);
 
   useEffect(() => {
     if (!userId || typeof window === "undefined") return;
@@ -264,11 +437,33 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
     if (window.isSecureContext === false) return;
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
 
+    let cancelled = false;
+
+    const clearRetry = () => {
+      if (pushRetryTimerRef.current) {
+        clearTimeout(pushRetryTimerRef.current);
+        pushRetryTimerRef.current = null;
+      }
+    };
+
+    const scheduleRetry = () => {
+      if (cancelled || pushRetryTimerRef.current) {
+        return;
+      }
+      pushRetryTimerRef.current = setTimeout(() => {
+        pushRetryTimerRef.current = null;
+        void setup();
+      }, 5000);
+    };
+
     if (pushSetupRef.current) return;
 
     const setup = async () => {
       const token = await getAuthToken();
-      if (!token) return;
+      if (!token) {
+        scheduleRetry();
+        return;
+      }
 
       const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
       if (!vapidPublicKey) {
@@ -294,7 +489,7 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
       if (!p256dh || !auth) return;
 
       const apiBase = resolveProactivityApiBase();
-      await fetch(`${apiBase}/users/${userId}/push/subscribe?token=${encodeURIComponent(token)}`, {
+      const response = await fetch(`${apiBase}/users/${userId}/push/subscribe?token=${encodeURIComponent(token)}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -306,15 +501,24 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
           auth: btoa(String.fromCharCode(...new Uint8Array(auth))),
         }),
       });
+      if (!response.ok) {
+        console.warn("[Proactivity] Push subscription registration failed:", response.status);
+        scheduleRetry();
+      }
     };
 
     pushSetupRef.current = setup()
       .catch((error) => {
         console.error("[Proactivity] Failed to register push subscription:", error);
+        scheduleRetry();
       })
       .finally(() => {
         pushSetupRef.current = null;
       });
+    return () => {
+      cancelled = true;
+      clearRetry();
+    };
   }, [getAuthToken, notificationPreferences.device, notificationPreferences.proactivity, userId]);
 
   return (

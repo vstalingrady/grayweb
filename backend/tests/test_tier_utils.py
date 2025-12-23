@@ -24,6 +24,12 @@ def test_coerce_model_for_tier_treats_pro_as_voyager() -> None:
     assert coerced is False
 
 
+def test_coerce_model_for_tier_remaps_glm_alias() -> None:
+    effective_model, coerced = coerce_model_for_tier("z-ai/glm-4.7-2025", "pathfinder")
+    assert effective_model == "z-ai/glm-4.7"
+    assert coerced is True
+
+
 def test_bootstrap_plan_tier_defaults_to_scout(monkeypatch) -> None:
     monkeypatch.delenv("BOOTSTRAP_PIONEER_EMAILS", raising=False)
     assert bootstrap_plan_tier("someone@example.com") == "scout"

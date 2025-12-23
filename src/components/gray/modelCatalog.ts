@@ -71,6 +71,12 @@ export const PIONEER_GROUPS: ModelGroup[] = [
     ],
   },
   {
+    id: "minimax",
+    label: "MiniMax",
+    iconPath: "/logos/minimax-color.svg",
+    models: [{ id: "minimax/minimax-m2.1", label: "MiniMax M2.1", cost: "$$", tierRequired: "pathfinder" }],
+  },
+  {
     id: "xiaomi",
     label: "Xiaomi",
     iconPath: "/logos/xiaomi.svg",
@@ -80,7 +86,7 @@ export const PIONEER_GROUPS: ModelGroup[] = [
     id: "z-ai",
     label: "Z.ai",
     iconPath: "/logos/zaiwhite.svg",
-    models: [{ id: "z-ai/glm-4.7-2025", label: "GLM 4.7", cost: "$$", tierRequired: "pathfinder" }],
+    models: [{ id: "z-ai/glm-4.7", label: "GLM 4.7", cost: "$$", tierRequired: "pathfinder" }],
   },
 ];
 

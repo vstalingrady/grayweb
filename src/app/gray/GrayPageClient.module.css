@@ -150,8 +150,8 @@
     overflow-x: hidden;
     /* Prevent horizontal scroll when pushed */
     --mobile-sidebar-width: clamp(260px, 70vw, 540px);
-    height: 100dvh;
     height: 100vh;
+    height: 100dvh;
     /* Fallback for older browsers */
   }
 
@@ -197,8 +197,8 @@
     padding-top: calc(48px + env(safe-area-inset-top));
     /* Account for mobile header */
     /* Use full viewport height; padding offsets the header */
-    height: 100dvh;
     height: 100vh;
+    height: 100dvh;
     /* Fallback */
   }
 

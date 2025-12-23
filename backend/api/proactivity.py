@@ -7,7 +7,7 @@ This router handles proactivity logs, settings, streaming, and push subscription
 import asyncio
 import json
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, AsyncGenerator, Dict, List, Optional, Set
 
 import databases
@@ -66,6 +66,26 @@ def _sse_event(event: str, data: Dict[str, Any]) -> str:
 def _infer_proactivity_id(cadence: Optional[str]) -> Optional[str]:
     normalized = (cadence or "").strip().lower()
     return PROACTIVITY_ID_BY_CADENCE.get(normalized)
+
+def _serialize_notification_row(row: Any) -> Dict[str, Any]:
+    record = dict(row)
+    metadata = record.get("metadata")
+    if isinstance(metadata, str):
+        try:
+            metadata = json.loads(metadata)
+        except json.JSONDecodeError:
+            metadata = None
+    if metadata is not None and not isinstance(metadata, dict):
+        metadata = None
+    record["metadata"] = metadata
+
+    for key in ("due_at", "sent_at", "read_at", "completed_at", "created_at"):
+        value = record.get(key)
+        if isinstance(value, datetime):
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=timezone.utc)
+            record[key] = value.isoformat()
+    return record
 
 
 async def get_user_from_query_token(
@@ -397,6 +417,63 @@ async def get_proactivity_settings(
         channels=payload.get("channels"),
         timezone=payload.get("timezone"),
     )
+
+@router.get("/users/{user_id}/proactivity/notifications", response_model=List[ProactivityNotification])
+async def list_proactivity_notifications(
+    user_id: int,
+    limit: Optional[int] = Query(None, ge=1),
+    unread_only: bool = Query(False),
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    user_id = current_user["id"]
+    require_same_user(user_id, current_user)
+
+    query = proactive_notifications.select().where(proactive_notifications.c.user_id == user_id)
+    if unread_only:
+        query = query.where(proactive_notifications.c.read_at.is_(None))
+    query = query.order_by(proactive_notifications.c.sent_at.desc())
+    if limit is not None:
+        query = query.limit(limit)
+
+    rows = await db.fetch_all(query)
+    return [_serialize_notification_row(row) for row in rows]
+
+@router.post(
+    "/users/{user_id}/proactivity/notifications/{notification_id}/read",
+    response_model=ProactivityNotification,
+)
+async def mark_proactivity_notification_read(
+    user_id: int,
+    notification_id: int,
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    user_id = current_user["id"]
+    require_same_user(user_id, current_user)
+
+    existing = await db.fetch_one(
+        proactive_notifications.select().where(
+            proactive_notifications.c.id == notification_id,
+            proactive_notifications.c.user_id == user_id,
+        )
+    )
+    if not existing:
+        raise HTTPException(status_code=404, detail="Notification not found")
+
+    if not existing["read_at"]:
+        await db.execute(
+            proactive_notifications.update()
+            .where(proactive_notifications.c.id == notification_id)
+            .values(read_at=utcnow())
+        )
+        updated = await db.fetch_one(
+            proactive_notifications.select().where(proactive_notifications.c.id == notification_id)
+        )
+        if updated:
+            return _serialize_notification_row(updated)
+
+    return _serialize_notification_row(existing)
 
 
 @router.put("/users/{user_id}/proactivity/settings", response_model=ProactivitySettings)

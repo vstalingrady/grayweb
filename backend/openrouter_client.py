@@ -136,6 +136,8 @@ class OpenRouterService:
         "moonshotai/kimi-k2-0905": 262_144,
         "moonshotai/kimi-k2-thinking": 262_144,
         "moonshotai/kimi-k2-fast": 262_144,
+        # MiniMax models
+        "minimax/minimax-m2.1": 205_000,
         # xAI Grok models
         "x-ai/grok-4.1-fast": 2_000_000,  # 2M context
         "x-ai/grok-3": 131_072,
