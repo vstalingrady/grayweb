@@ -70,17 +70,17 @@ async function handleProxy(request: Request) {
 
         const method = request.method.toUpperCase();
         const hasBody = method !== 'GET' && method !== 'HEAD';
-        const body = hasBody ? request.body : null;
+        const body = hasBody ? await request.arrayBuffer() : null;
 
         const init: RequestInit & { duplex?: "half" } = {
             method: request.method,
             headers,
-            body: body ?? undefined,
+            body: body ? Buffer.from(body) : undefined,
             cache: "no-store",
         };
 
         if (body) {
-            init.duplex = "half";
+            headers.set("content-length", String(body.byteLength));
         }
 
         const response = await fetch(targetUrl, init);
