@@ -14,7 +14,6 @@ import { clearAuthCookies } from "@/lib/auth/cookies";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import pageStyles from "./GrayPageLayout.module.css";
 import greetingStyles from "@/components/gray/Greeting.module.css";
-import chatStyles from "@/components/gray/chat/ChatStyles.module.css";
 import composerStyles from "@/components/gray/chat/ChatComposerStyles.module.css";
 import {
   type ProactivityItem,
@@ -67,6 +66,7 @@ import { useCalendarSyncHandlers } from "./hooks/useCalendarSyncHandlers";
 import { useGoogleCalendarIntegration } from "./hooks/useGoogleCalendarIntegration";
 import { usePlanHabitActions } from "./hooks/usePlanHabitActions";
 import { useGrayLayoutState } from "./hooks/useGrayLayoutState";
+import { MobileWelcomeScreen } from "@/components/gray/chat/view/MobileWelcomeScreen";
 
 // Lazy load all heavy components for better code splitting
 const GrayEnhancedSidebar = dynamic(
@@ -709,22 +709,7 @@ function GrayPageClientInner({
           data-compact={isCompactLayout ? "true" : "false"}
         >
           {/* Welcome overlay for the main "/" (threads) surface */}
-          {pathname === "/" && activeNav === "threads" ? (
-            <div className={chatStyles.mobileWelcomeScreen} aria-hidden="true">
-              <div className={chatStyles.mobileWelcomeContent}>
-                <div className={chatStyles.mobileWelcomeLogo}>
-                  <Image
-                    src="/grayaiwhitenotspinning.svg"
-                    alt=""
-                    width={40}
-                    height={40}
-                    className="uiIconImage"
-                  />
-                </div>
-                <p className={chatStyles.mobileWelcomeGreeting}>Ready when you are.</p>
-              </div>
-            </div>
-          ) : null}
+          {pathname === "/" && activeNav === "threads" ? <MobileWelcomeScreen /> : null}
           {!shouldHideDesktopWorkspaceChrome ? (
             <GrayWorkspaceHeader
               planLabel={viewerPlanLabel}
@@ -761,20 +746,7 @@ function GrayPageClientInner({
         data-view="general"
         data-compact={isCompactLayout ? "true" : "false"}
       >
-        <div className={chatStyles.mobileWelcomeScreen} aria-hidden="true">
-          <div className={chatStyles.mobileWelcomeContent}>
-            <div className={chatStyles.mobileWelcomeLogo}>
-              <Image
-                src="/grayaiwhitenotspinning.svg"
-                alt=""
-                width={40}
-                height={40}
-                className="uiIconImage"
-              />
-            </div>
-            <p className={chatStyles.mobileWelcomeGreeting}>Ready when you are.</p>
-          </div>
-        </div>
+        <MobileWelcomeScreen />
       </div>
     );
   };
