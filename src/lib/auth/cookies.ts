@@ -105,9 +105,9 @@ const syncServerSession = async (accessToken?: string | null): Promise<boolean> 
 export const persistAuthCookies = async (
   email?: string | null,
   accessToken?: string | null
-) => {
+): Promise<boolean> => {
   void email;
-  await syncServerSession(accessToken);
+  return syncServerSession(accessToken);
 };
 
 export const clearAuthCookies = () => {

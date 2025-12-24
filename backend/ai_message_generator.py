@@ -138,19 +138,29 @@ class AIMessageGenerator:
         context_summary = ", ".join(context_summary_parts)
 
         meta_line = f"Cadence: {cadence or 'unspecified'}. Label: {label}. Date key: {date_key or 'today'}."
-        context_chunks: List[str] = [f"User context: {context_summary}. {meta_line}"]
+        context_chunks: List[str] = [
+            f"Background context (use sparingly; do not restate unless the user mentioned it recently): "
+            f"{context_summary}. {meta_line}"
+        ]
         if reason:
             context_chunks.append(f"Trigger reason: {reason}")
         if tone:
             context_chunks.append(f"Requested tone: {tone}")
         if decision_context:
-            context_chunks.append(f"Decision context: {decision_context}")
+            context_chunks.append(
+                f"Decision context (use only if relevant to recent chat): {decision_context}"
+            )
         if profile_context:
-            context_chunks.append(f"Profile summary: {profile_context.strip()}")
+            context_chunks.append(
+                f"Profile background (use lightly; avoid repeating unless relevant): {profile_context.strip()}"
+            )
         if custom_instructions:
-            context_chunks.append(f"Custom instructions from the user:\n{custom_instructions.strip()}")
+            context_chunks.append(
+                "User preferences (use only when relevant to recent chat):\n"
+                f"{custom_instructions.strip()}"
+            )
         if chat_context:
-            context_chunks.append(f"Recent chat snippets:\n{chat_context.strip()}")
+            context_chunks.append(f"Recent chat snippets (primary signal):\n{chat_context.strip()}")
 
         user_context = "\n\n".join(part for part in context_chunks if part.strip())
 

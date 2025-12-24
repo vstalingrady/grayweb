@@ -49,10 +49,32 @@ from backend.compat_imports import (
 from backend.onboarding_tools import ONBOARDING_TOOLS
 from backend.core.chat_starter_helpers import sse_event as _sse_event
 from backend.core.title_generator import generate_chat_title_inline as _generate_chat_title_inline
+from backend.core.media_attachments import resolve_attachment_metadata
 
 api_logger = create_logger("api.chat")
 
 router = APIRouter(tags=["chat"])
+
+CUSTOM_INSTRUCTIONS_HEADER = "CUSTOM INSTRUCTIONS FROM USER (SOURCE OF TRUTH)"
+
+def _append_custom_instructions(
+    system_prompt: Optional[str],
+    user_record: Optional[Dict[str, Any]],
+) -> Optional[str]:
+    if not user_record:
+        return system_prompt
+    custom_instructions = _row_get(user_record, "personalization_custom_instructions")
+    if not isinstance(custom_instructions, str):
+        return system_prompt
+    trimmed = custom_instructions.strip()
+    if not trimmed:
+        return system_prompt
+    if system_prompt and CUSTOM_INSTRUCTIONS_HEADER in system_prompt:
+        return system_prompt
+    block = f"{CUSTOM_INSTRUCTIONS_HEADER}\n{trimmed}"
+    if system_prompt and system_prompt.strip():
+        return f"{system_prompt}\n\n{block}"
+    return block
 
 
 async def _get_db() -> databases.Database:
@@ -171,9 +193,18 @@ async def chat_route(
         # Save user message to local conversation store (after capturing prior history),
         # but avoid writing an identical message twice in a row (e.g., when a fallback
         # request replays the same prompt after a streaming failure).
+        attachment_metadata: Optional[List[Dict[str, Any]]] = None
+        if chat_request.attachments:
+            attachment_metadata = await resolve_attachment_metadata(
+                db,
+                chat_request.attachments,
+                chat_request.user_id,
+            )
+
         user_message_payload: Dict[str, Any] = {
             "role": "user",
-            "text": chat_request.message
+            "text": chat_request.message,
+            "attachments": attachment_metadata or None,
         }
         last_history_entry: Optional[Dict[str, Any]] = conversation_history[-1] if conversation_history else None
         should_persist_user = not (
@@ -188,7 +219,8 @@ async def chat_route(
                  await _insert_general_conversation_message(
                      user_id=authenticated_user_id,
                      role="user",
-                     text=chat_request.message
+                     text=chat_request.message,
+                     attachments=attachment_metadata or None,
                  )
         elif should_persist_user:
             await save_conversation_message(conversation_id, user_message_payload, user_id=chat_request.user_id)
@@ -220,12 +252,14 @@ async def chat_route(
                 },
             )
 
+        effective_system_prompt = _append_custom_instructions(chat_request.system_prompt, current_user)
+
         # Generate AI response
         ai_response, grounding_metadata = await _generate_ai_response(
             chat_request.message,
             conversation_history,
             chat_request.context,
-            chat_request.system_prompt,
+            effective_system_prompt,
             chat_request.time_context,
             effective_model,
             chat_request.attachments,
@@ -241,6 +275,7 @@ async def chat_route(
             search_enabled=chat_request.web_search_enabled,
             should_generate_title=chat_request.should_generate_title,
             reasoning_mode=effective_reasoning_mode,
+            reminders_enabled=chat_request.reminders_enabled,
             tools=tool_list,
             user_timezone=chat_request.timezone,
             plan_tier=normalized_tier,
@@ -426,6 +461,7 @@ async def chat_stream_route(
             effective_system_prompt = ONBOARDING_SYSTEM_PROMPT
         elif not effective_system_prompt:
              effective_system_prompt = DEFAULT_SYSTEM_PROMPT
+        effective_system_prompt = _append_custom_instructions(effective_system_prompt, user_record)
 
         # Determine Tool List (Parallel)
         tool_list = get_default_chat_tools()
@@ -454,9 +490,18 @@ async def chat_stream_route(
         if not (effective_message or "").strip() and not conversation_history and not (chat_request.attachments or []):
             effective_message = "Let's get started."
 
+        attachment_metadata: Optional[List[Dict[str, Any]]] = None
+        if chat_request.attachments:
+            attachment_metadata = await resolve_attachment_metadata(
+                db,
+                chat_request.attachments,
+                chat_request.user_id,
+            )
+
         user_message_payload: Dict[str, Any] = {
             "role": "user",
             "text": effective_message,
+            "attachments": attachment_metadata or None,
         }
 
         last_history_entry: Optional[Dict[str, Any]] = conversation_history[-1] if conversation_history else None
@@ -476,6 +521,7 @@ async def chat_stream_route(
                         user_id=general_user_id,
                         role="user",
                         text=effective_message,
+                        attachments=attachment_metadata or None,
                     )
                 else:
                     await save_conversation_message(

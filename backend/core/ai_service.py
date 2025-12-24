@@ -398,11 +398,22 @@ async def generate_ai_response(
     # Simple implementation leveraging stream logic or provider direct calls
     # For brevity, typically we'd use provider_service.generate()
     # But often non-streaming is used for specific tasks like title generation.
-    
+    conversation_history = deps["normalize_conversation_history"](conversation_history)
+
+    intent_window_text = deps["build_intent_window_text"](message, conversation_history)
+    request_structured_reminders = deps["_should_request_structured_reminders"](intent_window_text)
+    intent_requires_tools = request_structured_reminders or deps["_needs_structured_tools"](intent_window_text)
+    reminders_enabled = bool(kwargs.get("reminders_enabled", True))
+    needs_structured_tools = intent_requires_tools and reminders_enabled
+    is_onboarding_tool = deps["_has_onboarding_tool_hybrid"](tools)
+
     provider, model, _ = deps["determine_provider_and_model"](
         model=model,
         openrouter_available=bool(deps["OPENROUTER_SERVICE"] and deps["OPENROUTER_SERVICE"].available),
         gemini_default_model=deps["GEMINI_SERVICE"].default_model if deps["GEMINI_SERVICE"] else deps["GEMINI_DEFAULT_MODEL"],
+        needs_structured_tools=needs_structured_tools,
+        is_onboarding_tool=is_onboarding_tool,
+        maps_enabled=maps_enabled,
     )
     
     if provider == "openrouter":

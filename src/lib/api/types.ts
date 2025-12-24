@@ -237,6 +237,7 @@ export interface ChatMessage {
   grounding_metadata?: GroundingMetadata | null;
   groundingMetadata?: GroundingMetadata | null;
   timestamp?: number;
+  attachments?: MediaUpload[];
 }
 
 export interface ConversationHistoryPage {

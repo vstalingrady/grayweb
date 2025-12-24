@@ -50,6 +50,7 @@ export type ConversationHistoryEntryPayload = {
     text: string;
     updated_at?: string;
     metadata?: Record<string, unknown>;
+    attachments?: MediaUpload[];
 };
 
 export type ChatContextValue = {

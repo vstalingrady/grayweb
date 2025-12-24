@@ -381,18 +381,37 @@ export const toTimestamp = (value?: string | number | Date | null): number => {
 
 
 export const buildConversationHistoryPayload = (messages: ChatMessage[]) => {
+    const normalizeAttachments = (attachments?: ChatMessage["attachments"]) => {
+        if (!attachments || attachments.length === 0) {
+            return undefined;
+        }
+        const sanitized = attachments
+            .map((attachment) => {
+                if (!attachment || typeof attachment !== "object") {
+                    return null;
+                }
+                const { previewUrl, ...rest } = attachment;
+                return rest;
+            })
+            .filter((attachment): attachment is NonNullable<typeof attachment> => Boolean(attachment));
+        return sanitized.length > 0 ? sanitized : undefined;
+    };
+
     return messages
         .map<ConversationHistoryEntryPayload | null>((message) => {
+            const attachments = normalizeAttachments(message.attachments);
             if (message.role === "user") {
                 return {
                     role: "user",
                     text: message.content ?? "",
+                    attachments,
                 };
             }
             if (message.role === "assistant") {
                 return {
                     role: "model",
                     text: message.content ?? "",
+                    attachments,
                 };
             }
             return null;

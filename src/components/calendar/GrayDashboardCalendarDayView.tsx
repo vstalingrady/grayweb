@@ -143,13 +143,6 @@ export function GrayDashboardCalendarDayView({
                 {label}
               </span>
             ))}
-            {dayIndicatorOffset !== null && (
-              <div
-                className={styles.calendarTimelineNowLine}
-                style={{ top: `${dayIndicatorOffset}px` }}
-                aria-hidden="true"
-              />
-            )}
           </div>
           <div className={styles.calendarDayColumn} data-selected="true" data-today={isToday ? "true" : "false"}>
             <div className={styles.calendarColumnScroller} onClick={(event) => onColumnClick(event, selectedDate)}>

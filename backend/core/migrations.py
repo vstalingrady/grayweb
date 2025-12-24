@@ -169,6 +169,7 @@ def run_startup_migrations():
     
     # Ensure reminders column for existing tables
     _ensure_sqlite_columns("general_chat_messages", [
+        ("attachments", "JSON", None),
         ("reminders", "JSON", None),
     ])
 

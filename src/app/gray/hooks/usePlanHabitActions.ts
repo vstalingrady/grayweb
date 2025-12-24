@@ -65,8 +65,9 @@ export const usePlanHabitActions = ({
       }
 
       const nextCompleted = !targetPlan.completed;
+      const nowIso = new Date().toISOString();
       const updatedPlans = previousPlans.map((plan) =>
-        plan.id === id ? { ...plan, completed: nextCompleted } : plan
+        plan.id === id ? { ...plan, completed: nextCompleted, updatedAt: nowIso } : plan
       );
 
       setPlans(updatedPlans);
@@ -172,8 +173,9 @@ export const usePlanHabitActions = ({
         return;
       }
 
+      const nowIso = new Date().toISOString();
       const updatedHabits = previousHabits.map((habit) =>
-        habit.id === id ? { ...habit, completed: !habit.completed } : habit
+        habit.id === id ? { ...habit, completed: !habit.completed, updatedAt: nowIso } : habit
       );
 
       setHabits(updatedHabits);
@@ -309,4 +311,3 @@ export const usePlanHabitActions = ({
     deleteHabit,
   };
 };
-

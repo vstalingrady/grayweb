@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from importlib import import_module
 from importlib.util import find_spec
@@ -65,7 +66,11 @@ def normalize_conversation_history(
         if last_role == role and last_text == text:
             continue
 
-        normalized.append({"role": role, "text": text})
+        attachments_value = _parse_json_value(entry.get("attachments")) if isinstance(entry, dict) else None
+        if attachments_value:
+            normalized.append({"role": role, "text": text, "attachments": attachments_value})
+        else:
+            normalized.append({"role": role, "text": text})
         last_role = role
         last_text = text
 
@@ -86,6 +91,17 @@ def _message_timestamp_ms(message: Dict[str, Any]) -> int:
     if isinstance(value, (int, float)):
         return int(value)
     return 0
+
+
+def _parse_json_value(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            return None
+    return value
 
 
 def _slice_cached_history(
@@ -164,11 +180,14 @@ async def load_thread_history(
 
         messages: List[Dict[str, Any]] = []
         for row in rows:
+            attachments_value = _parse_json_value(row["attachments"])
+            if not attachments_value:
+                attachments_value = None
             entry = {
                 "role": row["role"],
                 "text": row["text"],
                 "grounding_metadata": row["grounding_metadata"],
-                "attachments": row["attachments"],
+                "attachments": attachments_value,
             }
             # Include timestamp so frontend displays the actual message time
             # We default to 0 (epoch) if missing so the frontend doesn't fall back to "now"

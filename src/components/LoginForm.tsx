@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { FaDiscord, FaGoogle } from "react-icons/fa6";
 import { Turnstile, TurnstileInstance } from "@marsidev/react-turnstile";
@@ -295,7 +295,7 @@ export default function LoginForm({
     }
   };
 
-  const performPostAuthNavigation = (destination: string) => {
+  const performPostAuthNavigation = useCallback((destination: string) => {
     if (typeof window === "undefined") {
       return;
     }
@@ -335,7 +335,43 @@ export default function LoginForm({
 
     // Fallback
     window.location.href = ensureAbsoluteUrl(destination);
-  };
+  }, [reconfirmDelete]);
+
+  useEffect(() => {
+    if (deleted) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const syncExistingSession = async () => {
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        return;
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const session = sessionData.session;
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+        return;
+      }
+
+      const synced = await persistAuthCookies(session?.user?.email ?? null, accessToken);
+      if (!synced || cancelled) {
+        return;
+      }
+
+      const destination = redirectTo ?? resolvePostAuthDestination();
+      performPostAuthNavigation(destination);
+    };
+
+    void syncExistingSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [deleted, redirectTo, performPostAuthNavigation]);
 
   const handleEmailAuth = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

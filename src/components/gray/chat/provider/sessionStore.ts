@@ -172,6 +172,7 @@ type ApiConversationMessage = {
   grounding_metadata?: GroundingMetadata | null;
   groundingMetadata?: GroundingMetadata | null;
   reminders?: unknown[] | null;
+  attachments?: MediaUpload[] | null;
 };
 
 export function mapApiMessagesToChatMessages(
@@ -205,6 +206,19 @@ export function mapApiMessagesToChatMessages(
     const normalizedMetadata = message.grounding_metadata ?? message.groundingMetadata ?? null;
     const messageTimestamp =
       typeof message.timestamp === "number" && Number.isFinite(message.timestamp) ? message.timestamp : fallbackTimestamp;
+    const rawAttachments = Array.isArray(message.attachments) ? message.attachments : [];
+    const attachments = rawAttachments
+      .map((attachment) => {
+        if (!attachment || typeof attachment !== "object") {
+          return null;
+        }
+        const id = Number((attachment as MediaUpload).id);
+        if (!Number.isFinite(id) || id <= 0) {
+          return null;
+        }
+        return attachment as MediaUpload;
+      })
+      .filter((attachment): attachment is MediaUpload => Boolean(attachment));
 
     return {
       id:
@@ -218,6 +232,7 @@ export function mapApiMessagesToChatMessages(
         apiReminders ??
         (role === "assistant" && reminderExtraction.reminders.length ? reminderExtraction.reminders : undefined),
       groundingMetadata: normalizedMetadata ?? undefined,
+      attachments: attachments.length > 0 ? attachments : undefined,
     };
   });
 }

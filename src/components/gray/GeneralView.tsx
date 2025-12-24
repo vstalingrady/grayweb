@@ -4,6 +4,7 @@ import styles from "@/app/gray/GrayPageClient.module.css";
 import { type HabitItem, type PlanItem, type PlanUpdates, type ProactivityItem } from "./types";
 import { useI18n } from "@/contexts/I18nContext";
 import { MiniMonth } from "@/components/calendar/MiniMonth";
+import { toDateKey } from "@/app/gray/utils";
 import {
   getProactivityTimes,
   formatCustomTimeLabel,
@@ -67,6 +68,30 @@ export function GrayGeneralView({
   const [isProactivityMenuOpen, setIsProactivityMenuOpen] = useState(false);
   const proactivityAnchorRef = useRef<HTMLButtonElement | null>(null);
 
+  const todayKey = useMemo(() => toDateKey(currentDate), [currentDate]);
+  const toItemDateKey = useCallback((value?: string | null) => {
+    if (!value) return null;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+    return toDateKey(parsed);
+  }, []);
+
+  const shouldHideCompletedItem = useCallback(
+    (item: PlanItem | HabitItem) => {
+      if (!item.completed) {
+        return false;
+      }
+      const completedAtKey = toItemDateKey(item.updatedAt) ?? toItemDateKey(item.createdAt);
+      if (!completedAtKey) {
+        return false;
+      }
+      return completedAtKey !== todayKey;
+    },
+    [toItemDateKey, todayKey]
+  );
+
   const calendarMonthLabel = useMemo(
     () =>
       calendarReferenceDate.toLocaleDateString([], {
@@ -106,13 +131,15 @@ export function GrayGeneralView({
         ...habits.map((habit) => ({ kind: "habit" as const, item: habit })),
       ];
 
+      const filtered = next.filter(({ item }) => !shouldHideCompletedItem(item));
+
       const toTimestamp = (value: string | null | undefined): number => {
         if (!value) return 0;
         const parsed = Date.parse(value);
         return Number.isFinite(parsed) ? parsed : 0;
       };
 
-      next.sort((a, b) => {
+      filtered.sort((a, b) => {
         const aTime =
           toTimestamp(a.item.updatedAt) ||
           toTimestamp(a.item.createdAt) ||
@@ -124,9 +151,9 @@ export function GrayGeneralView({
         return bTime - aTime;
       });
 
-      return next;
+      return filtered;
     },
-    [habits, plans]
+    [habits, plans, shouldHideCompletedItem]
   );
 
   const shouldShowEmptyState = unifiedItems.length === 0 && !isAdding;

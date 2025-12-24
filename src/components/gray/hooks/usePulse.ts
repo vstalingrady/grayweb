@@ -97,12 +97,13 @@ export function usePulse(
           return;
         }
         const mapped = pulses.map((pulse) => mapDashboardPulseToEntry(pulse));
+        const todayEntryId = mapped.find((entry) => entry.dateKey === nowDateKey)?.id ?? `pulse-${nowDateKey}`;
         setPulseState((previous) => {
           const previousActivePulseId = previous.userId === userId ? previous.activePulseId : null;
           const nextActivePulseId =
             previousActivePulseId && mapped.some((entry) => entry.id === previousActivePulseId)
               ? previousActivePulseId
-              : mapped[0]?.id ?? null;
+              : todayEntryId;
           return { userId, entries: mapped, activePulseId: nextActivePulseId };
         });
       } catch (error) {
@@ -114,7 +115,7 @@ export function usePulse(
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [nowDateKey, userId]);
 
   const mergeTodaySnapshot = useCallback(
     (previous: PulseEntry[]): PulseEntry[] => {

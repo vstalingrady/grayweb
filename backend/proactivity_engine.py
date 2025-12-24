@@ -870,12 +870,31 @@ class ProactivityEngine:
             logger.error(f"Failed to load dashboard pulse for user {user_id}: {exc}", exc_info=True)
             return None
 
+        def _normalize_json_list(value: Any) -> List[Any]:
+            if value is None:
+                return []
+            if isinstance(value, list):
+                return value
+            if isinstance(value, dict):
+                return [value]
+            if isinstance(value, str):
+                try:
+                    parsed = json.loads(value)
+                except (json.JSONDecodeError, TypeError):
+                    return []
+                if isinstance(parsed, list):
+                    return parsed
+                if isinstance(parsed, dict):
+                    return [parsed]
+                return []
+            return []
+
         dashboard_pulse: Dict[str, Any] = {}
         if record:
             dashboard_pulse = {
                 "date_key": record["date_key"],
-                "plans": record["plans"] or [],
-                "habits": record["habits"] or [],
+                "plans": _normalize_json_list(record["plans"]),
+                "habits": _normalize_json_list(record["habits"]),
             }
 
         profile_summary, custom_instructions = await self._load_user_profile_context(user_id)
@@ -969,7 +988,7 @@ class ProactivityEngine:
         return {"upcoming_reminders": upcoming, "overdue_reminders": overdue}
 
     async def _load_user_profile_context(self, user_id: int) -> Tuple[Optional[str], Optional[str]]:
-        """Pull saved personalization fields so proactive nudges can reference them."""
+        """Return lightweight personalization for proactivity (use sparingly)."""
         try:
             record = await self.db.fetch_one(
                 """
@@ -977,8 +996,6 @@ class ProactivityEngine:
                   personalization_nickname,
                   personalization_occupation,
                   personalization_about,
-                  personalization_location,
-                  personalization_time_zone,
                   personalization_custom_instructions
                 FROM users
                 WHERE id = :user_id
@@ -996,17 +1013,17 @@ class ProactivityEngine:
         summary_parts: List[str] = []
         nickname = self._format_snippet(row.get("personalization_nickname"), limit=80)
         occupation = self._format_snippet(row.get("personalization_occupation"), limit=120)
-        about = self._format_snippet(row.get("personalization_about"), limit=200)
+        about = self._format_snippet(row.get("personalization_about"), limit=160)
 
         if nickname:
             summary_parts.append(f"Preferred name: {nickname}")
         if occupation:
             summary_parts.append(f"Occupation: {occupation}")
         if about:
-            summary_parts.append(f"About: {about}")
+            summary_parts.append(f"About (short): {about}")
 
         profile_summary = ". ".join(summary_parts) if summary_parts else None
-        custom_instructions = self._truncate_block(row.get("personalization_custom_instructions"), limit=2000)
+        custom_instructions = self._truncate_block(row.get("personalization_custom_instructions"), limit=800)
         return profile_summary, custom_instructions
 
     async def _load_recent_chat_context(self, user_id: int, *, limit: int = 6) -> Optional[str]:
@@ -1063,8 +1080,24 @@ class ProactivityEngine:
         if not rows:
             return None
 
+        lookback_hours = self._chat_context_lookback_hours()
+        max_age = timedelta(hours=lookback_hours) if lookback_hours > 0 else None
+        now_utc = datetime.now(dt_timezone.utc)
+        filtered_rows: List[Dict[str, Any]] = []
+        for row in rows:
+            timestamp = self._normalize_timestamp(row.get("created_at"))
+            if not timestamp:
+                continue
+            timestamp_utc = self._normalize_to_utc(timestamp)
+            if max_age and now_utc - timestamp_utc > max_age:
+                continue
+            filtered_rows.append(row)
+
+        if not filtered_rows:
+            return None
+
         lines: List[str] = []
-        for row in reversed(rows):
+        for row in reversed(filtered_rows):
             snippet = self._format_snippet(row.get("content"), limit=220)
             if not snippet:
                 continue
@@ -1073,6 +1106,15 @@ class ProactivityEngine:
             lines.append(f"- {speaker}: {snippet}")
 
         return "\n".join(lines) if lines else None
+
+    @staticmethod
+    def _chat_context_lookback_hours() -> int:
+        raw = os.getenv("PROACTIVITY_CHAT_LOOKBACK_HOURS", "48")
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            return 48
+        return max(0, value)
 
     @staticmethod
     def _format_snippet(value: Optional[Any], *, limit: int) -> Optional[str]:

@@ -123,6 +123,7 @@
     position: relative;
     width: 100%;
     flex-shrink: 0;
+    box-sizing: border-box;
     padding-top: 48px;
     padding-top: calc(48px + env(safe-area-inset-top));
     height: 100vh;

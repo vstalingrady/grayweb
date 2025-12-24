@@ -164,20 +164,6 @@ export function GrayDashboardCalendarWeekView({
                 {label}
               </span>
             ))}
-            {weekNowIndicator && (
-              <>
-                <div
-                  className={styles.calendarTimelineNowLine}
-                  style={{ top: `${weekNowIndicator.offset}px` }}
-                  aria-hidden="true"
-                />
-                <div
-                  className={styles.calendarTimelineNowMarker}
-                  style={{ top: `${weekNowIndicator.offset}px` }}
-                  aria-hidden="true"
-                />
-              </>
-            )}
           </div>
           <div className={styles.calendarWeekColumns} ref={weekColumnsRef}>
             {weekDays.map((day, columnIndex) => {

@@ -55,6 +55,17 @@ def _parse_json_field(value: Any) -> Any:
     return parse_json_field(value)
 
 
+def _parse_json_value(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            return None
+    return value
+
+
 def _datetime_to_ms(dt) -> int:
     """Convert datetime to milliseconds timestamp."""
     from backend.core.serializers import datetime_to_ms
@@ -125,6 +136,16 @@ async def load_general_conversation_history(
                 reminders_value = row["reminders"]
                 if reminders_value is not None:
                     entry["reminders"] = _parse_json_field(reminders_value) if isinstance(reminders_value, str) else reminders_value
+            except (KeyError, IndexError):
+                pass  # Column doesn't exist or not accessible
+
+            # Include attachments if present (optional column in older DBs)
+            try:
+                attachments_value = row["attachments"]
+                if attachments_value is not None:
+                    parsed_attachments = _parse_json_value(attachments_value)
+                    if parsed_attachments:
+                        entry["attachments"] = parsed_attachments
             except (KeyError, IndexError):
                 pass  # Column doesn't exist or not accessible
             
@@ -242,6 +263,7 @@ async def replace_general_conversation_history(user_id: int, history: List[Dict[
                     "role": entry.get("role"),
                     "content": entry.get("text") or "",
                     "grounding_metadata": json.dumps(entry.get("grounding_metadata")) if entry.get("grounding_metadata") else None,
+                    "attachments": json.dumps(entry.get("attachments")) if entry.get("attachments") else None,
                     "reminders": json.dumps(entry.get("reminders")) if entry.get("reminders") else None,
                     "created_at": utcnow(),
                 })
@@ -249,7 +271,7 @@ async def replace_general_conversation_history(user_id: int, history: List[Dict[
             if values_list:
                 # SQLite has a 999-parameter limit; chunk to avoid "too many SQL variables"
                 query = general_chat_messages.insert()
-                chunk_size = 140  # 140 * 7 columns = 980 params (< 999)
+                chunk_size = 120  # 120 * 8 columns = 960 params (< 999)
                 for i in range(0, len(values_list), chunk_size):
                     chunk = values_list[i:i + chunk_size]
                     await database.execute_many(query, chunk)

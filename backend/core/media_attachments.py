@@ -5,7 +5,7 @@ Handles resolving and processing media attachments for chat messages.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from fastapi import HTTPException, status
 
@@ -61,6 +61,67 @@ class ChatAttachment:
     """Chat attachment spec."""
     def __init__(self, id: int):
         self.id = id
+
+
+async def resolve_attachment_metadata(
+    db: "databases.Database",
+    attachment_specs: Optional[List[ChatAttachment]],
+    user_id: int,
+) -> List[Dict[str, Any]]:
+    """Resolve attachment specs to metadata for persistence/UI rendering."""
+    if not attachment_specs:
+        return []
+
+    attachment_ids = [attachment.id for attachment in attachment_specs]
+    if not attachment_ids:
+        return []
+
+    media_uploads = _get_media_uploads()
+    query = media_uploads.select().where(
+        (media_uploads.c.id.in_(attachment_ids))
+        & (media_uploads.c.user_id == user_id)
+    )
+    rows = await db.fetch_all(query)
+    records = {row["id"]: row for row in rows}
+
+    missing = [str(attachment_id) for attachment_id in attachment_ids if attachment_id not in records]
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Attachment(s) not found: {', '.join(missing)}",
+        )
+
+    from backend.core.file_utils import STORAGE_BASE_URL
+
+    result: List[Dict[str, Any]] = []
+    for attachment_id in attachment_ids:
+        record = records[attachment_id]
+        storage_path = record["storage_path"]
+        if STORAGE_BASE_URL and storage_path:
+            storage_name = Path(str(storage_path)).name
+            public_url = f"{STORAGE_BASE_URL.rstrip('/')}/{storage_name}"
+        else:
+            public_url = f"/api/uploads/{record['id']}/file"
+
+        created_at = record["created_at"]
+        if hasattr(created_at, "isoformat"):
+            created_at_value = created_at.isoformat()
+        else:
+            created_at_value = created_at if created_at is not None else None
+
+        result.append(
+            {
+                "id": record["id"],
+                "user_id": record["user_id"],
+                "filename": record["filename"],
+                "mime_type": record["mime_type"],
+                "size": record["size"],
+                "created_at": created_at_value,
+                "public_url": public_url,
+            }
+        )
+
+    return result
 
 
 async def resolve_media_attachments(

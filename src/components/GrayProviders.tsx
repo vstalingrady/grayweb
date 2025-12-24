@@ -2,6 +2,7 @@
 
 import { type ReactNode, useEffect } from "react";
 import { usePathname } from "next/navigation";
+import { isGrayWorkspaceHost } from "@/lib/grayRouting";
 import { UserProvider } from "@/contexts/UserContext";
 import { ChatProvider } from "@/components/gray/ChatProvider";
 import { ProactivityNotificationProvider } from "@/components/gray/ProactivityNotificationProvider";
@@ -116,9 +117,31 @@ export function GrayProviders({ viewerEmail, children }: GrayProvidersProps) {
     );
   }, []);
   const pathname = usePathname();
-
-  // Skip user loading on confirm-delete page to prevent 401 errors after account deletion
-  const shouldLoadUser = pathname !== "/confirm-delete";
+  const hostname =
+    typeof window !== "undefined" ? window.location.hostname : "";
+  const isGrayHost = isGrayWorkspaceHost(hostname);
+  const appRoutePrefixes = [
+    "/g",
+    "/gray",
+    "/c",
+    "/threads",
+    "/pulse",
+    "/cal",
+    "/reference",
+    "/payment",
+    "/admin",
+    "/login",
+    "/signup",
+    "/reset-password",
+    "/callback",
+    "/confirm-delete",
+    "/delete-account",
+  ];
+  const isAppRoute = appRoutePrefixes.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
+  // Skip user loading on marketing pages to prevent auth redirects.
+  const shouldLoadUser = isGrayHost || isAppRoute;
   const effectiveEmail = shouldLoadUser ? viewerEmail : null;
 
   return (

@@ -28,6 +28,7 @@ DEPLOY_LOG="${REPO_DIR}/logs/deploy_$(date +%Y%m%d_%H%M%S).log"
 ALERT_EMAIL="${ALERT_EMAIL:-}"
 DISCORD_WEBHOOK_URL="${DISCORD_WEBHOOK_URL:-}"
 DISCORD_USER_ID="${DISCORD_USER_ID:-853296501882093598}"
+DISCORD_NOTIFY_SUCCESS_PING="${DISCORD_NOTIFY_SUCCESS_PING:-false}"
 MAX_HEALTH_RETRIES="${MAX_HEALTH_RETRIES:-5}"
 HEALTH_CHECK_DELAY="${HEALTH_CHECK_DELAY:-10}"
 BACKEND_URL="${BACKEND_URL:-http://localhost:8000}"
@@ -54,6 +55,15 @@ log_info() { log "INFO" "$*"; }
 log_warn() { log "WARN" "${YELLOW}$*${NC}"; }
 log_error() { log "ERROR" "${RED}$*${NC}"; }
 log_success() { log "SUCCESS" "${GREEN}$*${NC}"; }
+
+load_discord_env() {
+    if [[ -z "${DISCORD_WEBHOOK_URL:-}" && -f "${REPO_DIR}/.env" ]]; then
+        set -a
+        # shellcheck disable=SC1090
+        source "${REPO_DIR}/.env"
+        set +a
+    fi
+}
 
 # Send notification on failure
 send_failure_notification() {
@@ -105,6 +115,31 @@ send_failure_notification() {
     
     if [[ "$sent_notification" == false ]]; then
         log_warn "No notification method available or all failed. Check logs at: $DEPLOY_LOG"
+    fi
+}
+
+send_success_notification() {
+    local body="$1"
+
+    if [[ -z "${DISCORD_WEBHOOK_URL:-}" ]]; then
+        return 0
+    fi
+
+    log_info "Sending Discord success notification..."
+
+    local mention_prefix=""
+    if [[ "${DISCORD_NOTIFY_SUCCESS_PING}" == "true" && -n "${DISCORD_USER_ID:-}" ]]; then
+        mention_prefix="<@${DISCORD_USER_ID}> "
+    fi
+
+    local discord_message="${mention_prefix}✅ **Deployment Successful**\n\`\`\`$body\`\`\`"
+
+    if curl -sf -X POST "$DISCORD_WEBHOOK_URL" \
+        -H "Content-Type: application/json" \
+        -d "{\"content\":$(echo "$discord_message" | jq -Rs .)}" 2>/dev/null; then
+        log_success "Discord success notification sent!"
+    else
+        log_warn "Discord success notification failed"
     fi
 }
 
@@ -166,6 +201,7 @@ rollback() {
     log_warn "🔄 Rolling back to commit: $rollback_commit"
     
     cd "$REPO_DIR"
+    load_discord_env
     git checkout "$rollback_commit"
     
     # Rebuild and restart with previous version
@@ -336,6 +372,13 @@ $container_logs"
     
     # Update rollback point to new successful deployment
     store_rollback_point
+
+    local success_body="Branch: $BRANCH
+Commit: $new_commit
+Previous: $previous_commit
+Host: $(hostname)
+Log: $DEPLOY_LOG"
+    send_success_notification "$success_body"
     
     # Cleanup old images
     log_info "Cleaning up old images..."

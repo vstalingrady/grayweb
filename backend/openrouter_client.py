@@ -349,8 +349,9 @@ class OpenRouterService:
         
         runtime_text = _trim(runtime_context)
         if runtime_text:
-            payload.append({"role": "system", "content": runtime_text})
-        
+            # Keep runtime context near the start so the user message remains the latest turn.
+            payload.insert(0, {"role": "system", "content": runtime_text})
+
         return payload
 
     def _build_system_prompt(
