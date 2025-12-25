@@ -171,26 +171,26 @@ def calculate_cost(
 # Credit structure: Scout = base, then 6x/18x/36x multipliers
 LIMITS = {
     # Scout: free tier - loss leader for conversions
-    # Base: $0.30/month
+    # Base: $0.60/month
     "scout": {
-        "monthly_cost": 0.30,
-        "six_hour_cost": 0.0092,
+        "monthly_cost": 0.60,
+        "six_hour_cost": 0.0184,
     },
     # Pathfinder: 6x Scout credits
     "pathfinder": {
-        "monthly_cost": 1.8,
-        "six_hour_cost": 0.0552,
+        "monthly_cost": 3.6,
+        "six_hour_cost": 0.1104,
     },
     # Voyager: 18x Scout credits
     "voyager": {
-        "monthly_cost": 5.4,
-        "six_hour_cost": 0.1656,
+        "monthly_cost": 10.8,
+        "six_hour_cost": 0.3312,
     },
     # Pioneer: 36x Scout credits
     # NOTE: Premium models (Claude Opus, GPT Pro) burn credits faster
     "pioneer": {
-        "monthly_cost": 10.8,
-        "six_hour_cost": 0.3312,
+        "monthly_cost": 21.6,
+        "six_hour_cost": 0.6624,
     },
 }
 
