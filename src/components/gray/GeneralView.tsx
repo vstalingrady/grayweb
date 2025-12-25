@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { CheckSquare, Square, Pencil, Trash2, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { type HabitItem, type PlanItem, type PlanUpdates, type ProactivityItem } from "./types";

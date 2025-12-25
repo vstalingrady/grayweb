@@ -133,13 +133,20 @@ export const useModelPreferences = ({
         setSelectedModelId(null);
         setModelTier("lite");
       }
-      return;
-    }
-
-    if (normalizedTier === "voyager") {
+    } else if (normalizedTier === "voyager") {
       if (selectedModelId && PIONEER_ONLY_MODEL_IDS.includes(selectedModelId)) {
         setSelectedModelId(null);
         setModelTier("lite");
+      }
+    }
+
+    if (selectedModelId && selectedModelTierRequired && modelTier !== "pioneer") {
+      const isAllowed =
+        (normalizedTier === "pathfinder" && selectedModelTierRequired === "pathfinder") ||
+        (normalizedTier === "voyager" && selectedModelTierRequired !== "pioneer") ||
+        normalizedTier === "pioneer";
+      if (isAllowed) {
+        setModelTier("pioneer");
       }
     }
   }, [modelTier, reasoningMode, selectedModelId, setModelTier, setReasoningMode, setSelectedModelId, user]);
