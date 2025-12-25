@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -30,9 +31,10 @@ class _FakeDb:
 
 @pytest.mark.asyncio
 async def test_proactivity_prefers_general_chat_history():
+    now = datetime.now(timezone.utc)
     db = _FakeDb(
-        general_rows=[{"role": "user", "content": "From /g", "created_at": "2025-01-01T00:00:00Z"}],
-        thread_rows=[{"role": "user", "content": "From thread", "created_at": "2025-01-01T00:00:00Z"}],
+        general_rows=[{"role": "user", "content": "From /g", "created_at": (now - timedelta(minutes=5)).isoformat()}],
+        thread_rows=[{"role": "user", "content": "From thread", "created_at": (now - timedelta(minutes=4)).isoformat()}],
     )
     engine = ProactivityEngine(db=db)  # type: ignore[arg-type]
 
@@ -45,11 +47,12 @@ async def test_proactivity_prefers_general_chat_history():
 
 @pytest.mark.asyncio
 async def test_proactivity_falls_back_to_thread_history_when_general_empty():
+    now = datetime.now(timezone.utc)
     db = _FakeDb(
         general_rows=[],
         thread_rows=[
-            {"role": "assistant", "content": "Newest reply", "created_at": "2025-01-01T00:02:00Z"},
-            {"role": "user", "content": "Oldest prompt", "created_at": "2025-01-01T00:01:00Z"},
+            {"role": "assistant", "content": "Newest reply", "created_at": (now - timedelta(minutes=1)).isoformat()},
+            {"role": "user", "content": "Oldest prompt", "created_at": (now - timedelta(minutes=2)).isoformat()},
         ],
     )
     engine = ProactivityEngine(db=db)  # type: ignore[arg-type]
