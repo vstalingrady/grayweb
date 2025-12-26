@@ -56,7 +56,7 @@ jobs:
           script_stop: true
           timeout: 10m
           script: |
-            export REPO_DIR=/gray/repo
+            export REPO_DIR=/root/gray/repo
             export ALERT_EMAIL="${{ secrets.ALERT_EMAIL }}"
             export DISCORD_WEBHOOK_URL="${{ secrets.DISCORD_WEBHOOK_URL }}"
             export DISCORD_USER_ID="${{ secrets.DISCORD_USER_ID }}"

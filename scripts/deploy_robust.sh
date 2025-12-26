@@ -12,7 +12,7 @@
 # - Deployment log with timestamps
 #
 # Environment Variables:
-# - REPO_DIR: Repository directory (default: /home/ubuntu/gray)
+# - REPO_DIR: Repository directory (default: /root/gray/repo)
 # - ALERT_EMAIL: Email address for failure notifications (optional)
 # - SMTP_SERVER: SMTP server for sending emails (optional, requires mailx)
 # - MAX_HEALTH_RETRIES: Max retries for health check (default: 5)
@@ -22,7 +22,7 @@
 set -euo pipefail
 
 # Configuration
-REPO_DIR="${REPO_DIR:-/home/ubuntu/gray}"
+REPO_DIR="${REPO_DIR:-/root/gray/repo}"
 BRANCH="${1:-main}"
 DEPLOY_LOG="${REPO_DIR}/logs/deploy_$(date +%Y%m%d_%H%M%S).log"
 ALERT_EMAIL="${ALERT_EMAIL:-}"

@@ -1,0 +1,16 @@
+# GitHub Actions SSH: fix "unable to authenticate"
+
+# 1) Confirm the key you use locally works.
+ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes root@148.230.98.199
+
+# 2) Confirm the local key fingerprint (should match server authorized_keys).
+ssh-keygen -lf ~/.ssh/id_ed25519
+
+# 3) On the server, confirm authorized_keys fingerprints.
+ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes root@148.230.98.199 \
+  "ssh-keygen -lf /root/.ssh/authorized_keys"
+
+# 4) Update GitHub repo secret SERVER_SSH_KEY with the *private* key (not .pub).
+cat ~/.ssh/id_ed25519
+
+# 5) Re-run the GitHub Actions deploy workflow.

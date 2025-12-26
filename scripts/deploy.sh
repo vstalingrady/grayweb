@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-REPO_DIR="${REPO_DIR:-/home/ubuntu/gray}"
+REPO_DIR="${REPO_DIR:-/root/gray/repo}"
 BRANCH="${1:-main}"
 DISCORD_WEBHOOK_URL="${DISCORD_WEBHOOK_URL:-}"
 DISCORD_USER_ID="${DISCORD_USER_ID:-853296501882093598}"
