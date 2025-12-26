@@ -65,10 +65,6 @@ FALLBACK_PRICING: Dict[str, Dict[str, float]] = {
 # Default pricing for unknown models
 DEFAULT_PRICING = {"prompt": 1.00e-6, "completion": 5.00e-6, "cached": 0.10e-6}
 
-def _get_burst_exempt_emails() -> set[str]:
-    raw = os.getenv("USAGE_BURST_EXEMPT_EMAILS", "")
-    return {email.strip().lower() for email in raw.split(",") if email.strip()}
-
 
 async def _fetch_openrouter_pricing() -> Dict[str, Dict[str, float]]:
     """Fetch current model pricing from OpenRouter API."""
@@ -271,7 +267,7 @@ class UsageTracker:
     async def _get_user_usage(self, user_id: int):
         """Fetch current usage data for a user."""
         query = """
-            SELECT email, plan_tier, daily_token_usage, monthly_cost_usage, 
+            SELECT plan_tier, daily_token_usage, monthly_cost_usage, 
                    last_daily_reset, last_monthly_reset,
                    six_hour_cost_usage, last_six_hour_reset,
                    subscription_expires_at
@@ -344,8 +340,6 @@ class UsageTracker:
             subscription_expires_at
         )
         limits = get_limits_for_tier(tier)
-        email = (usage_data.get("email") or "").strip().lower()
-        burst_exempt = email in _get_burst_exempt_emails()
         
         if limits.get("is_unlimited"):
             return
@@ -376,7 +370,7 @@ class UsageTracker:
 
         # Check 8-Hour Limit
         current_six_hour = usage_data["six_hour_cost_usage"] or 0.0
-        if not burst_exempt and current_six_hour >= limits["six_hour_cost"]:
+        if current_six_hour >= limits["six_hour_cost"]:
             current_block = now.hour // 8
             next_block_hour = (current_block + 1) * 8
 
@@ -421,8 +415,6 @@ class UsageTracker:
             subscription_expires_at
         )
         limits = get_limits_for_tier(tier)
-        email = (usage_data.get("email") or "").strip().lower()
-        burst_exempt = email in _get_burst_exempt_emails()
         
         if limits.get("is_unlimited"):
             return {
@@ -450,8 +442,6 @@ class UsageTracker:
         current_six_hour = usage_data["six_hour_cost_usage"] or 0.0
         six_hour_limit = limits["six_hour_cost"]
         is_six_hour_limit_reached = current_six_hour >= six_hour_limit
-        if burst_exempt:
-            is_six_hour_limit_reached = False
 
         current_block = now.hour // 8
         next_block_hour = (current_block + 1) * 8
