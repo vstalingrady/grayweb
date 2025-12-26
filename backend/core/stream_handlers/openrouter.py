@@ -347,59 +347,93 @@ async def _stream_openrouter_response_impl(
         
         # Process tool calls if any
         if pending_tool_calls:
+            normalized_calls = []
             for idx, tc in sorted(pending_tool_calls.items()):
                 tool_name = tc["name"]
                 tool_args_str = "".join(tc["arguments"])
-                
                 if not tool_name:
                     continue
-                
                 try:
                     tool_args = json.loads(tool_args_str) if tool_args_str else {}
                 except json.JSONDecodeError:
                     tool_args = {}
-                
+                tool_call_id = tc.get("id") or f"tool_{turn}_{idx}"
+                normalized_calls.append({
+                    "idx": idx,
+                    "name": tool_name,
+                    "args_str": tool_args_str or "{}",
+                    "args": tool_args,
+                    "id": tool_call_id,
+                })
+
+            if normalized_calls:
+                tool_calls = []
+                for call in normalized_calls:
+                    tool_calls.append({
+                        "id": call["id"],
+                        "type": "function",
+                        "function": {
+                            "name": call["name"],
+                            "arguments": call["args_str"],
+                        },
+                    })
+                current_history.append({
+                    "role": "model",
+                    "text": accumulated,
+                    "tool_calls": tool_calls,
+                })
+
+            for call in normalized_calls:
+                tool_name = call["name"]
+                tool_args = call["args"]
+                tool_call_id = call["id"]
+
                 api_logger.info(
                     f"[OpenRouter] Executing tool: {tool_name}",
                     extra={"user_id": user_id, "tool": tool_name}
                 )
-                
+
                 # Create a FunctionCall compatible object
                 gemini_fc = types.FunctionCall(name=tool_name, args=tool_args)
-                
+
                 try:
                     tool_result = await execute_function_call_fn(
                         gemini_fc, user_id, db, user_timezone=user_timezone
                     )
-                    
+
                     # Emit tool cards
                     if isinstance(tool_result, dict) and tool_result.get("type") in {
                         "gray.reminder", "gray.plan", "gray.habit"
                     }:
                         yield ("reminders", [tool_result])
-                    
+
                     # Signal onboarding completion if complete_onboarding succeeded
                     if tool_name == "complete_onboarding" and isinstance(tool_result, dict):
                         if tool_result.get("status") == "success":
                             yield ("onboarding_complete", tool_result)
-                    
-                    # Add to history for multi-turn
-                    current_history.append({"role": "assistant", "text": accumulated})
+
+                    try:
+                        tool_content = json.dumps(tool_result)
+                    except TypeError:
+                        tool_content = json.dumps({"result": str(tool_result)})
+
+                    # Add tool result to history for multi-turn
                     current_history.append({
                         "role": "tool",
-                        "tool_name": tool_name,
-                        "tool_result": tool_result,
+                        "name": tool_name,
+                        "tool_call_id": tool_call_id,
+                        "content": tool_content,
                     })
-                    
+
                 except Exception as tool_error:
                     api_logger.error(f"Tool execution failed: {tool_name}: {tool_error}", exc_info=True)
-                    current_history.append({"role": "assistant", "text": accumulated})
                     current_history.append({
                         "role": "tool",
-                        "tool_name": tool_name,
-                        "error": str(tool_error),
+                        "name": tool_name,
+                        "tool_call_id": tool_call_id,
+                        "content": json.dumps({"error": str(tool_error)}),
                     })
-            
+
             total_accumulated += accumulated
             current_message = ""
             continue  # Next turn

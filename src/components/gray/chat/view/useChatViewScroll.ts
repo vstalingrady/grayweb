@@ -39,11 +39,14 @@ export const useChatViewScroll = ({
   const scrollAnchorRef = useRef<HTMLDivElement>(null);
   const composerDockRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
+  const userScrolledAwayRef = useRef(false);
+  const lastScrollTopRef = useRef(0);
   const [composerHeight, setComposerHeight] = useState(0);
   const prevMessageCountRef = useRef(0);
   const prevSessionKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
+    const isSessionChange = prevSessionKeyRef.current !== sessionKey;
     const shouldScroll =
       prevSessionKeyRef.current !== sessionKey || prevMessageCountRef.current !== messages.length;
     if (!hasHydrated || !scrollAnchorRef.current) {
@@ -57,8 +60,11 @@ export const useChatViewScroll = ({
       return;
     }
     if (shouldScroll) {
-      // Always keep the newest message visible.
-      scrollAnchorRef.current.scrollIntoView({ behavior: "auto" });
+      const allowAutoScroll = isSessionChange || (!userScrolledAwayRef.current && isAtBottomRef.current);
+      if (allowAutoScroll) {
+        // Keep the newest message visible when the user hasn't scrolled away.
+        scrollAnchorRef.current.scrollIntoView({ behavior: "auto" });
+      }
     }
     prevMessageCountRef.current = messages.length;
     prevSessionKeyRef.current = sessionKey;
@@ -97,9 +103,19 @@ export const useChatViewScroll = ({
     if (!viewport) {
       return;
     }
-    const threshold = 300;
-    const isNearBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= threshold;
+    const threshold = 120;
+    const currentScrollTop = viewport.scrollTop;
+    const isNearBottom = viewport.scrollHeight - currentScrollTop - viewport.clientHeight <= threshold;
+    const isScrollingUp = currentScrollTop < lastScrollTopRef.current;
+    lastScrollTopRef.current = currentScrollTop;
     isAtBottomRef.current = isNearBottom;
+    if (isScrollingUp) {
+      userScrolledAwayRef.current = true;
+      return;
+    }
+    if (isNearBottom) {
+      userScrolledAwayRef.current = false;
+    }
   }, []);
 
   // When streaming begins (activeStreamingMessageId becomes non-null), auto-scroll to bottom
@@ -108,10 +124,12 @@ export const useChatViewScroll = ({
   useEffect(() => {
     // Detect when streaming just started
     if (streamingTargetId && !prevStreamingIdRef.current) {
-      // Reset to bottom state so streaming auto-scrolls
-      isAtBottomRef.current = true;
-      // Immediately scroll to bottom
-      if (scrollAnchorRef.current) {
+      const viewport = chatViewportRef.current;
+      const threshold = 120;
+      const isNearBottom =
+        !viewport || viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= threshold;
+      isAtBottomRef.current = isNearBottom;
+      if (isNearBottom && !userScrolledAwayRef.current && scrollAnchorRef.current) {
         scrollAnchorRef.current.scrollIntoView({ behavior: "instant" });
       }
     }
@@ -119,7 +137,12 @@ export const useChatViewScroll = ({
   }, [streamingTargetId]);
 
   useEffect(() => {
-    if (!streamingContentSignature || !scrollAnchorRef.current || !isAtBottomRef.current) {
+    if (
+      !streamingContentSignature ||
+      !scrollAnchorRef.current ||
+      !isAtBottomRef.current ||
+      userScrolledAwayRef.current
+    ) {
       return;
     }
     scrollAnchorRef.current.scrollIntoView({ behavior: "instant" });
