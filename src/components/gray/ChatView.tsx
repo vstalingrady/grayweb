@@ -17,6 +17,7 @@ import composerStyles from "@/components/gray/chat/ChatComposerStyles.module.css
 import type { ContextUsageSummary } from "@/components/gray/types";
 import { useI18n } from "@/contexts/I18nContext";
 import { useUser } from "@/contexts/UserContext";
+import { UsageLimitBanner } from "@/components/gray/UsageLimitBanner";
 import AttachmentTray from "./AttachmentTray";
 import { GrayChatComposer } from "./ChatComposer";
 import { useChatStore } from "./ChatProvider";
@@ -99,6 +100,10 @@ export function GrayChatView({
   }, [loadConversationMessages, session?.conversationId, session?.id, session?.messages.length]);
 
   const { user, waitForUser } = useUser();
+  const usageStatus = user?.usage_status ?? null;
+  const isUsageLimitReached = Boolean(
+    usageStatus?.is_monthly_limit_reached || usageStatus?.is_six_hour_limit_reached
+  );
   const [draft, setDraft] = useState("");
   const hasHydrated = useHasHydrated();
   const replyTimeout = useRef<number | null>(null);
@@ -685,6 +690,7 @@ export function GrayChatView({
           className={composerStyles.chatAttachmentInput}
           onChange={handleAttachmentInputChange}
         />
+        {isUsageLimitReached && usageStatus ? <UsageLimitBanner usageStatus={usageStatus} /> : null}
         <GrayChatComposer
           value={draft}
           onChange={setDraft}

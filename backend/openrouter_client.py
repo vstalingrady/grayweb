@@ -160,6 +160,16 @@ class OpenRouterService:
             "no",
             "off",
         }
+        self._prompt_cache_enabled = (os.getenv("OPENROUTER_PROMPT_CACHE") or "true").strip().lower() not in {
+            "0",
+            "false",
+            "no",
+            "off",
+        }
+        cache_prefixes = os.getenv("OPENROUTER_PROMPT_CACHE_PREFIXES", "anthropic/")
+        self._prompt_cache_prefixes = [
+            prefix.strip().lower() for prefix in cache_prefixes.split(",") if prefix.strip()
+        ]
         self._lite_model = os.getenv("OPENROUTER_LITE_MODEL", "x-ai/grok-4.1-fast")
         self._default_model = os.getenv("OPENROUTER_DEFAULT_MODEL", self.MODEL_MAPPINGS["default"])
         # Output token budget:
@@ -257,6 +267,19 @@ class OpenRouterService:
         if resolved_model == self._lite_model:
             return self._max_history_lite
         return self._max_history_premium or self._max_history_lite
+
+    def _should_cache_prompt(self, resolved_model: Optional[str]) -> bool:
+        if not self._prompt_cache_enabled:
+            return False
+        model_lower = (resolved_model or "").strip().lower()
+        if not model_lower:
+            return False
+        if not self._prompt_cache_prefixes:
+            return True
+        return any(model_lower.startswith(prefix) for prefix in self._prompt_cache_prefixes)
+
+    def _wrap_cache_control(self, text: str) -> List[Dict[str, Any]]:
+        return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
 
     def _build_messages(
         self,
@@ -474,6 +497,10 @@ class OpenRouterService:
             history_token_budget=history_token_budget,
             runtime_context=runtime_context,
         )
+
+        if runtime_context and self._should_cache_prompt(resolved_model):
+            if messages and messages[0].get("role") == "system" and messages[0].get("content") == runtime_context:
+                messages[0]["content"] = self._wrap_cache_control(runtime_context)
         
         if not messages:
             messages = [{"role": "user", "content": message}]
@@ -599,6 +626,10 @@ class OpenRouterService:
             history_token_budget=history_token_budget,
             runtime_context=runtime_context,
         )
+
+        if runtime_context and self._should_cache_prompt(resolved_model):
+            if messages and messages[0].get("role") == "system" and messages[0].get("content") == runtime_context:
+                messages[0]["content"] = self._wrap_cache_control(runtime_context)
         
         if not messages:
             messages = [{"role": "user", "content": message}]
