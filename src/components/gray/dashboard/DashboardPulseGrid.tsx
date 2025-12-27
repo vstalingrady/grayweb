@@ -45,7 +45,7 @@ const toDateKey = (date: Date) => {
 export function DashboardPulseGrid({
   currentDate,
   selectedDate,
-  viewerName,
+  viewerName: _viewerName,
   proactivity,
   events,
   proactivityDeliveryKeys,

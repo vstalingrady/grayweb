@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -608,83 +607,6 @@ function GrayPageClientInner({
     );
   };
 
-  const renderMainSurfaceFor = (surfaceViewMode: ViewMode) => {
-    const hideWorkspaceChrome =
-      !isMobileViewport &&
-      (surfaceViewMode === "chat" ||
-        (pathname?.startsWith("/c/") ?? false) ||
-        pathname === "/g" ||
-        (pathname?.startsWith("/g/") ?? false));
-
-    if (surfaceViewMode === "chat") {
-      return (
-        <div
-          className={pageStyles.mainContent}
-          data-view={surfaceViewMode}
-          data-compact={isCompactLayout ? "true" : "false"}
-        >
-          {!hideWorkspaceChrome ? (
-            <GrayWorkspaceHeader
-              planLabel={viewerPlanLabel}
-              onUpgradeClick={handleUpgradePlan}
-              showUpgradeButton={shouldShowUpgradeButton}
-              hideDesktopMeta={hideWorkspaceChrome}
-            >
-              {renderWorkspaceGreeting()}
-            </GrayWorkspaceHeader>
-          ) : null}
-          <GrayChatView
-            sessionId={currentChatId ?? null}
-            onContextUsageChange={setContextUsageSummary}
-            hideThinkingIndicator={hideChatThinkingIndicator}
-            introContent={null}
-            isInputDisabled={isUsageLimitReached}
-          />
-        </div>
-      );
-    }
-
-    if (surfaceViewMode === "general") {
-      return (
-        <div
-          className={pageStyles.mainContent}
-          data-view={surfaceViewMode}
-          data-compact={isCompactLayout ? "true" : "false"}
-        >
-          {!hideWorkspaceChrome ? (
-            <GrayWorkspaceHeader
-              planLabel={viewerPlanLabel}
-              onUpgradeClick={handleUpgradePlan}
-              showUpgradeButton={shouldShowUpgradeButton}
-              hideDesktopMeta={hideWorkspaceChrome}
-            >
-              {renderWorkspaceGreeting()}
-            </GrayWorkspaceHeader>
-          ) : null}
-          <GrayGeneralView
-            greeting={greeting}
-            currentDate={now}
-            plans={derivedPlans}
-            habits={derivedHabits}
-            proactivity={proactivity}
-            onSelectProactivity={selectProactivityPreset}
-            onRemoveProactivity={removeProactivity}
-            onTogglePlan={togglePlan}
-            onToggleHabit={toggleHabit}
-            onSavePlan={savePlan}
-            onDeletePlan={deletePlan}
-            onDeleteHabit={deleteHabit}
-            onRefreshData={refreshPlansAndHabits}
-            showGreeting={false}
-            hidePlans={isMobileViewport}
-          />
-        </div>
-      );
-    }
-
-    return renderDashboardSurface();
-  };
-
   // Close mobile sidebar on navigation
   const handleMobileNavigate = (nav: SidebarNavKey) => {
     handleNavigate(nav);
@@ -801,7 +723,7 @@ function GrayPageClientInner({
     if (activeNav === "general" && manualViewMode === "history") {
       setManualViewMode(null);
     }
-  }, [activeNav, baseViewMode, manualViewMode]);
+  }, [activeNav, baseViewMode, isMobileViewport, manualViewMode]);
 
   const viewerName = useMemo(() => {
     if (userLoading) {
