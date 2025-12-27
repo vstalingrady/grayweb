@@ -4,6 +4,8 @@ import LoginForm from "@/components/LoginForm";
 import { readServerSession } from "@/lib/auth/server";
 import {
   hostFromHeaders,
+  isGrayWorkspaceHost,
+  isLocalHostname,
   normalizeWorkspaceRedirect,
   resolveDefaultWorkspacePath,
   resolveWorkspaceOrigin,
@@ -39,10 +41,36 @@ const sanitizeRedirect = (
 };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const requestHeaders = await headers();
+  const host = hostFromHeaders(requestHeaders);
+  const isLocal = isLocalHostname(host);
+  const isWorkspaceHost = isGrayWorkspaceHost(host);
+  const forwardedProto = requestHeaders.get("x-forwarded-proto") ?? undefined;
+  const forwardedPort = requestHeaders.get("x-forwarded-port") ?? undefined;
+  const workspaceOrigin = resolveWorkspaceOrigin(host, forwardedProto, forwardedPort);
+
+  if (!isLocal && !isWorkspaceHost && workspaceOrigin) {
+    const params = await searchParams;
+    const redirectUrl = new URL("/login", workspaceOrigin);
+    if (params) {
+      for (const [key, value] of Object.entries(params)) {
+        if (Array.isArray(value)) {
+          value.forEach((entry) => {
+            if (typeof entry === "string") {
+              redirectUrl.searchParams.append(key, entry);
+            }
+          });
+        } else if (typeof value === "string") {
+          redirectUrl.searchParams.set(key, value);
+        }
+      }
+    }
+    redirect(redirectUrl.toString());
+  }
+
   const session = await readServerSession();
 
   if (session) {
-    const requestHeaders = await headers();
     const host = hostFromHeaders(requestHeaders);
     const workspaceHost = resolveWorkspaceHost(host) ?? host;
     const params = await searchParams;
@@ -54,11 +82,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       redirectTarget,
       workspaceHost
     );
-    const workspaceOrigin = resolveWorkspaceOrigin(
-      host,
-      requestHeaders.get("x-forwarded-proto") ?? undefined,
-      requestHeaders.get("x-forwarded-port") ?? undefined
-    );
+    const workspaceOrigin = resolveWorkspaceOrigin(host, forwardedProto, forwardedPort);
 
     if (workspaceOrigin && destination.startsWith("/")) {
       redirect(new URL(destination, workspaceOrigin).toString());

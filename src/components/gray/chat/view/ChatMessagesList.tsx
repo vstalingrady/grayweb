@@ -105,6 +105,8 @@ export const ChatMessagesList = memo(
       setExpandedMessageId((prev) => (prev === messageId ? null : messageId));
     }, []);
 
+    const shouldAnchorMessages = !hasMoreHistory && !isLoadingHistory;
+
     return (
       <div className={styles.chatMessages} data-streaming={shouldShowPendingStreamIndicator ? "true" : undefined}>
         {(hasMoreHistory || isLoadingHistory) && (
@@ -117,6 +119,7 @@ export const ChatMessagesList = memo(
             {isLoadingHistory ? t("Loading earlier messages...") : t("Load earlier messages")}
           </button>
         )}
+        {shouldAnchorMessages && <div className={styles.chatMessagesSpacer} aria-hidden="true" />}
         {messages.map((message, messageIndex) => {
 	          const isUser = message.role === "user";
 	          const isAssistant = !isUser;
