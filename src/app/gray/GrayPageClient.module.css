@@ -7647,6 +7647,7 @@ h1.greeting {
 .dashboardCardEvents {
   grid-area: events;
   min-height: 280px;
+  max-height: 520px;
 }
 
 .dashboardCardProactivity {
@@ -7697,6 +7698,10 @@ h1.greeting {
   flex: 1;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+}
+
+.dashboardCardEvents .dashboardCardBody {
   overflow-y: auto;
 }
 
