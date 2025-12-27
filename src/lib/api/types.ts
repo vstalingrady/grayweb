@@ -582,6 +582,11 @@ export interface AnalyticsSummary {
     inactive_30d: number;
     churn_rate_30d: number;
   };
+  timeseries?: {
+    months: string[];
+    signups: number[];
+    paid_transactions: number[];
+  };
   revenue?: {
     by_status: Record<string, number>;
     by_plan: Record<string, number>;

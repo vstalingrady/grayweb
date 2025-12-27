@@ -230,6 +230,66 @@
   color: var(--fg-subtle, rgba(200, 200, 200, 0.5));
 }
 
+.analyticsChart {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.analyticsChartLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted, rgba(210, 210, 210, 0.62));
+}
+
+.analyticsChartLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.analyticsChartSwatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.analyticsChartSvg {
+  width: 100%;
+  height: auto;
+}
+
+.analyticsChartAxis {
+  stroke: rgba(255, 255, 255, 0.22);
+  stroke-width: 1;
+}
+
+.analyticsChartGrid {
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-width: 1;
+}
+
+.analyticsChartLine {
+  fill: none;
+  stroke-width: 2.2;
+}
+
+.analyticsChartDot {
+  stroke: rgba(10, 10, 10, 0.5);
+  stroke-width: 1;
+}
+
+.analyticsChartLabel {
+  fill: rgba(220, 220, 220, 0.65);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
 .analyticsLinkRow {
   display: flex;
   flex-direction: column;

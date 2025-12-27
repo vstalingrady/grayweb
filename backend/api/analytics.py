@@ -8,7 +8,7 @@ import hmac
 import ipaddress
 import os
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import databases
 import sqlalchemy
@@ -56,19 +56,35 @@ def _month_key(value: Optional[datetime]) -> Optional[str]:
         return None
 
 
-def _build_month_series(months: int = 6) -> Dict[str, Dict[str, int]]:
+def _build_month_series(
+    months: int = 6,
+    fields: Optional[Tuple[str, ...]] = None,
+) -> Dict[str, Dict[str, int]]:
     now = utcnow_aware()
     series: Dict[str, Dict[str, int]] = {}
     year = now.year
     month = now.month
+    default_fields = ("signups", "conversions", "gross_revenue", "commission")
+    selected_fields = fields or default_fields
     for _ in range(months):
-        key = f\"{year:04d}-{month:02d}\"
-        series[key] = {\"signups\": 0, \"conversions\": 0, \"gross_revenue\": 0, \"commission\": 0}
+        key = f"{year:04d}-{month:02d}"
+        series[key] = {field: 0 for field in selected_fields}
         month -= 1
         if month <= 0:
             month = 12
             year -= 1
     return series
+
+
+def _coerce_datetime(value: Any) -> Optional[datetime]:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None)
+        except ValueError:
+            return None
+    return None
 
 
 def _is_localhost_request(request: Request) -> bool:
@@ -207,6 +223,57 @@ async def _build_analytics_summary(
     except Exception:
         user_growth["new_7d"] = 0
         user_growth["new_30d"] = 0
+
+    # ========== TIMESERIES (6 mo) ==========
+    timeseries: Dict[str, Any] = {}
+    try:
+        month_series = _build_month_series(6, fields=("signups", "paid_transactions"))
+        month_keys = sorted(month_series.keys())
+        if month_keys:
+            start_year, start_month = month_keys[0].split("-")
+            start_date = datetime(int(start_year), int(start_month), 1)
+        else:
+            start_date = utcnow_aware().replace(day=1, hour=0, minute=0, second=0, microsecond=0).replace(tzinfo=None)
+
+        user_rows = await db.fetch_all(
+            sqlalchemy.select(users.c.created_at).where(users.c.created_at >= start_date)
+        )
+        for row in user_rows:
+            created_at = _coerce_datetime(row["created_at"])
+            if not created_at:
+                continue
+            month_key = _month_key(created_at)
+            if month_key and month_key in month_series:
+                month_series[month_key]["signups"] += 1
+
+        paid_statuses = ["success", "settlement"]
+        transaction_rows = await db.fetch_all(
+            sqlalchemy.select(
+                transactions.c.status,
+                transactions.c.paid_at,
+                transactions.c.updated_at,
+                transactions.c.created_at,
+            ).where(transactions.c.status.in_(paid_statuses))
+        )
+        for row in transaction_rows:
+            paid_at = (
+                _coerce_datetime(row["paid_at"])
+                or _coerce_datetime(row["updated_at"])
+                or _coerce_datetime(row["created_at"])
+            )
+            if not paid_at or paid_at < start_date:
+                continue
+            month_key = _month_key(paid_at)
+            if month_key and month_key in month_series:
+                month_series[month_key]["paid_transactions"] += 1
+
+        timeseries = {
+            "months": month_keys,
+            "signups": [month_series[key]["signups"] for key in month_keys],
+            "paid_transactions": [month_series[key]["paid_transactions"] for key in month_keys],
+        }
+    except Exception:
+        timeseries = {"months": [], "signups": [], "paid_transactions": []}
 
     # ========== ENGAGEMENT METRICS ==========
     engagement: Dict[str, Any] = {}
@@ -397,6 +464,7 @@ async def _build_analytics_summary(
         "generated_at": utcnow_aware().isoformat(),
         "counts": counts,
         "user_growth": user_growth,
+        "timeseries": timeseries,
         "engagement": engagement,
         "feature_adoption": feature_adoption,
         "retention": retention,

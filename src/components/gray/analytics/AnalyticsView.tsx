@@ -32,6 +32,16 @@ const formatDateTime = (value?: string | null) => {
   }
 };
 
+const formatMonthLabel = (value: string) => {
+  const [year, month] = value.split("-");
+  const monthIndex = Number(month) - 1;
+  if (!Number.isFinite(monthIndex)) {
+    return value;
+  }
+  const date = new Date(Number(year), monthIndex, 1);
+  return date.toLocaleString("en-US", { month: "short" });
+};
+
 const formatCurrencyAmount = (value: number, currency: string) => {
   const normalized = currency.toUpperCase();
   if (normalized === "USD") {
@@ -126,6 +136,149 @@ const AnalyticsMeter = ({ label, value, valueLabel }: AnalyticsMeterProps) => {
   );
 };
 
+type LineChartSeries = {
+  label: string;
+  values: number[];
+  color: string;
+};
+
+type LineChartProps = {
+  xLabels: string[];
+  series: LineChartSeries[];
+  height?: number;
+  formatTick?: (value: number) => string;
+};
+
+const LineChart = ({ xLabels, series, height = 200, formatTick = formatCount }: LineChartProps) => {
+  const width = 640;
+  const padding = { top: 20, right: 24, bottom: 32, left: 44 };
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+
+  const maxValue = Math.max(1, ...series.flatMap((entry) => entry.values));
+  const pointsCount = Math.max(1, xLabels.length);
+  const stepX = pointsCount > 1 ? plotWidth / (pointsCount - 1) : 0;
+
+  const resolvePoint = (value: number, index: number) => {
+    const x = padding.left + stepX * index;
+    const ratio = maxValue > 0 ? value / maxValue : 0;
+    const y = padding.top + (1 - ratio) * plotHeight;
+    return { x, y };
+  };
+
+  const buildPath = (values: number[]) => {
+    return values
+      .map((value, index) => {
+        const point = resolvePoint(value, index);
+        return `${index === 0 ? "M" : "L"}${point.x},${point.y}`;
+      })
+      .join(" ");
+  };
+
+  const tickCount = 4;
+  const ticks = Array.from({ length: tickCount + 1 }, (_, index) => {
+    const ratio = index / tickCount;
+    const y = padding.top + ratio * plotHeight;
+    const value = Math.round((1 - ratio) * maxValue);
+    return { y, value };
+  });
+
+  const labelIndices = new Set<number>();
+  if (xLabels.length <= 5) {
+    xLabels.forEach((_, index) => labelIndices.add(index));
+  } else {
+    labelIndices.add(0);
+    labelIndices.add(Math.floor((xLabels.length - 1) / 2));
+    labelIndices.add(xLabels.length - 1);
+  }
+
+  return (
+    <div className={styles.analyticsChart}>
+      <div className={styles.analyticsChartLegend}>
+        {series.map((entry) => (
+          <div key={entry.label} className={styles.analyticsChartLegendItem}>
+            <span className={styles.analyticsChartSwatch} style={{ background: entry.color }} />
+            <span>{entry.label}</span>
+          </div>
+        ))}
+      </div>
+      <svg
+        className={styles.analyticsChartSvg}
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label="Analytics chart"
+      >
+        {ticks.map((tick) => (
+          <g key={tick.value}>
+            <line
+              className={styles.analyticsChartGrid}
+              x1={padding.left}
+              y1={tick.y}
+              x2={width - padding.right}
+              y2={tick.y}
+            />
+            <text
+              className={styles.analyticsChartLabel}
+              x={padding.left - 8}
+              y={tick.y + 4}
+              textAnchor="end"
+            >
+              {formatTick(tick.value)}
+            </text>
+          </g>
+        ))}
+        <line
+          className={styles.analyticsChartAxis}
+          x1={padding.left}
+          y1={padding.top}
+          x2={padding.left}
+          y2={height - padding.bottom}
+        />
+        <line
+          className={styles.analyticsChartAxis}
+          x1={padding.left}
+          y1={height - padding.bottom}
+          x2={width - padding.right}
+          y2={height - padding.bottom}
+        />
+
+        {xLabels.map((label, index) =>
+          labelIndices.has(index) ? (
+            <text
+              key={label}
+              className={styles.analyticsChartLabel}
+              x={padding.left + stepX * index}
+              y={height - 8}
+              textAnchor="middle"
+            >
+              {label}
+            </text>
+          ) : null
+        )}
+
+        {series.map((entry) => (
+          <g key={entry.label}>
+            <path className={styles.analyticsChartLine} d={buildPath(entry.values)} stroke={entry.color} />
+            {entry.values.map((value, index) => {
+              const point = resolvePoint(value, index);
+              return (
+                <circle
+                  key={`${entry.label}-${index}`}
+                  className={styles.analyticsChartDot}
+                  cx={point.x}
+                  cy={point.y}
+                  r={3}
+                  fill={entry.color}
+                />
+              );
+            })}
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+};
+
 export function AnalyticsView() {
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [affiliateSummary, setAffiliateSummary] = useState<AffiliateAnalyticsSummary | null>(null);
@@ -205,15 +358,50 @@ export function AnalyticsView() {
     value: value ?? 0,
   }));
 
+  const adminTimeline = summary?.timeseries;
+  const adminMonths = adminTimeline?.months?.map(formatMonthLabel) ?? [];
+  const adminSeries = adminTimeline
+    ? [
+      {
+        label: "Signups",
+        values: adminTimeline.signups,
+        color: "rgba(122, 214, 255, 0.95)",
+      },
+      {
+        label: "Paid transactions",
+        values: adminTimeline.paid_transactions,
+        color: "rgba(255, 180, 110, 0.95)",
+      },
+    ]
+    : [];
+  const showAdminChart = adminSeries.length > 0 && adminMonths.length > 0;
+
   const affiliateTimeline = affiliateSummary?.timeline ?? [];
+  const affiliateMonths = affiliateTimeline.map((entry) => formatMonthLabel(entry.month));
   const affiliateSignupsEntries = affiliateTimeline.map((entry) => ({
-    label: entry.month,
+    label: formatMonthLabel(entry.month),
     value: entry.signups,
   }));
   const affiliateConversionEntries = affiliateTimeline.map((entry) => ({
-    label: entry.month,
+    label: formatMonthLabel(entry.month),
     value: entry.conversions,
   }));
+
+  const affiliateSeries = affiliateTimeline.length
+    ? [
+      {
+        label: "Signups",
+        values: affiliateTimeline.map((entry) => entry.signups),
+        color: "rgba(122, 214, 255, 0.95)",
+      },
+      {
+        label: "Conversions",
+        values: affiliateTimeline.map((entry) => entry.conversions),
+        color: "rgba(172, 255, 199, 0.9)",
+      },
+    ]
+    : [];
+  const showAffiliateChart = affiliateSeries.length > 0 && affiliateMonths.length > 0;
 
   const affiliateCurrencyEntries = Object.entries(
     affiliateSummary?.summary?.currency_breakdown ?? {}
@@ -222,6 +410,24 @@ export function AnalyticsView() {
     grossRevenue: values.gross_revenue,
     commissionOwed: values.commission_owed,
   }));
+  const affiliateCurrencyKeys = Object.keys(affiliateSummary?.summary?.currency_breakdown ?? {});
+  const affiliateRevenueCurrency = affiliateCurrencyKeys.length === 1 ? affiliateCurrencyKeys[0] : null;
+  const affiliateRevenueSeries =
+    affiliateRevenueCurrency && affiliateTimeline.length
+      ? [
+        {
+          label: "Gross revenue",
+          values: affiliateTimeline.map((entry) => entry.gross_revenue),
+          color: "rgba(255, 180, 110, 0.95)",
+        },
+        {
+          label: "Commission",
+          values: affiliateTimeline.map((entry) => entry.commission),
+          color: "rgba(255, 236, 180, 0.9)",
+        },
+      ]
+      : [];
+  const showAffiliateRevenueChart = affiliateRevenueSeries.length > 0 && affiliateMonths.length > 0;
 
   if (isLoading) {
     return (
@@ -272,6 +478,12 @@ export function AnalyticsView() {
               </div>
               <AnalyticsMeter label="Paid share" value={paidShare} />
             </AnalyticsCard>
+
+            {showAdminChart ? (
+              <AnalyticsCard title="Trends (6 mo)">
+                <LineChart xLabels={adminMonths} series={adminSeries} />
+              </AnalyticsCard>
+            ) : null}
 
             <AnalyticsCard title="Engagement">
               <div className={styles.analyticsStatList}>
@@ -400,6 +612,12 @@ export function AnalyticsView() {
               ) : null}
             </AnalyticsCard>
 
+            {showAffiliateChart ? (
+              <AnalyticsCard title="Affiliate growth (6 mo)">
+                <LineChart xLabels={affiliateMonths} series={affiliateSeries} />
+              </AnalyticsCard>
+            ) : null}
+
             <AnalyticsCard title="Affiliate pipeline (6 mo)">
               <div className={styles.analyticsSplit}>
                 <div>
@@ -411,6 +629,22 @@ export function AnalyticsView() {
                   <AnalyticsBarList entries={affiliateConversionEntries} emptyLabel="No conversions yet" />
                 </div>
               </div>
+            </AnalyticsCard>
+
+            <AnalyticsCard title="Affiliate revenue (6 mo)">
+              {showAffiliateRevenueChart ? (
+                <LineChart
+                  xLabels={affiliateMonths}
+                  series={affiliateRevenueSeries}
+                  formatTick={(value) =>
+                    affiliateRevenueCurrency ? formatCurrencyAmount(value, affiliateRevenueCurrency) : formatCount(value)
+                  }
+                />
+              ) : (
+                <p className={styles.analyticsListEmpty}>
+                  Revenue charts show when a single billing currency is used.
+                </p>
+              )}
             </AnalyticsCard>
           </>
         ) : null}
