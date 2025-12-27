@@ -398,9 +398,14 @@ class OpenRouterService:
         self,
         system_prompt: Optional[str],
         workspace_context: Optional[str],
-        time_context: Optional[str],
     ) -> Optional[str]:
-        """Construct system prompt with optional (stable) context."""
+        """Construct STABLE system prompt for caching.
+        
+        Note: time_context is intentionally NOT included here - it's handled
+        separately via _build_runtime_context() and placed AFTER this cached
+        content in the message array. This allows the system prompt to be
+        cached while time context remains dynamic.
+        """
         pieces: List[str] = []
         base = _trim(system_prompt)
         if base:
@@ -553,7 +558,7 @@ class OpenRouterService:
 
         # Add system prompt if provided - this is the STABLE content we want to cache.
         # It includes the base instructions and workspace context, but NOT time_context (which is volatile).
-        system = self._build_system_prompt(system_prompt, workspace_context, time_context)
+        system = self._build_system_prompt(system_prompt, workspace_context)
         if system:
             # Apply cache_control to system prompt for models that require explicit breakpoints.
             # Anthropic and Google Gemini need this; others have automatic caching.
@@ -725,7 +730,7 @@ class OpenRouterService:
 
         # Add system prompt if provided - this is the STABLE content we want to cache.
         # It includes the base instructions and workspace context, but NOT time_context (which is volatile).
-        system = self._build_system_prompt(system_prompt, workspace_context, time_context)
+        system = self._build_system_prompt(system_prompt, workspace_context)
         if system:
             # Apply cache_control to system prompt for models that require explicit breakpoints.
             # Anthropic and Google Gemini need this; others have automatic caching.

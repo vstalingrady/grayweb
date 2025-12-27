@@ -649,7 +649,24 @@ export function GrayChatView({
   // Check if the currently streaming message is actually present in the visible list.
   // If so, the list item itself will render the spinner/content, so we shouldn't
   // show the fallback "pending" indicator at the bottom.
-  const isStreamingMessageInList = Boolean(activeStreamingMessageId && messages.some((m) => m.id === activeStreamingMessageId));
+  const effectiveStreamingMessageId = useMemo(() => {
+    if (activeStreamingMessageId) {
+      return activeStreamingMessageId;
+    }
+    if (!isResponding) {
+      return null;
+    }
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message.role === "assistant") {
+        return message.id;
+      }
+    }
+    return null;
+  }, [activeStreamingMessageId, isResponding, messages]);
+  const isStreamingMessageInList = Boolean(
+    effectiveStreamingMessageId && messages.some((m) => m.id === effectiveStreamingMessageId)
+  );
 
   const shouldShowPendingStreamIndicator =
     !hideThinkingIndicator && (isResponding || sessionPendingAutoStream) && !isStreamingMessageInList;
@@ -670,7 +687,7 @@ export function GrayChatView({
         ) : (
           <ChatMessagesList
             messages={messages}
-            activeStreamingMessageId={activeStreamingMessageId}
+            activeStreamingMessageId={effectiveStreamingMessageId}
             regeneratingMessageId={regeneratingMessageId}
             copiedMessageId={copiedMessageId}
             markdownComponents={markdownComponents}

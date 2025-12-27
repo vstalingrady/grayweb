@@ -124,13 +124,15 @@ export const ChatMessagesList = memo(
 	          const assistantSections = isAssistant ? parseStructuredAssistantMessage(rawContent) : null;
 	          const rawThinkingText = isAssistant ? assistantSections?.thinking ?? null : null;
 	          const aiText = isAssistant ? assistantSections?.ai ?? rawContent : rawContent;
-          const shouldSurfaceThinking = Boolean(reasoningMode);
+          const hasRawThinkingText =
+            typeof rawThinkingText === "string" && rawThinkingText.trim().length > 0;
+          const shouldSurfaceThinking = hasRawThinkingText || Boolean(reasoningMode);
           const useThinkingAsAnswer =
             !shouldSurfaceThinking &&
             typeof rawThinkingText === "string" &&
             rawThinkingText.trim().length > 0 &&
             (!aiText || !aiText.trim());
-	          const thinkingText = shouldSurfaceThinking ? rawThinkingText : null;
+	          const thinkingText = hasRawThinkingText ? rawThinkingText : null;
           const assistantTextCandidate = isAssistant
             ? useThinkingAsAnswer
               ? rawThinkingText ?? ""

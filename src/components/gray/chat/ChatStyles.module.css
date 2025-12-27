@@ -210,8 +210,7 @@
   .chatMessages {
     padding-left: max(14px, env(safe-area-inset-left, 0px));
     padding-right: max(14px, env(safe-area-inset-right, 0px));
-    padding-bottom: calc(var(--chat-composer-height, 80px) + 12px);
-    scroll-padding-bottom: calc(var(--chat-composer-height, 80px) + 12px);
+    padding-bottom: 16px;
   }
 
   .chatIntro {
