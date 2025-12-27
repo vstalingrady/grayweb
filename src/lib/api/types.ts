@@ -548,3 +548,46 @@ export interface UserUpdate {
   conversation_memory_enabled?: boolean | null;
   auto_web_search_enabled?: boolean | null;
 }
+
+export interface AnalyticsSummary {
+  generated_at: string;
+  counts?: Record<string, number | null>;
+  user_growth?: {
+    total_users: number;
+    plan_distribution: Record<string, number>;
+    new_7d: number;
+    new_30d: number;
+  };
+  engagement?: {
+    dau: number;
+    wau: number;
+    mau: number;
+    total_general_messages: number;
+    total_thread_messages: number;
+    avg_messages_per_user: number;
+  };
+  feature_adoption?: {
+    users_with_plans: number;
+    users_with_habits: number;
+    active_reminders: number;
+    calendar_events: number;
+    push_subscriptions: number;
+  };
+  retention?: {
+    active_today: number;
+  };
+  churn?: {
+    eligible_30d: number;
+    active_30d: number;
+    inactive_30d: number;
+    churn_rate_30d: number;
+  };
+  revenue?: {
+    by_status: Record<string, number>;
+    by_plan: Record<string, number>;
+    conversion_rate: number;
+  };
+  database_url?: string;
+  sqlite_path?: string | null;
+  sqlite_size_bytes?: number | null;
+}

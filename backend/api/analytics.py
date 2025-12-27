@@ -34,6 +34,7 @@ from backend.database import (
     media_uploads,
     google_calendar_credentials,
 )
+from backend.auth import get_current_user
 
 from backend.core.cors_utils import IS_PRODUCTION
 
@@ -41,6 +42,7 @@ from backend.time_utils import utcnow_aware
 
 
 router = APIRouter(tags=["analytics"])
+ADMIN_ANALYTICS_EMAILS = {"vstalingrady@gmail.com"}
 
 
 def _is_localhost_request(request: Request) -> bool:
@@ -69,22 +71,16 @@ def _is_localhost_request(request: Request) -> bool:
     return bool(client_ip and client_ip.is_loopback)
 
 
-@router.get("/dev/analytics/summary")
-async def dev_analytics_summary(
-    request: Request,
-    db: databases.Database = Depends(get_database),
-):
-    """Development analytics summary endpoint."""
-    token = (os.getenv("DEV_ANALYTICS_TOKEN") or "").strip()
-    provided = (request.headers.get("x-dev-analytics-token") or "").strip()
-    token_ok = bool(token) and hmac.compare_digest(token, provided)
+def _is_analytics_admin(user: Dict[str, Any]) -> bool:
+    email = (user.get("email") or "").strip().lower()
+    return bool(email) and email in ADMIN_ANALYTICS_EMAILS
 
-    is_localhost = _is_localhost_request(request)
-    if IS_PRODUCTION and not is_localhost and not token_ok:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-    if not is_localhost and not token_ok:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
+async def _build_analytics_summary(
+    db: databases.Database,
+    *,
+    include_debug: bool,
+) -> Dict[str, Any]:
     from backend.database import user_chat_threads, user_chat_messages, transactions
 
     tables: Dict[str, sqlalchemy.Table] = {
@@ -120,7 +116,7 @@ async def dev_analytics_summary(
 
     sqlite_path: Optional[str] = None
     sqlite_size_bytes: Optional[int] = None
-    if isinstance(DATABASE_URL, str) and DATABASE_URL.startswith("sqlite:///"):
+    if include_debug and isinstance(DATABASE_URL, str) and DATABASE_URL.startswith("sqlite:///"):
         sqlite_path = DATABASE_URL.replace("sqlite:///", "", 1)
         try:
             sqlite_size_bytes = os.path.getsize(sqlite_path)
@@ -139,7 +135,13 @@ async def dev_analytics_summary(
 
     # Plan tier distribution
     try:
-        plan_distribution: Dict[str, int] = {"scout": 0, "voyager": 0, "pioneer": 0, "none": 0}
+        plan_distribution: Dict[str, int] = {
+            "scout": 0,
+            "pathfinder": 0,
+            "voyager": 0,
+            "pioneer": 0,
+            "none": 0,
+        }
         rows = await db.fetch_all(
             sqlalchemy.select(users.c.plan_tier, sqlalchemy.func.count().label("cnt"))
             .group_by(users.c.plan_tier)
@@ -152,14 +154,20 @@ async def dev_analytics_summary(
                 plan_distribution["none"] += int(row["cnt"])
         user_growth["plan_distribution"] = plan_distribution
     except Exception:
-        user_growth["plan_distribution"] = {"scout": 0, "voyager": 0, "pioneer": 0, "none": 0}
+        user_growth["plan_distribution"] = {
+            "scout": 0,
+            "pathfinder": 0,
+            "voyager": 0,
+            "pioneer": 0,
+            "none": 0,
+        }
 
     # New signups in last 7 days and 30 days
     try:
         now = utcnow_aware()
         seven_days_ago = now - timedelta(days=7)
         thirty_days_ago = now - timedelta(days=30)
-        
+
         new_7d = await db.fetch_val(
             sqlalchemy.select(sqlalchemy.func.count()).select_from(users)
             .where(users.c.created_at >= seven_days_ago)
@@ -284,6 +292,50 @@ async def dev_analytics_summary(
     except Exception:
         retention = {"active_today": 0}
 
+    # ========== CHURN METRICS ==========
+    churn: Dict[str, Any] = {}
+    try:
+        now = utcnow_aware()
+        cutoff = now - timedelta(days=30)
+        eligible_users = await db.fetch_val(
+            sqlalchemy.select(sqlalchemy.func.count()).select_from(users)
+            .where(users.c.created_at < cutoff)
+        )
+        eligible_users = int(eligible_users or 0)
+
+        active_general = sqlalchemy.select(
+            general_chat_messages.c.user_id.label("user_id")
+        ).where(general_chat_messages.c.created_at >= cutoff)
+        active_thread = sqlalchemy.select(
+            user_chat_threads.c.user_identifier.label("user_id")
+        ).select_from(
+            user_chat_messages.join(user_chat_threads, user_chat_messages.c.thread_id == user_chat_threads.c.id)
+        ).where(user_chat_messages.c.created_at >= cutoff)
+
+        active_union = active_general.union(active_thread).subquery()
+        active_eligible = await db.fetch_val(
+            sqlalchemy.select(sqlalchemy.func.count(sqlalchemy.func.distinct(active_union.c.user_id)))
+            .select_from(active_union.join(users, users.c.id == active_union.c.user_id))
+            .where(users.c.created_at < cutoff)
+        )
+        active_eligible = int(active_eligible or 0)
+
+        inactive_eligible = max(eligible_users - active_eligible, 0)
+        churn_rate = round(inactive_eligible / eligible_users, 3) if eligible_users > 0 else 0.0
+        churn = {
+            "eligible_30d": eligible_users,
+            "active_30d": active_eligible,
+            "inactive_30d": inactive_eligible,
+            "churn_rate_30d": churn_rate,
+        }
+    except Exception:
+        churn = {
+            "eligible_30d": 0,
+            "active_30d": 0,
+            "inactive_30d": 0,
+            "churn_rate_30d": 0.0,
+        }
+
     # ========== REVENUE METRICS ==========
     revenue: Dict[str, Any] = {}
     try:
@@ -315,15 +367,52 @@ async def dev_analytics_summary(
     except Exception:
         revenue = {"by_status": {}, "by_plan": {}, "conversion_rate": 0.0}
 
-    return {
+    payload = {
         "generated_at": utcnow_aware().isoformat(),
-        "database_url": DATABASE_URL,
-        "sqlite_path": sqlite_path,
-        "sqlite_size_bytes": sqlite_size_bytes,
         "counts": counts,
         "user_growth": user_growth,
         "engagement": engagement,
         "feature_adoption": feature_adoption,
         "retention": retention,
+        "churn": churn,
         "revenue": revenue,
     }
+
+    if include_debug:
+        payload.update(
+            {
+                "database_url": DATABASE_URL,
+                "sqlite_path": sqlite_path,
+                "sqlite_size_bytes": sqlite_size_bytes,
+            }
+        )
+
+    return payload
+
+
+@router.get("/dev/analytics/summary")
+async def dev_analytics_summary(
+    request: Request,
+    db: databases.Database = Depends(get_database),
+):
+    """Development analytics summary endpoint."""
+    token = (os.getenv("DEV_ANALYTICS_TOKEN") or "").strip()
+    provided = (request.headers.get("x-dev-analytics-token") or "").strip()
+    token_ok = bool(token) and hmac.compare_digest(token, provided)
+
+    is_localhost = _is_localhost_request(request)
+    if IS_PRODUCTION and not is_localhost and not token_ok:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if not is_localhost and not token_ok:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return await _build_analytics_summary(db, include_debug=True)
+
+
+@router.get("/analytics/summary")
+async def analytics_summary(
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    if not _is_analytics_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return await _build_analytics_summary(db, include_debug=False)

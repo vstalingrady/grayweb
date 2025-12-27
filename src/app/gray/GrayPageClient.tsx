@@ -113,6 +113,11 @@ const HistoryOverlay = dynamic(
   { loading: () => null }
 );
 
+const AnalyticsView = dynamic(
+  () => import("@/components/gray/analytics/AnalyticsView").then((mod) => mod.AnalyticsView),
+  { loading: () => null }
+);
+
 // Helper functions and constants imported from extracted modules
 
 type GrayPageClientProps = {
@@ -125,7 +130,7 @@ type GrayPageClientProps = {
   defaultSidebarExpandedDesktop?: boolean;
 };
 
-type ViewMode = "chat" | "dashboard" | "general" | "history";
+type ViewMode = "chat" | "dashboard" | "general" | "history" | "analytics";
 
 function GrayPageClientInner({
   initialTimestamp,
@@ -149,6 +154,7 @@ function GrayPageClientInner({
   const userId = typeof user?.id === "number" ? user.id : null;
   const normalizedTier = useMemo(() => normalizePlanTier(user), [user]);
   const hasCalendarAccess = normalizedTier === "voyager" || normalizedTier === "pioneer";
+  const isAnalyticsAdmin = (user?.email ?? "").trim().toLowerCase() === "vstalingrady@gmail.com";
   const resolvedTimezone = useMemo(() => {
     try {
       return Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
@@ -491,7 +497,12 @@ function GrayPageClientInner({
   const viewMode: ViewMode =
     baseViewMode === "chat"
       ? "chat"
-      : manualViewMode ?? (activeNav === "history" ? "history" : baseViewMode);
+      : manualViewMode ??
+        (activeNav === "history"
+          ? "history"
+          : activeNav === "analytics"
+            ? "analytics"
+            : baseViewMode);
 
   const handleMobileHeaderSelectChat = useCallback(() => {
     setMobilePulseActive(false);
@@ -558,6 +569,9 @@ function GrayPageClientInner({
   const renderPrimaryView = () => {
     if (isDashboardView) {
       return renderDashboardSurface();
+    }
+    if (viewMode === "analytics") {
+      return <AnalyticsView />;
     }
     if (isChatView) {
       return (
@@ -724,6 +738,17 @@ function GrayPageClientInner({
         </div>
       );
     }
+    if (viewMode === "analytics") {
+      return (
+        <div
+          className={pageStyles.mainContent}
+          data-view={viewMode}
+          data-compact={isCompactLayout ? "true" : "false"}
+        >
+          {renderPrimaryView()}
+        </div>
+      );
+    }
     return renderPrimaryView();
   };
 
@@ -733,6 +758,17 @@ function GrayPageClientInner({
         <div
           className={pageStyles.mainContent}
           data-view="chat"
+          data-compact={isCompactLayout ? "true" : "false"}
+        >
+          {renderPrimaryView()}
+        </div>
+      );
+    }
+    if (viewMode === "analytics") {
+      return (
+        <div
+          className={pageStyles.mainContent}
+          data-view="analytics"
           data-compact={isCompactLayout ? "true" : "false"}
         >
           {renderPrimaryView()}
@@ -838,18 +874,28 @@ function GrayPageClientInner({
   }, [user, userLoading, viewerName]);
 
   const filteredSidebarItems = useMemo(() => {
-    if (!hasCalendarAccess) {
-      return SIDEBAR_ITEMS.filter((item) => item.id !== "calendar");
-    }
-    return SIDEBAR_ITEMS;
-  }, [hasCalendarAccess]);
+    return SIDEBAR_ITEMS.filter((item) => {
+      if (!hasCalendarAccess && item.id === "calendar") {
+        return false;
+      }
+      if (!isAnalyticsAdmin && item.id === "analytics") {
+        return false;
+      }
+      return true;
+    });
+  }, [hasCalendarAccess, isAnalyticsAdmin]);
 
   const filteredRailItems = useMemo(() => {
-    if (!hasCalendarAccess) {
-      return SIDEBAR_RAIL_ITEMS.filter((item) => item.id !== "calendar");
-    }
-    return SIDEBAR_RAIL_ITEMS;
-  }, [hasCalendarAccess]);
+    return SIDEBAR_RAIL_ITEMS.filter((item) => {
+      if (!hasCalendarAccess && item.id === "calendar") {
+        return false;
+      }
+      if (!isAnalyticsAdmin && item.id === "analytics") {
+        return false;
+      }
+      return true;
+    });
+  }, [hasCalendarAccess, isAnalyticsAdmin]);
 
   const historySections = useMemo(() => buildHistorySections(sessions), [sessions]);
   const isDashboardView = viewMode === "dashboard";
@@ -944,6 +990,9 @@ function GrayPageClientInner({
     }
     if (viewMode === "history" || activeNav === "history") {
       return "History";
+    }
+    if (viewMode === "analytics" || activeNav === "analytics") {
+      return "Analytics";
     }
     if (activeNav === "threads") {
       return "New Chat";
