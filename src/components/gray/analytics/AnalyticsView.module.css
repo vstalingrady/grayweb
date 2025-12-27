@@ -110,6 +110,70 @@
   color: var(--fg-primary, rgba(245, 245, 245, 0.94));
 }
 
+.analyticsBarList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.analyticsBarRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.analyticsBarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.analyticsBarLabel {
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-subtle, rgba(200, 200, 200, 0.5));
+}
+
+.analyticsBarValue {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--fg-primary, rgba(245, 245, 245, 0.94));
+}
+
+.analyticsBarTrack {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.analyticsBarFill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(122, 214, 255, 0.95), rgba(195, 233, 255, 0.7));
+}
+
+.analyticsMeter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.analyticsMeterTrack {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.analyticsMeterFill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(255, 168, 82, 0.9), rgba(255, 215, 145, 0.8));
+}
+
 .analyticsList {
   list-style: none;
   margin: 0;

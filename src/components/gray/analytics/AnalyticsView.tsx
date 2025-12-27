@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { analyticsService, ApiError, type AnalyticsSummary } from "@/lib/api";
 import styles from "./AnalyticsView.module.css";
 
@@ -56,6 +56,65 @@ const AnalyticsStat = ({ label, value }: AnalyticsStatProps) => (
   </div>
 );
 
+type AnalyticsBarEntry = {
+  label: string;
+  value: number;
+  valueLabel?: string;
+};
+
+type AnalyticsBarListProps = {
+  entries: AnalyticsBarEntry[];
+  emptyLabel?: string;
+};
+
+const AnalyticsBarList = ({ entries, emptyLabel = "No data" }: AnalyticsBarListProps) => {
+  if (entries.length === 0) {
+    return <p className={styles.analyticsListEmpty}>{emptyLabel}</p>;
+  }
+
+  const maxValue = Math.max(1, ...entries.map((entry) => entry.value));
+
+  return (
+    <div className={styles.analyticsBarList}>
+      {entries.map((entry) => {
+        const width = Math.round((entry.value / maxValue) * 1000) / 10;
+        return (
+          <div key={entry.label} className={styles.analyticsBarRow}>
+            <div className={styles.analyticsBarHeader}>
+              <span className={styles.analyticsBarLabel}>{entry.label}</span>
+              <span className={styles.analyticsBarValue}>{entry.valueLabel ?? formatCount(entry.value)}</span>
+            </div>
+            <div className={styles.analyticsBarTrack}>
+              <div className={styles.analyticsBarFill} style={{ width: `${width}%` }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+type AnalyticsMeterProps = {
+  label: string;
+  value?: number | null;
+  valueLabel?: string;
+};
+
+const AnalyticsMeter = ({ label, value, valueLabel }: AnalyticsMeterProps) => {
+  const resolvedValue = Math.max(0, Math.min(1, value ?? 0));
+  return (
+    <div className={styles.analyticsMeter}>
+      <div className={styles.analyticsBarHeader}>
+        <span className={styles.analyticsBarLabel}>{label}</span>
+        <span className={styles.analyticsBarValue}>{valueLabel ?? formatPercent(resolvedValue)}</span>
+      </div>
+      <div className={styles.analyticsMeterTrack}>
+        <div className={styles.analyticsMeterFill} style={{ width: `${resolvedValue * 100}%` }} />
+      </div>
+    </div>
+  );
+};
+
 export function AnalyticsView() {
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -99,15 +158,24 @@ export function AnalyticsView() {
   const paidUsers =
     (planDistribution.pathfinder ?? 0) + (planDistribution.voyager ?? 0) + (planDistribution.pioneer ?? 0);
 
-  const statusEntries = useMemo(() => {
-    const byStatus = summary?.revenue?.by_status ?? {};
-    return Object.entries(byStatus).map(([key, value]) => ({ key, value: value ?? 0 }));
-  }, [summary]);
+  const totalUsers = summary?.user_growth?.total_users ?? 0;
+  const paidShare = totalUsers > 0 ? paidUsers / totalUsers : 0;
 
-  const revenuePlanEntries = useMemo(() => {
-    const byPlan = summary?.revenue?.by_plan ?? {};
-    return Object.entries(byPlan).map(([key, value]) => ({ key, value: value ?? 0 }));
-  }, [summary]);
+  const engagementEntries = [
+    { label: "DAU", value: summary?.engagement?.dau ?? 0 },
+    { label: "WAU", value: summary?.engagement?.wau ?? 0 },
+    { label: "MAU", value: summary?.engagement?.mau ?? 0 },
+  ];
+
+  const statusEntries = Object.entries(summary?.revenue?.by_status ?? {}).map(([key, value]) => ({
+    key,
+    value: value ?? 0,
+  }));
+
+  const revenuePlanEntries = Object.entries(summary?.revenue?.by_plan ?? {}).map(([key, value]) => ({
+    key,
+    value: value ?? 0,
+  }));
 
   if (isLoading) {
     return (
@@ -151,6 +219,7 @@ export function AnalyticsView() {
             <AnalyticsStat label="New (7d)" value={formatCount(summary?.user_growth?.new_7d)} />
             <AnalyticsStat label="New (30d)" value={formatCount(summary?.user_growth?.new_30d)} />
           </div>
+          <AnalyticsMeter label="Paid share" value={paidShare} />
         </AnalyticsCard>
 
         <AnalyticsCard title="Engagement">
@@ -160,6 +229,12 @@ export function AnalyticsView() {
             <AnalyticsStat label="MAU" value={formatCount(summary?.engagement?.mau)} />
             <AnalyticsStat label="Avg msgs / user" value={formatCount(summary?.engagement?.avg_messages_per_user)} />
           </div>
+          <AnalyticsBarList
+            entries={engagementEntries.map((entry) => ({
+              label: entry.label,
+              value: entry.value,
+            }))}
+          />
         </AnalyticsCard>
 
         <AnalyticsCard title="Churn (30d)">
@@ -169,6 +244,7 @@ export function AnalyticsView() {
             <AnalyticsStat label="Inactive users" value={formatCount(summary?.churn?.inactive_30d)} />
             <AnalyticsStat label="Churn rate" value={formatPercent(summary?.churn?.churn_rate_30d)} />
           </div>
+          <AnalyticsMeter label="Churn rate" value={summary?.churn?.churn_rate_30d} />
         </AnalyticsCard>
 
         <AnalyticsCard title="Feature adoption">
@@ -182,14 +258,13 @@ export function AnalyticsView() {
         </AnalyticsCard>
 
         <AnalyticsCard title="Plan distribution">
-          <ul className={styles.analyticsList}>
-            {planEntries.map((entry) => (
-              <li key={entry.key} className={styles.analyticsListItem}>
-                <span className={styles.analyticsListLabel}>{entry.key}</span>
-                <span className={styles.analyticsListValue}>{formatCount(entry.value)}</span>
-              </li>
-            ))}
-          </ul>
+          <AnalyticsBarList
+            entries={planEntries.map((entry) => ({
+              label: entry.key,
+              value: entry.value,
+            }))}
+            emptyLabel="No plans"
+          />
         </AnalyticsCard>
 
         <AnalyticsCard title="Revenue">
@@ -199,33 +274,23 @@ export function AnalyticsView() {
           <div className={styles.analyticsSplit}>
             <div>
               <p className={styles.analyticsSectionLabel}>By status</p>
-              <ul className={styles.analyticsList}>
-                {statusEntries.length > 0 ? (
-                  statusEntries.map((entry) => (
-                    <li key={entry.key} className={styles.analyticsListItem}>
-                      <span className={styles.analyticsListLabel}>{entry.key}</span>
-                      <span className={styles.analyticsListValue}>{formatCount(entry.value)}</span>
-                    </li>
-                  ))
-                ) : (
-                  <li className={styles.analyticsListEmpty}>No transactions</li>
-                )}
-              </ul>
+              <AnalyticsBarList
+                entries={statusEntries.map((entry) => ({
+                  label: entry.key,
+                  value: entry.value,
+                }))}
+                emptyLabel="No transactions"
+              />
             </div>
             <div>
               <p className={styles.analyticsSectionLabel}>By plan (settled)</p>
-              <ul className={styles.analyticsList}>
-                {revenuePlanEntries.length > 0 ? (
-                  revenuePlanEntries.map((entry) => (
-                    <li key={entry.key} className={styles.analyticsListItem}>
-                      <span className={styles.analyticsListLabel}>{entry.key}</span>
-                      <span className={styles.analyticsListValue}>{formatCount(entry.value)}</span>
-                    </li>
-                  ))
-                ) : (
-                  <li className={styles.analyticsListEmpty}>No revenue</li>
-                )}
-              </ul>
+              <AnalyticsBarList
+                entries={revenuePlanEntries.map((entry) => ({
+                  label: entry.key,
+                  value: entry.value,
+                }))}
+                emptyLabel="No revenue"
+              />
             </div>
           </div>
         </AnalyticsCard>
