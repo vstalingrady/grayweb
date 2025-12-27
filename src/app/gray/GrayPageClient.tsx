@@ -171,6 +171,8 @@ function GrayPageClientInner({
 
     return new Date(year, monthIndex, day, 0, 0, 0, 0);
   }, [nowDateKey]);
+  const [mobilePulseActive, setMobilePulseActive] = useState(false);
+  const shouldLoadCalendarData = variant === "dashboard" || mobilePulseActive;
 
   // Custom Hooks
   const {
@@ -183,7 +185,7 @@ function GrayPageClientInner({
     calendarEvents,
     setCalendarEvents,
     refreshPlansAndHabits
-  } = useWorkspaceData(userId, variant, hasCalendarAccess);
+  } = useWorkspaceData(userId, variant, hasCalendarAccess, shouldLoadCalendarData);
 
   const {
     proactivity,
@@ -486,8 +488,6 @@ function GrayPageClientInner({
     }
     return activeNav === "history" && baseViewMode !== "chat" ? "history" : null;
   });
-  const [mobilePulseActive, setMobilePulseActive] = useState(false);
-
   const viewMode: ViewMode =
     baseViewMode === "chat"
       ? "chat"

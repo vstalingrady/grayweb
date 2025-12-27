@@ -43,7 +43,8 @@ const resolveGoogleDate = (payload: ApiGoogleCalendarEvent["start"] | ApiGoogleC
 export function useWorkspaceData(
   userId: number | null,
   variant: "general" | "dashboard" | "chat",
-  hasCalendarAccess: boolean
+  hasCalendarAccess: boolean,
+  loadCalendarDataOverride?: boolean
 ) {
   const [plans, setPlans] = useState<PlanItem[]>([]);
   const [habits, setHabits] = useState<HabitItem[]>([]);
@@ -120,7 +121,7 @@ export function useWorkspaceData(
       return;
     }
 
-    const shouldLoadCalendarData = variant === "dashboard" && hasCalendarAccess;
+    const shouldLoadCalendarData = hasCalendarAccess && (loadCalendarDataOverride ?? variant === "dashboard");
     let isMounted = true;
     setLoading(true);
 
@@ -335,7 +336,7 @@ export function useWorkspaceData(
     return () => {
       isMounted = false;
     };
-  }, [userId, variant, hasCalendarAccess]);
+  }, [userId, variant, hasCalendarAccess, loadCalendarDataOverride]);
 
   return {
     plans,
