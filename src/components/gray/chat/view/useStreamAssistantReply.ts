@@ -204,6 +204,18 @@ export const useStreamAssistantReply = ({
 
       try {
         let localThinkingStartTime: number | null = null;
+        let didSetReasoningSeconds = false;
+        const finalizeReasoningSeconds = (elapsed: number) => {
+          if (didSetReasoningSeconds) {
+            return;
+          }
+          didSetReasoningSeconds = true;
+          setReasoningSeconds(elapsed);
+          setIsActivelyThinking(false);
+          if (assistantMessageId) {
+            updateMessage(targetSessionId, assistantMessageId, { reasoningSeconds: elapsed });
+          }
+        };
         for await (const event of chatService.sendMessageStream(
           {
             message: prompt,
@@ -244,8 +256,7 @@ export const useStreamAssistantReply = ({
             const hadClosingTag = prevAccumulated.toLowerCase().includes("</thinking>");
             if (hasClosingTag && !hadClosingTag && localThinkingStartTime) {
               const elapsed = (Date.now() - localThinkingStartTime) / 1000;
-              setReasoningSeconds(elapsed);
-              setIsActivelyThinking(false);
+              finalizeReasoningSeconds(elapsed);
             }
 
             if (assistantMessageId) {
@@ -274,6 +285,10 @@ export const useStreamAssistantReply = ({
           }
 
           if (event.type === "end") {
+            if (localThinkingStartTime && !didSetReasoningSeconds) {
+              const elapsed = (Date.now() - localThinkingStartTime) / 1000;
+              finalizeReasoningSeconds(elapsed);
+            }
             if (!isGeneralSession) {
               streamedConversationId = normalizeConversationIdValue(event.conversationId) ?? streamedConversationId;
               if (streamedConversationId) {

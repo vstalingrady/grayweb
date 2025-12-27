@@ -179,6 +179,7 @@ async def _stream_openrouter_response_impl(
         # Native tool call accumulator
         pending_tool_calls: Dict[int, Dict[str, Any]] = {}
         reasoning_started = False
+        reasoning_buffer = ""
         
         # Legacy text-based tool detection for onboarding
         tool_buffer = ""
@@ -247,6 +248,7 @@ async def _stream_openrouter_response_impl(
                         if not reasoning_started:
                             reasoning_started = True
                             yield ("delta", "<thinking>")
+                        reasoning_buffer += reasoning_content
                         yield ("delta", reasoning_content)
                         continue
                 
@@ -344,6 +346,9 @@ async def _stream_openrouter_response_impl(
         # Close reasoning tags if still open
         if reasoning_started:
             yield ("delta", "</thinking>\n")
+
+        if reasoning_buffer and "<thinking>" not in accumulated.lower():
+            accumulated = f"<thinking>{reasoning_buffer}</thinking>\n" + accumulated
         
         # Process tool calls if any
         if pending_tool_calls:
