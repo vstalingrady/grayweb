@@ -597,6 +597,15 @@ async def get_current_user(
                 "Auto-provisioned user for auth_user_id",
                 extra={"auth_user_id": auth_user_id, "email": email, "plan_tier": assigned_plan_tier},
             )
+            try:
+                from backend.affiliate_utils import attach_affiliate_referral
+
+                await attach_affiliate_referral(database, dict(user), request)
+            except Exception as exc:
+                logger.warning(
+                    "Failed to attach affiliate referral",
+                    extra={"error": str(exc), "user_id": user["id"] if user else None},
+                )
         except Exception as creation_error:
             logger.error(
                 "Failed to auto-provision user for auth_user_id",
@@ -611,6 +620,13 @@ async def get_current_user(
         )
 
     user_dict = dict(user)
+
+    try:
+        from backend.affiliate_utils import assign_affiliate_owner_if_needed
+
+        await assign_affiliate_owner_if_needed(database, user_dict)
+    except Exception as exc:
+        logger.warning("Failed to sync affiliate owner", extra={"error": str(exc), "user_id": user_dict.get("id")})
     
     # Cache the user in L1 (in-memory) and L2 (Redis)
     _cache_user(email, user_dict)

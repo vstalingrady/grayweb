@@ -591,3 +591,29 @@ export interface AnalyticsSummary {
   sqlite_path?: string | null;
   sqlite_size_bytes?: number | null;
 }
+
+export interface AffiliateAnalyticsSummary {
+  generated_at: string;
+  affiliate: {
+    code: string;
+    display_name?: string | null;
+    commission_rate: number;
+    discount_rate: number;
+    share_url: string;
+  };
+  summary: {
+    signups: number;
+    conversions: number;
+    active_conversions: number;
+    gross_revenue: number;
+    commission_owed: number;
+    currency_breakdown: Record<string, { gross_revenue: number; commission_owed: number }>;
+  };
+  timeline: Array<{
+    month: string;
+    signups: number;
+    conversions: number;
+    gross_revenue: number;
+    commission: number;
+  }>;
+}

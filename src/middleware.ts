@@ -28,6 +28,7 @@ export function middleware(request: NextRequest) {
         "/delete-account",
         "/admin",
         "/analytics",
+        "/a",
         "/threads",
         "/pulse",
         "/grove",

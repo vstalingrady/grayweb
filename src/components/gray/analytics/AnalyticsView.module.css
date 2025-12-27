@@ -230,6 +230,23 @@
   color: var(--fg-subtle, rgba(200, 200, 200, 0.5));
 }
 
+.analyticsLinkRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.analyticsLink {
+  font-size: 0.85rem;
+  color: rgba(145, 201, 255, 0.92);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.analyticsLink:hover {
+  text-decoration: underline;
+}
+
 @media (max-width: 700px) {
   .analyticsView {
     padding: clamp(18px, 6vw, 28px) clamp(16px, 6vw, 24px);

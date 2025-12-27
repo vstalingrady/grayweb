@@ -208,7 +208,89 @@ def run_startup_migrations():
         ("billing_cycle", "VARCHAR", None),
         ("subscription_starts_at", "DATETIME", None),
         ("subscription_ends_at", "DATETIME", None),
+        ("currency", "VARCHAR", None),
+        ("paid_at", "DATETIME", None),
     ])
+
+    # Affiliate tables
+    _ensure_sqlite_table("affiliates", """
+        CREATE TABLE affiliates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT NOT NULL UNIQUE,
+            display_name TEXT,
+            commission_rate REAL NOT NULL DEFAULT 0.0,
+            discount_rate REAL NOT NULL DEFAULT 0.0,
+            owner_user_id INTEGER,
+            owner_email TEXT,
+            is_active BOOLEAN DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(owner_user_id) REFERENCES users(id)
+        )
+    """)
+    _ensure_sqlite_columns("affiliates", [
+        ("display_name", "TEXT", None),
+        ("commission_rate", "REAL", "0.0"),
+        ("discount_rate", "REAL", "0.0"),
+        ("owner_user_id", "INTEGER", None),
+        ("owner_email", "TEXT", None),
+        ("is_active", "BOOLEAN", "1"),
+    ])
+    _ensure_sqlite_index("affiliates", "ix_affiliates_code", "code")
+    _ensure_sqlite_index("affiliates", "ix_affiliates_owner_user_id", "owner_user_id")
+    _ensure_sqlite_index("affiliates", "ix_affiliates_owner_email", "owner_email")
+
+    _ensure_sqlite_table("affiliate_referrals", """
+        CREATE TABLE affiliate_referrals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            affiliate_id INTEGER NOT NULL,
+            referred_user_id INTEGER NOT NULL,
+            referred_email TEXT,
+            attributed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            conversion_at DATETIME,
+            conversion_order_id TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(affiliate_id, referred_user_id),
+            FOREIGN KEY(affiliate_id) REFERENCES affiliates(id),
+            FOREIGN KEY(referred_user_id) REFERENCES users(id)
+        )
+    """)
+    _ensure_sqlite_unique_index(
+        "affiliate_referrals",
+        "uq_affiliate_referral_pair",
+        "affiliate_id, referred_user_id",
+    )
+    _ensure_sqlite_unique_index(
+        "affiliate_referrals",
+        "uq_affiliate_referral_referred_user",
+        "referred_user_id",
+    )
+    _ensure_sqlite_index("affiliate_referrals", "ix_affiliate_referrals_affiliate_id", "affiliate_id")
+
+    _ensure_sqlite_table("affiliate_commissions", """
+        CREATE TABLE affiliate_commissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            affiliate_id INTEGER NOT NULL,
+            referral_id INTEGER NOT NULL,
+            transaction_id INTEGER,
+            order_id TEXT NOT NULL UNIQUE,
+            amount INTEGER NOT NULL,
+            currency TEXT,
+            commission_rate REAL NOT NULL,
+            commission_amount INTEGER NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(affiliate_id) REFERENCES affiliates(id),
+            FOREIGN KEY(referral_id) REFERENCES affiliate_referrals(id),
+            FOREIGN KEY(transaction_id) REFERENCES transactions(id)
+        )
+    """)
+    _ensure_sqlite_unique_index(
+        "affiliate_commissions",
+        "uq_affiliate_commissions_order_id",
+        "order_id",
+    )
+    _ensure_sqlite_index("affiliate_commissions", "ix_affiliate_commissions_affiliate_id", "affiliate_id")
 
 
     _ensure_sqlite_columns(

@@ -7,7 +7,7 @@ This router handles developer analytics and metrics endpoints.
 import hmac
 import ipaddress
 import os
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
 import databases
@@ -33,6 +33,8 @@ from backend.database import (
     context_cache,
     media_uploads,
     google_calendar_credentials,
+    affiliate_referrals,
+    affiliate_commissions,
 )
 from backend.auth import get_current_user
 
@@ -43,6 +45,30 @@ from backend.time_utils import utcnow_aware
 
 router = APIRouter(tags=["analytics"])
 ADMIN_ANALYTICS_EMAILS = {"vstalingrady@gmail.com"}
+
+
+def _month_key(value: Optional[datetime]) -> Optional[str]:
+    if not value:
+        return None
+    try:
+        return value.strftime("%Y-%m")
+    except Exception:
+        return None
+
+
+def _build_month_series(months: int = 6) -> Dict[str, Dict[str, int]]:
+    now = utcnow_aware()
+    series: Dict[str, Dict[str, int]] = {}
+    year = now.year
+    month = now.month
+    for _ in range(months):
+        key = f\"{year:04d}-{month:02d}\"
+        series[key] = {\"signups\": 0, \"conversions\": 0, \"gross_revenue\": 0, \"commission\": 0}
+        month -= 1
+        if month <= 0:
+            month = 12
+            year -= 1
+    return series
 
 
 def _is_localhost_request(request: Request) -> bool:
@@ -416,3 +442,83 @@ async def analytics_summary(
     if not _is_analytics_admin(current_user):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     return await _build_analytics_summary(db, include_debug=False)
+
+
+@router.get("/analytics/affiliate")
+async def affiliate_summary(
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    from backend.affiliate_utils import resolve_affiliate_for_user, AFFILIATE_COMMISSION_WINDOW_DAYS
+
+    affiliate = await resolve_affiliate_for_user(db, user=current_user)
+    if not affiliate:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    affiliate_id = affiliate["id"]
+    now = utcnow_aware()
+    window_start = now - timedelta(days=AFFILIATE_COMMISSION_WINDOW_DAYS)
+
+    referrals = await db.fetch_all(
+        affiliate_referrals.select().where(affiliate_referrals.c.affiliate_id == affiliate_id)
+    )
+    commissions = await db.fetch_all(
+        affiliate_commissions.select().where(affiliate_commissions.c.affiliate_id == affiliate_id)
+    )
+
+    total_signups = len(referrals)
+    total_conversions = sum(1 for referral in referrals if referral["conversion_at"] is not None)
+    active_conversions = sum(
+        1
+        for referral in referrals
+        if referral["conversion_at"] is not None and referral["conversion_at"] >= window_start
+    )
+
+    gross_revenue = sum(int(row["amount"]) for row in commissions)
+    commission_total = sum(int(row["commission_amount"]) for row in commissions)
+    currency_breakdown: Dict[str, Dict[str, int]] = {}
+    for row in commissions:
+        currency = (row["currency"] or "unknown").upper()
+        bucket = currency_breakdown.setdefault(currency, {"gross_revenue": 0, "commission_owed": 0})
+        bucket["gross_revenue"] += int(row["amount"])
+        bucket["commission_owed"] += int(row["commission_amount"])
+
+    month_series = _build_month_series(6)
+
+    for referral in referrals:
+        signup_key = _month_key(referral["attributed_at"] or referral["created_at"])
+        if signup_key and signup_key in month_series:
+            month_series[signup_key]["signups"] += 1
+        conversion_key = _month_key(referral["conversion_at"])
+        if conversion_key and conversion_key in month_series:
+            month_series[conversion_key]["conversions"] += 1
+
+    for commission in commissions:
+        month_key = _month_key(commission["created_at"])
+        if month_key and month_key in month_series:
+            month_series[month_key]["gross_revenue"] += int(commission["amount"])
+            month_series[month_key]["commission"] += int(commission["commission_amount"])
+
+    base_url = (os.getenv("NEXT_PUBLIC_SITE_URL") or os.getenv("SITE_URL") or "https://gray.alignment.id").rstrip("/")
+
+    return {
+        "generated_at": now.isoformat(),
+        "affiliate": {
+            "code": affiliate.get("code"),
+            "display_name": affiliate.get("display_name"),
+            "commission_rate": affiliate.get("commission_rate"),
+            "discount_rate": affiliate.get("discount_rate"),
+            "share_url": f"{base_url}/a/{affiliate.get('code')}",
+        },
+        "summary": {
+            "signups": total_signups,
+            "conversions": total_conversions,
+            "active_conversions": active_conversions,
+            "gross_revenue": gross_revenue,
+            "commission_owed": commission_total,
+            "currency_breakdown": currency_breakdown,
+        },
+        "timeline": [
+            {"month": key, **values} for key, values in sorted(month_series.items())
+        ],
+    }

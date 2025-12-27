@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { analyticsService, ApiError, type AnalyticsSummary } from "@/lib/api";
+import { analyticsService, ApiError, type AnalyticsSummary, type AffiliateAnalyticsSummary } from "@/lib/api";
 import styles from "./AnalyticsView.module.css";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
@@ -30,6 +30,17 @@ const formatDateTime = (value?: string | null) => {
   } catch {
     return value;
   }
+};
+
+const formatCurrencyAmount = (value: number, currency: string) => {
+  const normalized = currency.toUpperCase();
+  if (normalized === "USD") {
+    return `$${(value / 100).toFixed(2)}`;
+  }
+  if (normalized === "IDR") {
+    return `Rp ${numberFormatter.format(value)}`;
+  }
+  return numberFormatter.format(value);
 };
 
 type AnalyticsCardProps = {
@@ -117,6 +128,7 @@ const AnalyticsMeter = ({ label, value, valueLabel }: AnalyticsMeterProps) => {
 
 export function AnalyticsView() {
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  const [affiliateSummary, setAffiliateSummary] = useState<AffiliateAnalyticsSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -124,19 +136,35 @@ export function AnalyticsView() {
     let cancelled = false;
     const loadSummary = async () => {
       try {
-        const result = await analyticsService.getAnalyticsSummary();
-        if (!cancelled) {
-          setSummary(result);
-          setError(null);
-        }
-      } catch (err) {
+        const [summaryResult, affiliateResult] = await Promise.allSettled([
+          analyticsService.getAnalyticsSummary(),
+          analyticsService.getAffiliateSummary(),
+        ]);
+
         if (cancelled) {
           return;
         }
-        if (err instanceof ApiError && (err.status === 403 || err.status === 404)) {
-          setError("Access restricted.");
+
+        if (summaryResult.status === "fulfilled") {
+          setSummary(summaryResult.value);
+        }
+
+        if (affiliateResult.status === "fulfilled") {
+          setAffiliateSummary(affiliateResult.value);
+        }
+
+        const hasSummary = summaryResult.status === "fulfilled";
+        const hasAffiliate = affiliateResult.status === "fulfilled";
+        if (!hasSummary && !hasAffiliate) {
+          const errorCandidate =
+            summaryResult.status === "rejected" ? summaryResult.reason : affiliateResult.reason;
+          if (errorCandidate instanceof ApiError && (errorCandidate.status === 403 || errorCandidate.status === 404)) {
+            setError("Access restricted.");
+          } else {
+            setError("Failed to load analytics.");
+          }
         } else {
-          setError("Failed to load analytics.");
+          setError(null);
         }
       } finally {
         if (!cancelled) {
@@ -177,6 +205,24 @@ export function AnalyticsView() {
     value: value ?? 0,
   }));
 
+  const affiliateTimeline = affiliateSummary?.timeline ?? [];
+  const affiliateSignupsEntries = affiliateTimeline.map((entry) => ({
+    label: entry.month,
+    value: entry.signups,
+  }));
+  const affiliateConversionEntries = affiliateTimeline.map((entry) => ({
+    label: entry.month,
+    value: entry.conversions,
+  }));
+
+  const affiliateCurrencyEntries = Object.entries(
+    affiliateSummary?.summary?.currency_breakdown ?? {}
+  ).map(([currency, values]) => ({
+    currency,
+    grossRevenue: values.gross_revenue,
+    commissionOwed: values.commission_owed,
+  }));
+
   if (isLoading) {
     return (
       <div className={styles.analyticsView}>
@@ -201,99 +247,173 @@ export function AnalyticsView() {
     );
   }
 
+  const generatedAtLabel = formatDateTime(summary?.generated_at ?? affiliateSummary?.generated_at);
+  const showAdminAnalytics = Boolean(summary);
+
   return (
     <div className={styles.analyticsView}>
       <div className={styles.analyticsHeader}>
         <p className={styles.analyticsEyebrow}>Private</p>
         <h1 className={styles.analyticsTitle}>Analytics</h1>
         <p className={styles.analyticsSubtitle}>
-          Generated {formatDateTime(summary?.generated_at)}
+          Generated {generatedAtLabel}
         </p>
       </div>
 
       <div className={styles.analyticsGrid}>
-        <AnalyticsCard title="User growth">
-          <div className={styles.analyticsStatList}>
-            <AnalyticsStat label="Total users" value={formatCount(summary?.user_growth?.total_users)} />
-            <AnalyticsStat label="Paid users" value={formatCount(paidUsers)} />
-            <AnalyticsStat label="New (7d)" value={formatCount(summary?.user_growth?.new_7d)} />
-            <AnalyticsStat label="New (30d)" value={formatCount(summary?.user_growth?.new_30d)} />
-          </div>
-          <AnalyticsMeter label="Paid share" value={paidShare} />
-        </AnalyticsCard>
+        {showAdminAnalytics ? (
+          <>
+            <AnalyticsCard title="User growth">
+              <div className={styles.analyticsStatList}>
+                <AnalyticsStat label="Total users" value={formatCount(summary?.user_growth?.total_users)} />
+                <AnalyticsStat label="Paid users" value={formatCount(paidUsers)} />
+                <AnalyticsStat label="New (7d)" value={formatCount(summary?.user_growth?.new_7d)} />
+                <AnalyticsStat label="New (30d)" value={formatCount(summary?.user_growth?.new_30d)} />
+              </div>
+              <AnalyticsMeter label="Paid share" value={paidShare} />
+            </AnalyticsCard>
 
-        <AnalyticsCard title="Engagement">
-          <div className={styles.analyticsStatList}>
-            <AnalyticsStat label="DAU" value={formatCount(summary?.engagement?.dau)} />
-            <AnalyticsStat label="WAU" value={formatCount(summary?.engagement?.wau)} />
-            <AnalyticsStat label="MAU" value={formatCount(summary?.engagement?.mau)} />
-            <AnalyticsStat label="Avg msgs / user" value={formatCount(summary?.engagement?.avg_messages_per_user)} />
-          </div>
-          <AnalyticsBarList
-            entries={engagementEntries.map((entry) => ({
-              label: entry.label,
-              value: entry.value,
-            }))}
-          />
-        </AnalyticsCard>
-
-        <AnalyticsCard title="Churn (30d)">
-          <div className={styles.analyticsStatList}>
-            <AnalyticsStat label="Eligible users" value={formatCount(summary?.churn?.eligible_30d)} />
-            <AnalyticsStat label="Active users" value={formatCount(summary?.churn?.active_30d)} />
-            <AnalyticsStat label="Inactive users" value={formatCount(summary?.churn?.inactive_30d)} />
-            <AnalyticsStat label="Churn rate" value={formatPercent(summary?.churn?.churn_rate_30d)} />
-          </div>
-          <AnalyticsMeter label="Churn rate" value={summary?.churn?.churn_rate_30d} />
-        </AnalyticsCard>
-
-        <AnalyticsCard title="Feature adoption">
-          <div className={styles.analyticsStatList}>
-            <AnalyticsStat label="Users with plans" value={formatCount(summary?.feature_adoption?.users_with_plans)} />
-            <AnalyticsStat label="Users with habits" value={formatCount(summary?.feature_adoption?.users_with_habits)} />
-            <AnalyticsStat label="Active reminders" value={formatCount(summary?.feature_adoption?.active_reminders)} />
-            <AnalyticsStat label="Calendar events" value={formatCount(summary?.feature_adoption?.calendar_events)} />
-            <AnalyticsStat label="Push subs" value={formatCount(summary?.feature_adoption?.push_subscriptions)} />
-          </div>
-        </AnalyticsCard>
-
-        <AnalyticsCard title="Plan distribution">
-          <AnalyticsBarList
-            entries={planEntries.map((entry) => ({
-              label: entry.key,
-              value: entry.value,
-            }))}
-            emptyLabel="No plans"
-          />
-        </AnalyticsCard>
-
-        <AnalyticsCard title="Revenue">
-          <div className={styles.analyticsStatList}>
-            <AnalyticsStat label="Conversion" value={formatPercent(summary?.revenue?.conversion_rate)} />
-          </div>
-          <div className={styles.analyticsSplit}>
-            <div>
-              <p className={styles.analyticsSectionLabel}>By status</p>
+            <AnalyticsCard title="Engagement">
+              <div className={styles.analyticsStatList}>
+                <AnalyticsStat label="DAU" value={formatCount(summary?.engagement?.dau)} />
+                <AnalyticsStat label="WAU" value={formatCount(summary?.engagement?.wau)} />
+                <AnalyticsStat label="MAU" value={formatCount(summary?.engagement?.mau)} />
+                <AnalyticsStat label="Avg msgs / user" value={formatCount(summary?.engagement?.avg_messages_per_user)} />
+              </div>
               <AnalyticsBarList
-                entries={statusEntries.map((entry) => ({
+                entries={engagementEntries.map((entry) => ({
+                  label: entry.label,
+                  value: entry.value,
+                }))}
+              />
+            </AnalyticsCard>
+
+            <AnalyticsCard title="Churn (30d)">
+              <div className={styles.analyticsStatList}>
+                <AnalyticsStat label="Eligible users" value={formatCount(summary?.churn?.eligible_30d)} />
+                <AnalyticsStat label="Active users" value={formatCount(summary?.churn?.active_30d)} />
+                <AnalyticsStat label="Inactive users" value={formatCount(summary?.churn?.inactive_30d)} />
+                <AnalyticsStat label="Churn rate" value={formatPercent(summary?.churn?.churn_rate_30d)} />
+              </div>
+              <AnalyticsMeter label="Churn rate" value={summary?.churn?.churn_rate_30d} />
+            </AnalyticsCard>
+
+            <AnalyticsCard title="Feature adoption">
+              <div className={styles.analyticsStatList}>
+                <AnalyticsStat label="Users with plans" value={formatCount(summary?.feature_adoption?.users_with_plans)} />
+                <AnalyticsStat label="Users with habits" value={formatCount(summary?.feature_adoption?.users_with_habits)} />
+                <AnalyticsStat label="Active reminders" value={formatCount(summary?.feature_adoption?.active_reminders)} />
+                <AnalyticsStat label="Calendar events" value={formatCount(summary?.feature_adoption?.calendar_events)} />
+                <AnalyticsStat label="Push subs" value={formatCount(summary?.feature_adoption?.push_subscriptions)} />
+              </div>
+            </AnalyticsCard>
+
+            <AnalyticsCard title="Plan distribution">
+              <AnalyticsBarList
+                entries={planEntries.map((entry) => ({
                   label: entry.key,
                   value: entry.value,
                 }))}
-                emptyLabel="No transactions"
+                emptyLabel="No plans"
               />
-            </div>
-            <div>
-              <p className={styles.analyticsSectionLabel}>By plan (settled)</p>
-              <AnalyticsBarList
-                entries={revenuePlanEntries.map((entry) => ({
-                  label: entry.key,
-                  value: entry.value,
-                }))}
-                emptyLabel="No revenue"
-              />
-            </div>
-          </div>
-        </AnalyticsCard>
+            </AnalyticsCard>
+
+            <AnalyticsCard title="Revenue">
+              <div className={styles.analyticsStatList}>
+                <AnalyticsStat label="Conversion" value={formatPercent(summary?.revenue?.conversion_rate)} />
+              </div>
+              <div className={styles.analyticsSplit}>
+                <div>
+                  <p className={styles.analyticsSectionLabel}>By status</p>
+                  <AnalyticsBarList
+                    entries={statusEntries.map((entry) => ({
+                      label: entry.key,
+                      value: entry.value,
+                    }))}
+                    emptyLabel="No transactions"
+                  />
+                </div>
+                <div>
+                  <p className={styles.analyticsSectionLabel}>By plan (settled)</p>
+                  <AnalyticsBarList
+                    entries={revenuePlanEntries.map((entry) => ({
+                      label: entry.key,
+                      value: entry.value,
+                    }))}
+                    emptyLabel="No revenue"
+                  />
+                </div>
+              </div>
+            </AnalyticsCard>
+          </>
+        ) : null}
+
+        {affiliateSummary ? (
+          <>
+            <AnalyticsCard title="Affiliate performance">
+              <div className={styles.analyticsStatList}>
+                <AnalyticsStat label="Affiliate code" value={affiliateSummary.affiliate.code} />
+                <AnalyticsStat
+                  label="Commission rate"
+                  value={formatPercent(affiliateSummary.affiliate.commission_rate)}
+                />
+                <AnalyticsStat
+                  label="Discount rate"
+                  value={formatPercent(affiliateSummary.affiliate.discount_rate)}
+                />
+                <AnalyticsStat label="Signups" value={formatCount(affiliateSummary.summary.signups)} />
+                <AnalyticsStat label="Conversions" value={formatCount(affiliateSummary.summary.conversions)} />
+                <AnalyticsStat
+                  label="Active (6 mo)"
+                  value={formatCount(affiliateSummary.summary.active_conversions)}
+                />
+              </div>
+              <div className={styles.analyticsLinkRow}>
+                <span className={styles.analyticsStatLabel}>Share link</span>
+                <a
+                  className={styles.analyticsLink}
+                  href={affiliateSummary.affiliate.share_url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {affiliateSummary.affiliate.share_url}
+                </a>
+              </div>
+              {affiliateCurrencyEntries.length ? (
+                <div className={styles.analyticsSplit}>
+                  {affiliateCurrencyEntries.map((entry) => (
+                    <div key={entry.currency}>
+                      <p className={styles.analyticsSectionLabel}>{entry.currency} totals</p>
+                      <div className={styles.analyticsStatList}>
+                        <AnalyticsStat
+                          label="Gross revenue"
+                          value={formatCurrencyAmount(entry.grossRevenue, entry.currency)}
+                        />
+                        <AnalyticsStat
+                          label="Commission owed"
+                          value={formatCurrencyAmount(entry.commissionOwed, entry.currency)}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </AnalyticsCard>
+
+            <AnalyticsCard title="Affiliate pipeline (6 mo)">
+              <div className={styles.analyticsSplit}>
+                <div>
+                  <p className={styles.analyticsSectionLabel}>Signups</p>
+                  <AnalyticsBarList entries={affiliateSignupsEntries} emptyLabel="No signups yet" />
+                </div>
+                <div>
+                  <p className={styles.analyticsSectionLabel}>Conversions</p>
+                  <AnalyticsBarList entries={affiliateConversionEntries} emptyLabel="No conversions yet" />
+                </div>
+              </div>
+            </AnalyticsCard>
+          </>
+        ) : null}
       </div>
     </div>
   );

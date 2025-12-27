@@ -146,6 +146,15 @@ def _get_dodo_allowed_payment_methods() -> List[str]:
     return ["credit", "debit"]
 
 
+def _parse_amount(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    try:
+        return int(round(float(value)))
+    except (TypeError, ValueError):
+        return None
+
+
 def _get_dodo_session_value(session: Any, key: str) -> Optional[Any]:
     if isinstance(session, dict):
         return session.get(key)
@@ -173,6 +182,7 @@ def _extract_metadata(payload_data: Any) -> Dict[str, Any]:
 
 async def _create_midtrans_charge(request: PaymentRequest, user: Dict[str, Any]) -> PaymentChargeResponse:
     from backend.payment_utils import create_core_api_transaction
+    from backend.affiliate_utils import apply_discount, resolve_affiliate_discount
 
     app_logger = _get_logger()
     amount, item_name, _ = _get_plan_amount(request.plan_tier, request.billing_cycle)
@@ -188,6 +198,15 @@ async def _create_midtrans_charge(request: PaymentRequest, user: Dict[str, Any])
     user_id = _row_get(user, "id")
     if not user_id:
         raise HTTPException(status_code=401, detail="User not found")
+
+    discount_rate, _, _ = await resolve_affiliate_discount(
+        database,
+        user_id=user_id,
+        billing_cycle=request.billing_cycle,
+    )
+    if discount_rate > 0:
+        amount = apply_discount(amount, discount_rate)
+        item_details[0]["price"] = amount
 
     full_name = (_row_get(user, "full_name") or "").strip()
     first_name = full_name.split(" ")[0] if full_name else "User"
@@ -226,6 +245,7 @@ async def _create_midtrans_charge(request: PaymentRequest, user: Dict[str, Any])
             user_id=user_id,
             order_id=order_id,
             amount=amount,
+            currency="IDR",
             status="pending",
             payment_type=payment_type,
             plan_tier=request.plan_tier,
@@ -279,6 +299,7 @@ async def _create_midtrans_charge(request: PaymentRequest, user: Dict[str, Any])
 
 async def _create_dodo_checkout(request: PaymentRequest, user: Dict[str, Any]) -> PaymentChargeResponse:
     from backend.dodo_payments import DodoPaymentsUnavailable, get_dodo_client
+    from backend.affiliate_utils import apply_discount, resolve_affiliate_discount
 
     app_logger = _get_logger()
     user_id = _row_get(user, "id")
@@ -303,11 +324,20 @@ async def _create_dodo_checkout(request: PaymentRequest, user: Dict[str, Any]) -
         "currency": metadata_currency,
     }
 
+    discount_rate, _, _ = await resolve_affiliate_discount(
+        database,
+        user_id=user_id,
+        billing_cycle=request.billing_cycle,
+    )
+    if discount_rate > 0:
+        amount = apply_discount(amount, discount_rate)
+
     try:
         query = transactions.insert().values(
             user_id=user_id,
             order_id=order_id,
             amount=amount,
+            currency=currency,
             status="pending",
             payment_type="dodo_checkout",
             plan_tier=normalized_plan,
@@ -329,6 +359,12 @@ async def _create_dodo_checkout(request: PaymentRequest, user: Dict[str, Any]) -
             "always_create_new_customer": True,
         },
     }
+    if discount_rate > 0:
+        discount_code = os.getenv("DODO_REFERRAL_DISCOUNT_CODE")
+        if discount_code:
+            checkout_args["discount_code"] = discount_code
+        else:
+            app_logger.warning("Referral discount configured without Dodo discount code.")
     if email:
         checkout_args["customer"] = {"email": email}
     return_url = _get_dodo_return_url(request)
@@ -440,11 +476,32 @@ async def handle_payment_notification(notification: MidtransNotification, backgr
     should_notify_success = new_status == "success" and previous_status != "success"
 
     try:
+        amount_value = _parse_amount(notification.gross_amount)
+        paid_at = existing_transaction["paid_at"] if existing_transaction and existing_transaction["paid_at"] else utcnow()
+        updated_amount = (
+            amount_value
+            if amount_value is not None
+            else existing_transaction["amount"] if existing_transaction else 0
+        )
+        currency_value = notification.currency or "IDR"
+        updated_currency = (
+            currency_value
+            if new_status == "success"
+            else existing_transaction["currency"] if existing_transaction else currency_value
+        )
+        updated_paid_at = (
+            paid_at
+            if new_status == "success"
+            else existing_transaction["paid_at"] if existing_transaction else None
+        )
         query = transactions.update().where(
             transactions.c.order_id == notification.order_id
         ).values(
             status=new_status,
-            updated_at=utcnow()
+            amount=updated_amount,
+            currency=updated_currency,
+            paid_at=updated_paid_at,
+            updated_at=utcnow(),
         )
         await database.execute(query)
         
@@ -488,6 +545,24 @@ async def handle_payment_notification(notification: MidtransNotification, backgr
                         updated_at=utcnow(),
                     )
                 )
+
+                try:
+                    from backend.affiliate_utils import record_affiliate_commission
+
+                    await record_affiliate_commission(
+                        database,
+                        user_id=user_id,
+                        transaction_id=transaction["id"],
+                        order_id=notification.order_id,
+                        amount=int(transaction["amount"]),
+                        currency=transaction.get("currency"),
+                        paid_at=paid_at,
+                    )
+                except Exception as exc:
+                    app_logger.warning(
+                        "Failed to record affiliate commission",
+                        extra={"error": str(exc), "order_id": notification.order_id},
+                    )
 
                 try:
                     updated_user = await database.fetch_one(users.select().where(users.c.id == user_id))
@@ -703,10 +778,26 @@ async def handle_dodo_webhook(request: Request, background_tasks: BackgroundTask
         should_notify_success = is_payment_success and previous_status != "success"
 
         if order_id:
+            amount_value = _parse_amount(data.get("amount") if isinstance(data, dict) else None)
+            paid_at = existing_transaction["paid_at"] if existing_transaction and existing_transaction["paid_at"] else utcnow()
+            updated_amount = (
+                amount_value
+                if amount_value is not None
+                else existing_transaction["amount"] if existing_transaction else 0
+            )
+            currency_value = (data.get("currency") if isinstance(data, dict) else None) or (
+                existing_transaction["currency"] if existing_transaction else None
+            )
             await database.execute(
                 transactions.update()
                 .where(transactions.c.order_id == order_id)
-                .values(status=new_status, updated_at=utcnow())
+                .values(
+                    status=new_status,
+                    amount=updated_amount,
+                    currency=currency_value,
+                    paid_at=paid_at,
+                    updated_at=utcnow(),
+                )
             )
 
         if user_id_int and plan_tier and previous_status != "success":
@@ -742,6 +833,24 @@ async def handle_dodo_webhook(request: Request, background_tasks: BackgroundTask
                     )
                 )
 
+            if order_id and existing_transaction:
+                try:
+                    from backend.affiliate_utils import record_affiliate_commission
+
+                    await record_affiliate_commission(
+                        database,
+                        user_id=user_id_int,
+                        transaction_id=existing_transaction.get("id") if existing_transaction else None,
+                        order_id=order_id,
+                        amount=int(updated_amount),
+                        currency=currency_value,
+                        paid_at=paid_at,
+                    )
+                except Exception as exc:
+                    app_logger.warning(
+                        "Failed to record affiliate commission",
+                        extra={"error": str(exc), "order_id": order_id},
+                    )
             try:
                 updated_user = await database.fetch_one(users.select().where(users.c.id == user_id_int))
                 user_email = updated_user["email"] if updated_user else None

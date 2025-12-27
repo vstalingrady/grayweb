@@ -452,6 +452,22 @@ async def _stream_openrouter_response_impl(
         try:
             cached_tokens = min(total_cached_tokens, total_prompt_tokens)
             billable_prompt_tokens = max(total_prompt_tokens - cached_tokens, 0)
+            
+            # Log cache performance for monitoring
+            cache_hit_rate = (cached_tokens / total_prompt_tokens * 100) if total_prompt_tokens > 0 else 0
+            if cached_tokens > 0:
+                api_logger.info(
+                    f"[Cache] HIT: {cached_tokens:,} cached / {total_prompt_tokens:,} prompt tokens "
+                    f"({cache_hit_rate:.1f}% cached) | model={resolved_model}",
+                    extra={
+                        "user_id": user_id,
+                        "model": resolved_model,
+                        "prompt_tokens": total_prompt_tokens,
+                        "cached_tokens": cached_tokens,
+                        "cache_hit_rate": cache_hit_rate,
+                    }
+                )
+            
             tracker = usage_tracker_cls(db)
             await tracker.track_usage(
                 user_id,

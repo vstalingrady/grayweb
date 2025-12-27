@@ -1,0 +1,69 @@
+import { NextRequest, NextResponse } from "next/server";
+import {
+  hostFromHeaders,
+  isGrayWorkspaceHost,
+  isLocalHostname,
+  resolveWorkspaceOrigin,
+} from "@/lib/grayRouting";
+
+const AFFILIATE_COOKIE_NAME = "gray-affiliate";
+const AFFILIATE_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+const AFFILIATE_CODE_PATTERN = /^[a-z0-9][a-z0-9_-]{1,63}$/;
+
+const normalizeAffiliateCode = (value?: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed || !AFFILIATE_CODE_PATTERN.test(trimmed)) {
+    return null;
+  }
+  return trimmed;
+};
+
+const resolveAffiliateCookieDomain = (host?: string | null): string | undefined => {
+  if (!host) {
+    return undefined;
+  }
+  const hostname = host.split(":")[0]?.toLowerCase() ?? "";
+  if (!hostname || isLocalHostname(hostname)) {
+    return undefined;
+  }
+  if (hostname === "alignment.id" || hostname.endsWith(".alignment.id")) {
+    return ".alignment.id";
+  }
+  return undefined;
+};
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { affiliate: string } }
+) {
+  const requestHost = hostFromHeaders(request.headers);
+  const isLocal = isLocalHostname(requestHost);
+  const forwardedProto = request.headers.get("x-forwarded-proto") ?? undefined;
+  const forwardedPort = request.headers.get("x-forwarded-port") ?? undefined;
+  const workspaceOrigin = resolveWorkspaceOrigin(requestHost, forwardedProto, forwardedPort);
+  const isWorkspaceHost = isGrayWorkspaceHost(requestHost);
+
+  const code = normalizeAffiliateCode(params.affiliate);
+  const redirectTarget = workspaceOrigin && !isLocal && !isWorkspaceHost
+    ? new URL("/signup", workspaceOrigin)
+    : new URL("/signup", request.nextUrl.origin);
+
+  const response = NextResponse.redirect(redirectTarget);
+
+  if (code) {
+    response.cookies.set({
+      name: AFFILIATE_COOKIE_NAME,
+      value: code,
+      maxAge: AFFILIATE_COOKIE_MAX_AGE_SECONDS,
+      path: "/",
+      sameSite: "lax",
+      secure: !isLocal,
+      domain: resolveAffiliateCookieDomain(requestHost),
+    });
+  }
+
+  return response;
+}

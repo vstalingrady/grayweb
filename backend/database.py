@@ -344,16 +344,63 @@ transactions = sqlalchemy.Table(
     sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id"), nullable=False),
     sqlalchemy.Column("order_id", sqlalchemy.String, unique=True, index=True, nullable=False),
     sqlalchemy.Column("amount", sqlalchemy.Integer, nullable=False),
+    sqlalchemy.Column("currency", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("status", sqlalchemy.String, default="pending"),  # pending, settlement, cancel, expire, failure
     sqlalchemy.Column("payment_type", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("plan_tier", sqlalchemy.String, nullable=False),  # voyager, pioneer
     sqlalchemy.Column("billing_cycle", sqlalchemy.String, nullable=True),  # monthly, annual
     sqlalchemy.Column("subscription_starts_at", sqlalchemy.DateTime, nullable=True),
     sqlalchemy.Column("subscription_ends_at", sqlalchemy.DateTime, nullable=True),
+    sqlalchemy.Column("paid_at", sqlalchemy.DateTime, nullable=True),
     sqlalchemy.Column("snap_token", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("snap_redirect_url", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+)
+
+affiliates = sqlalchemy.Table(
+    "affiliates",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+    sqlalchemy.Column("code", sqlalchemy.String, nullable=False, unique=True, index=True),
+    sqlalchemy.Column("display_name", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("commission_rate", sqlalchemy.Float, nullable=False, default=0.0),
+    sqlalchemy.Column("discount_rate", sqlalchemy.Float, nullable=False, default=0.0),
+    sqlalchemy.Column("owner_user_id", sqlalchemy.ForeignKey("users.id"), nullable=True, index=True),
+    sqlalchemy.Column("owner_email", sqlalchemy.String, nullable=True, index=True),
+    sqlalchemy.Column("is_active", sqlalchemy.Boolean, default=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+)
+
+affiliate_referrals = sqlalchemy.Table(
+    "affiliate_referrals",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+    sqlalchemy.Column("affiliate_id", sqlalchemy.ForeignKey("affiliates.id"), nullable=False),
+    sqlalchemy.Column("referred_user_id", sqlalchemy.ForeignKey("users.id"), nullable=False, unique=True),
+    sqlalchemy.Column("referred_email", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("attributed_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("conversion_at", sqlalchemy.DateTime, nullable=True),
+    sqlalchemy.Column("conversion_order_id", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+    sqlalchemy.UniqueConstraint("affiliate_id", "referred_user_id", name="uq_affiliate_referral_pair"),
+)
+
+affiliate_commissions = sqlalchemy.Table(
+    "affiliate_commissions",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+    sqlalchemy.Column("affiliate_id", sqlalchemy.ForeignKey("affiliates.id"), nullable=False),
+    sqlalchemy.Column("referral_id", sqlalchemy.ForeignKey("affiliate_referrals.id"), nullable=False),
+    sqlalchemy.Column("transaction_id", sqlalchemy.ForeignKey("transactions.id"), nullable=True),
+    sqlalchemy.Column("order_id", sqlalchemy.String, nullable=False, unique=True, index=True),
+    sqlalchemy.Column("amount", sqlalchemy.Integer, nullable=False),
+    sqlalchemy.Column("currency", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("commission_rate", sqlalchemy.Float, nullable=False),
+    sqlalchemy.Column("commission_amount", sqlalchemy.Integer, nullable=False),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
 )
 
 # Chat tables
