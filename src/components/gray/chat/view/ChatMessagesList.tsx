@@ -105,7 +105,7 @@ export const ChatMessagesList = memo(
       setExpandedMessageId((prev) => (prev === messageId ? null : messageId));
     }, []);
 
-    const shouldAnchorMessages = !hasMoreHistory && !isLoadingHistory;
+    const shouldAnchorMessages = !isLoadingHistory;
 
     return (
       <div className={styles.chatMessages} data-streaming={shouldShowPendingStreamIndicator ? "true" : undefined}>
