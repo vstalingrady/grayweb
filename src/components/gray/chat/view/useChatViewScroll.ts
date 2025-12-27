@@ -46,6 +46,15 @@ export const useChatViewScroll = ({
   const prevSessionKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (prevSessionKeyRef.current === sessionKey) {
+      return;
+    }
+    userScrolledAwayRef.current = false;
+    isAtBottomRef.current = true;
+    lastScrollTopRef.current = 0;
+  }, [sessionKey]);
+
+  useEffect(() => {
     const isSessionChange = prevSessionKeyRef.current !== sessionKey;
     const shouldScroll =
       prevSessionKeyRef.current !== sessionKey || prevMessageCountRef.current !== messages.length;
@@ -54,7 +63,7 @@ export const useChatViewScroll = ({
       prevSessionKeyRef.current = sessionKey;
       return;
     }
-    if (suppressAutoScroll) {
+    if (suppressAutoScroll && !isSessionChange) {
       prevMessageCountRef.current = messages.length;
       prevSessionKeyRef.current = sessionKey;
       return;

@@ -120,6 +120,7 @@ export function GrayChatView({
   const [reasoningSeconds, setReasoningSeconds] = useState<number | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const isLoadingHistoryRef = useRef(false);
+  const activeSessionIdRef = useRef<string | null>(null);
 
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const handleAttachmentInputChange = useCallback(
@@ -178,6 +179,12 @@ export function GrayChatView({
     }
   }, [session?.id, session?.conversationId]);
 
+  useEffect(() => {
+    activeSessionIdRef.current = session?.id ?? null;
+    isLoadingHistoryRef.current = false;
+    setIsLoadingHistory(false);
+  }, [session?.id]);
+
   const messages = useMemo(() => session?.messages ?? [], [session?.messages]);
   const sessionAutoStreamId = session?.id ?? null;
   const sessionConversationId = session?.conversationId ?? null;
@@ -212,6 +219,7 @@ export function GrayChatView({
     if (isLoadingHistoryRef.current) {
       return;
     }
+    const targetSessionId = session.id;
     const fallbackBefore =
       messages.length > 0 &&
         typeof messages[0]?.createdAt === "number" &&
@@ -239,6 +247,11 @@ export function GrayChatView({
       console.warn("Failed to load older messages:", error);
     } finally {
       requestAnimationFrame(() => {
+        if (activeSessionIdRef.current !== targetSessionId) {
+          isLoadingHistoryRef.current = false;
+          setIsLoadingHistory(false);
+          return;
+        }
         const nextViewport = chatViewportRef.current;
         if (nextViewport) {
           const nextScrollHeight = nextViewport.scrollHeight;

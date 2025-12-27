@@ -166,7 +166,9 @@ class OpenRouterService:
             "no",
             "off",
         }
-        cache_prefixes = os.getenv("OPENROUTER_PROMPT_CACHE_PREFIXES", "anthropic/")
+        # Anthropic and Google Gemini require explicit cache_control breakpoints.
+        # OpenAI, DeepSeek, Grok, Moonshot, Groq have automatic caching.
+        cache_prefixes = os.getenv("OPENROUTER_PROMPT_CACHE_PREFIXES", "anthropic/,google/")
         self._prompt_cache_prefixes = [
             prefix.strip().lower() for prefix in cache_prefixes.split(",") if prefix.strip()
         ]
@@ -278,7 +280,22 @@ class OpenRouterService:
             return True
         return any(model_lower.startswith(prefix) for prefix in self._prompt_cache_prefixes)
 
-    def _wrap_cache_control(self, text: str) -> List[Dict[str, Any]]:
+    def _wrap_cache_control(self, text: str, model: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Wrap text with cache_control for prompt caching.
+        
+        Args:
+            text: The text content to wrap
+            model: The model being used. Anthropic models get 1h TTL for longer sessions.
+        
+        Returns:
+            List with a single content block containing the text with cache_control.
+        """
+        # Use 1h TTL for Anthropic models to avoid repeated cache writes in longer sessions.
+        # Default 5-minute TTL is too short for typical chat sessions.
+        model_lower = (model or "").strip().lower()
+        if model_lower.startswith("anthropic/"):
+            return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral", "ttl": "1h"}}]
+        # Google Gemini and others use basic ephemeral caching (Gemini has 5-min TTL regardless)
         return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
 
     def _build_messages(
@@ -498,9 +515,8 @@ class OpenRouterService:
             runtime_context=runtime_context,
         )
 
-        if runtime_context and self._should_cache_prompt(resolved_model):
-            if messages and messages[0].get("role") == "system" and messages[0].get("content") == runtime_context:
-                messages[0]["content"] = self._wrap_cache_control(runtime_context)
+        # Note: Runtime context (time) is NOT cached - it changes every request.
+        # System prompt caching happens below after _build_system_prompt.
         
         if not messages:
             messages = [{"role": "user", "content": message}]
@@ -535,11 +551,21 @@ class OpenRouterService:
         if plugins:
             payload["plugins"] = plugins
 
-        # Add system prompt if provided
+        # Add system prompt if provided - this is the STABLE content we want to cache.
+        # It includes the base instructions and workspace context, but NOT time_context (which is volatile).
         system = self._build_system_prompt(system_prompt, workspace_context, time_context)
         if system:
-            # Insert system message at the beginning
-            payload["messages"].insert(0, {"role": "system", "content": system})
+            # Apply cache_control to system prompt for models that require explicit breakpoints.
+            # Anthropic and Google Gemini need this; others have automatic caching.
+            if self._should_cache_prompt(resolved_model):
+                # Wrap as multipart content with cache_control
+                payload["messages"].insert(0, {
+                    "role": "system",
+                    "content": self._wrap_cache_control(system, resolved_model)
+                })
+            else:
+                # Standard system message for providers with automatic caching
+                payload["messages"].insert(0, {"role": "system", "content": system})
 
         client = await self._get_client()
         response = await client.post(
@@ -627,9 +653,8 @@ class OpenRouterService:
             runtime_context=runtime_context,
         )
 
-        if runtime_context and self._should_cache_prompt(resolved_model):
-            if messages and messages[0].get("role") == "system" and messages[0].get("content") == runtime_context:
-                messages[0]["content"] = self._wrap_cache_control(runtime_context)
+        # Note: Runtime context (time) is NOT cached - it changes every request.
+        # System prompt caching happens below after _build_system_prompt.
         
         if not messages:
             messages = [{"role": "user", "content": message}]
@@ -698,10 +723,21 @@ class OpenRouterService:
             else:
                 _logger.info(f"[OpenRouter] Skipped reasoning param for grok-4 model: {resolved_model}")
 
-        # Add system prompt if provided
+        # Add system prompt if provided - this is the STABLE content we want to cache.
+        # It includes the base instructions and workspace context, but NOT time_context (which is volatile).
         system = self._build_system_prompt(system_prompt, workspace_context, time_context)
         if system:
-            payload["messages"].insert(0, {"role": "system", "content": system})
+            # Apply cache_control to system prompt for models that require explicit breakpoints.
+            # Anthropic and Google Gemini need this; others have automatic caching.
+            if self._should_cache_prompt(resolved_model):
+                # Wrap as multipart content with cache_control
+                payload["messages"].insert(0, {
+                    "role": "system",
+                    "content": self._wrap_cache_control(system, resolved_model)
+                })
+            else:
+                # Standard system message for providers with automatic caching
+                payload["messages"].insert(0, {"role": "system", "content": system})
 
         client = await self._get_client()
         async with client.stream(

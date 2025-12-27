@@ -5,9 +5,43 @@ export type AssistantSections = {
   isStructured: boolean;
 };
 
+type TagCandidate = {
+  open: string;
+  close: string;
+  allowAnyPosition?: boolean;
+};
+
 // Memoized cache for parseStructuredAssistantMessage to avoid re-parsing same content
 const parseCache = new Map<string, AssistantSections>();
 const PARSE_CACHE_SIZE = 1000;
+
+const FINAL_TAG_CANDIDATES: TagCandidate[] = [
+  { open: "<final>", close: "</final>" },
+  { open: "<answer>", close: "</answer>" },
+  { open: "<response>", close: "</response>" },
+];
+
+const stripFinalWrapper = (value: string): string => {
+  let output = value.trim();
+  if (!output) {
+    return output;
+  }
+
+  const lowerOutput = output.toLowerCase();
+  for (const candidate of FINAL_TAG_CANDIDATES) {
+    const openIndex = lowerOutput.indexOf(candidate.open);
+    if (openIndex !== -1 && output.slice(0, openIndex).trim().length === 0) {
+      const contentStart = openIndex + candidate.open.length;
+      const closeIndex = lowerOutput.indexOf(candidate.close, contentStart);
+      output =
+        closeIndex !== -1 ? output.slice(contentStart, closeIndex).trim() : output.slice(contentStart).trim();
+      break;
+    }
+  }
+
+  output = output.replace(/^(final|answer|response)\s*:\s*/i, "");
+  return output;
+};
 
 export const stripToolUseBlocks = (text: string): string => {
   if (!text) {
@@ -16,6 +50,13 @@ export const stripToolUseBlocks = (text: string): string => {
   let result = text;
   // Strip generic <tool_use>...</tool_use> style blocks that some providers emit.
   result = result.replace(/<tool_use[\s\S]*?<\/tool_use>/gi, "");
+  // Strip tool call wrappers that some models emit as plain text.
+  result = result.replace(/<tool_calls[\s\S]*?<\/tool_calls>/gi, "");
+  result = result.replace(/<tool_calls[\s\S]*?<\/tool_call>/gi, "");
+  result = result.replace(/<tool_call[\s\S]*?<\/tool_call>/gi, "");
+  // Strip function/parameter tag payloads in tool call dumps.
+  result = result.replace(/<function\s*=[\s\S]*?<\/function>/gi, "");
+  result = result.replace(/<parameter\s*=[\s\S]*?<\/parameter>/gi, "");
   // Strip any residual <tool_result> blocks if present.
   result = result.replace(/<tool_result[\s\S]*?<\/tool_result>/gi, "");
   return result;
@@ -101,23 +142,31 @@ export const parseStructuredAssistantMessage = (content?: string | null): Assist
 
   // NEW: First check for <thinking> tags at the start (modern backend format)
   // This handles the case where backend sends: <thinking>content</thinking>\nActual response
-  const thinkingTagCandidates = [
-    { open: "<thinking>", close: "</thinking>" },
-    { open: "<chainofthought>", close: "</chainofthought>" },
-    { open: "<chain_of_thought>", close: "</chain_of_thought>" },
+  const thinkingTagCandidates: TagCandidate[] = [
+    { open: "<thinking>", close: "</thinking>", allowAnyPosition: true },
+    { open: "<analysis>", close: "</analysis>" },
+    { open: "<reasoning>", close: "</reasoning>" },
+    { open: "<chainofthought>", close: "</chainofthought>", allowAnyPosition: true },
+    { open: "<chain_of_thought>", close: "</chain_of_thought>", allowAnyPosition: true },
   ];
 
   for (const candidate of thinkingTagCandidates) {
     const openIndex = findIndex(candidate.open);
     if (openIndex !== -1) {
-      // Tags found in the message (allow any position to support streaming with prefix content)
+      if (!candidate.allowAnyPosition) {
+        const prefix = normalized.slice(0, openIndex);
+        if (prefix.trim().length > 0) {
+          continue;
+        }
+      }
+      // Tags found in the message (some allow any position to support streaming with prefix content)
       const thinkingContentStart = openIndex + candidate.open.length;
       const closeIndex = findIndex(candidate.close, thinkingContentStart);
 
       if (closeIndex !== -1) {
         base.thinking = normalized.slice(thinkingContentStart, closeIndex).trim() || null;
         const afterTagIndex = closeIndex + candidate.close.length;
-        base.ai = normalized.slice(afterTagIndex).trim();
+        base.ai = stripFinalWrapper(normalized.slice(afterTagIndex).trim());
       } else {
         // Tag opened but not closed (streaming)
         base.thinking = normalized.slice(thinkingContentStart).trim() || null;
@@ -188,10 +237,10 @@ export const parseStructuredAssistantMessage = (content?: string | null): Assist
   }
 
   if (aiLabelIndex !== -1) {
-    base.ai = normalized.slice(aiLabelIndex + aiLabel.length).trim();
+    base.ai = stripFinalWrapper(normalized.slice(aiLabelIndex + aiLabel.length).trim());
     base.isStructured = true;
   } else if (afterThinkingIndex !== -1 && afterThinkingIndex < normalized.length) {
-    base.ai = normalized.slice(afterThinkingIndex).trim();
+    base.ai = stripFinalWrapper(normalized.slice(afterThinkingIndex).trim());
   }
 
   // Cache the result with LRU eviction
@@ -206,4 +255,3 @@ export const parseStructuredAssistantMessage = (content?: string | null): Assist
 
   return base;
 };
-
