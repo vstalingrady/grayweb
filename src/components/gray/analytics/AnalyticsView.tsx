@@ -5,6 +5,7 @@ import { analyticsService, ApiError, type AnalyticsSummary } from "@/lib/api";
 import styles from "./AnalyticsView.module.css";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
+const PLAN_ORDER = ["scout", "pathfinder", "voyager", "pioneer", "none"];
 
 const formatCount = (value?: number | null) => {
   if (value === null || value === undefined) {
@@ -91,16 +92,12 @@ export function AnalyticsView() {
   }, []);
 
   const planDistribution = summary?.user_growth?.plan_distribution ?? {};
-  const planOrder = ["scout", "pathfinder", "voyager", "pioneer", "none"];
-  const planEntries = useMemo(() => {
-    return planOrder
-      .map((key) => ({ key, value: planDistribution[key] ?? 0 }))
-      .filter((entry) => entry.value > 0 || entry.key !== "none");
-  }, [planDistribution]);
+  const planEntries = PLAN_ORDER
+    .map((key) => ({ key, value: planDistribution[key] ?? 0 }))
+    .filter((entry) => entry.value > 0 || entry.key !== "none");
 
-  const paidUsers = useMemo(() => {
-    return (planDistribution.pathfinder ?? 0) + (planDistribution.voyager ?? 0) + (planDistribution.pioneer ?? 0);
-  }, [planDistribution]);
+  const paidUsers =
+    (planDistribution.pathfinder ?? 0) + (planDistribution.voyager ?? 0) + (planDistribution.pioneer ?? 0);
 
   const statusEntries = useMemo(() => {
     const byStatus = summary?.revenue?.by_status ?? {};
