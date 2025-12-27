@@ -622,3 +622,18 @@ export interface AffiliateAnalyticsSummary {
     commission: number;
   }>;
 }
+
+export interface AffiliateDirectoryEntry {
+  code: string;
+  display_name?: string | null;
+  owner_email?: string | null;
+  commission_rate: number;
+  discount_rate: number;
+  is_active: boolean;
+  share_url: string;
+}
+
+export interface AffiliateDirectoryResponse {
+  generated_at: string;
+  affiliates: AffiliateDirectoryEntry[];
+}

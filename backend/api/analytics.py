@@ -33,6 +33,7 @@ from backend.database import (
     context_cache,
     media_uploads,
     google_calendar_credentials,
+    affiliates,
     affiliate_referrals,
     affiliate_commissions,
 )
@@ -516,10 +517,28 @@ async def analytics_summary(
 async def affiliate_summary(
     db: databases.Database = Depends(get_database),
     current_user: Dict[str, Any] = Depends(get_current_user),
+    code: Optional[str] = None,
 ):
-    from backend.affiliate_utils import resolve_affiliate_for_user, AFFILIATE_COMMISSION_WINDOW_DAYS
+    from backend.affiliate_utils import (
+        resolve_affiliate_for_user,
+        AFFILIATE_COMMISSION_WINDOW_DAYS,
+        normalize_affiliate_code,
+    )
 
-    affiliate = await resolve_affiliate_for_user(db, user=current_user)
+    affiliate = None
+    normalized_code = normalize_affiliate_code(code) if code else None
+    if code and not normalized_code:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    if normalized_code:
+        if not _is_analytics_admin(current_user):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+        affiliate = await db.fetch_one(
+            affiliates.select().where(affiliates.c.code == normalized_code)
+        )
+    else:
+        affiliate = await resolve_affiliate_for_user(db, user=current_user)
+
     if not affiliate:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
@@ -589,4 +608,75 @@ async def affiliate_summary(
         "timeline": [
             {"month": key, **values} for key, values in sorted(month_series.items())
         ],
+    }
+
+
+@router.get("/analytics/affiliates")
+async def affiliate_directory(
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    if not _is_analytics_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    base_url = (os.getenv("NEXT_PUBLIC_SITE_URL") or os.getenv("SITE_URL") or "https://gray.alignment.id").rstrip("/")
+    now = utcnow_aware()
+
+    rows = await db.fetch_all(affiliates.select().order_by(affiliates.c.code.asc()))
+    return {
+        "generated_at": now.isoformat(),
+        "affiliates": [
+            {
+                "code": row["code"],
+                "display_name": row["display_name"],
+                "owner_email": row["owner_email"],
+                "commission_rate": row["commission_rate"],
+                "discount_rate": row["discount_rate"],
+                "is_active": bool(row["is_active"]),
+                "share_url": f"{base_url}/a/{row['code']}",
+            }
+            for row in rows
+        ],
+    }
+
+
+@router.post("/analytics/affiliates/test")
+async def seed_test_affiliate(
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    if not _is_analytics_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    code = "test"
+    base_url = (os.getenv("NEXT_PUBLIC_SITE_URL") or os.getenv("SITE_URL") or "https://gray.alignment.id").rstrip("/")
+    existing = await db.fetch_one(affiliates.select().where(affiliates.c.code == code))
+    if not existing:
+        now = utcnow_aware()
+        owner_email = (current_user.get("email") or "").strip().lower() or None
+        await db.execute(
+            affiliates.insert().values(
+                code=code,
+                display_name="Test affiliate",
+                commission_rate=0.2,
+                discount_rate=0.1,
+                owner_email=owner_email,
+                is_active=True,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        existing = await db.fetch_one(affiliates.select().where(affiliates.c.code == code))
+
+    if not existing:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to seed affiliate")
+
+    return {
+        "code": existing["code"],
+        "display_name": existing["display_name"],
+        "owner_email": existing["owner_email"],
+        "commission_rate": existing["commission_rate"],
+        "discount_rate": existing["discount_rate"],
+        "is_active": bool(existing["is_active"]),
+        "share_url": f"{base_url}/a/{existing['code']}",
     }

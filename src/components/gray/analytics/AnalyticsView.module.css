@@ -76,6 +76,19 @@
     inset 0 0 0 1px rgba(255, 255, 255, 0.02);
 }
 
+.analyticsCardSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.analyticsCardSummary::-webkit-details-marker {
+  display: none;
+}
+
 .analyticsCardTitle {
   margin: 0;
   font-size: 0.72rem;
@@ -83,6 +96,26 @@
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: rgba(235, 235, 235, 0.66);
+}
+
+.analyticsCardChevron {
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid rgba(235, 235, 235, 0.6);
+  border-bottom: 2px solid rgba(235, 235, 235, 0.6);
+  transform: rotate(45deg);
+  transition: transform 0.2s ease;
+  flex: 0 0 auto;
+}
+
+.analyticsCard[open] .analyticsCardChevron {
+  transform: rotate(-135deg);
+}
+
+.analyticsCardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .analyticsStatList {
@@ -108,6 +141,68 @@
   font-size: 1.05rem;
   font-weight: 600;
   color: var(--fg-primary, rgba(245, 245, 245, 0.94));
+}
+
+.analyticsTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.analyticsTableLabel {
+  text-align: left;
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-subtle, rgba(200, 200, 200, 0.5));
+  font-weight: 600;
+  padding: 8px 0;
+}
+
+.analyticsTableValue {
+  text-align: right;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--fg-primary, rgba(245, 245, 245, 0.94));
+  padding: 8px 0;
+}
+
+.analyticsTable tr + tr {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.analyticsMatrix {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.analyticsMatrixHeader {
+  text-align: left;
+  font-size: 0.58rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--fg-subtle, rgba(200, 200, 200, 0.52));
+  font-weight: 600;
+  padding: 6px 0 10px;
+}
+
+.analyticsMatrixRowLabel {
+  text-align: left;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--fg-primary, rgba(245, 245, 245, 0.9));
+  padding: 8px 0;
+}
+
+.analyticsMatrixCell {
+  text-align: right;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--fg-primary, rgba(235, 235, 235, 0.84));
+  padding: 8px 0;
+}
+
+.analyticsMatrix tr + tr {
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .analyticsBarList {
@@ -253,10 +348,17 @@
 }
 
 .analyticsChartSwatch {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
   border-radius: 999px;
   display: inline-block;
+}
+
+.analyticsChartCanvas {
+  padding: 6px;
+  border-radius: 14px;
+  background: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.08), transparent 55%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .analyticsChartSvg {
@@ -265,29 +367,82 @@
 }
 
 .analyticsChartAxis {
-  stroke: rgba(255, 255, 255, 0.22);
+  stroke: rgba(255, 255, 255, 0.38);
   stroke-width: 1;
 }
 
 .analyticsChartGrid {
-  stroke: rgba(255, 255, 255, 0.08);
+  stroke: rgba(255, 255, 255, 0.14);
   stroke-width: 1;
 }
 
 .analyticsChartLine {
   fill: none;
-  stroke-width: 2.2;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.35));
 }
 
 .analyticsChartDot {
-  stroke: rgba(10, 10, 10, 0.5);
-  stroke-width: 1;
+  stroke: rgba(10, 10, 10, 0.6);
+  stroke-width: 1.2;
 }
 
 .analyticsChartLabel {
-  fill: rgba(220, 220, 220, 0.65);
+  fill: rgba(240, 240, 240, 0.8);
   font-size: 10px;
   letter-spacing: 0.08em;
+}
+
+.analyticsSelectRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.analyticsSelectLabel {
+  font-size: 0.6rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--fg-subtle, rgba(200, 200, 200, 0.6));
+}
+
+.analyticsSelect {
+  background: rgba(12, 12, 12, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(245, 245, 245, 0.92);
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.analyticsSelect:focus {
+  outline: none;
+  border-color: rgba(145, 201, 255, 0.6);
+  box-shadow: 0 0 0 2px rgba(145, 201, 255, 0.18);
+}
+
+.analyticsButton {
+  background: rgba(70, 120, 200, 0.2);
+  border: 1px solid rgba(145, 201, 255, 0.4);
+  color: rgba(220, 235, 255, 0.9);
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.analyticsButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.analyticsButton:not(:disabled):hover {
+  background: rgba(70, 120, 200, 0.32);
 }
 
 .analyticsLinkRow {
