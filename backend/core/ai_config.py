@@ -26,7 +26,7 @@ LITE_TIER_PROVIDER = (os.getenv("LITE_TIER_PROVIDER") or "openrouter").strip().l
 # Model identifiers
 REMINDER_MODEL = os.getenv("REMINDER_MODEL", "models/gemini-flash-lite-latest")
 GROK_TOOL_MODEL = os.getenv("GROK_TOOL_MODEL", "x-ai/grok-4.1-fast")
-OPENROUTER_LITE_MODEL = os.getenv("OPENROUTER_LITE_MODEL", "x-ai/grok-4.1-fast")
+OPENROUTER_LITE_MODEL = os.getenv("OPENROUTER_LITE_MODEL", "xiaomi/mimo-v2-flash:free")
 GEMINI_DEFAULT_MODEL = os.getenv("GEMINI_DEFAULT_MODEL", "models/gemini-flash-lite-latest")
 GEMINI_LIGHT_MODEL = os.getenv("GEMINI_LIGHT_MODEL", "models/gemini-flash-lite-latest")
 GEMINI_PRO_MODEL = os.getenv("GEMINI_PRO_MODEL", "models/gemini-3-pro-preview")

@@ -56,7 +56,7 @@ const FREE_FEATURES: FeatureItem[] = [
         id: "fast_model",
         label: "Fast model",
         icon: Zap,
-        subtext: "Grok 4.1 Fast",
+        subtext: "MiMo V2 Flash",
     },
     { id: "limited_messages", label: "Limited daily messages", icon: MessageSquare },
     { id: "token_memory", label: "65,536 token memory", icon: Pin },

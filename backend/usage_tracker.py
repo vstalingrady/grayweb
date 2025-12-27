@@ -28,7 +28,7 @@ _PRICING_CACHE_TTL = datetime.timedelta(hours=6)
 # Fetched from OpenRouter API on Dec 2024
 # Only includes models from ModelSelector.tsx + internal Gemini models
 FALLBACK_PRICING: Dict[str, Dict[str, float]] = {
-    # xAI Grok (Gray Lite default)
+    # xAI Grok
     "x-ai/grok-4.1-fast": {"prompt": 2e-07, "completion": 5e-07, "cached": 2e-08},
     
     # Anthropic Claude (Pioneer models)
@@ -58,7 +58,7 @@ FALLBACK_PRICING: Dict[str, Dict[str, float]] = {
     "moonshotai/kimi-k2-fast": {"prompt": 1.0e-06, "completion": 3.0e-06, "cached": 5.0e-07},
     "moonshotai/kimi-k2-thinking": {"prompt": 4.8e-07, "completion": 2.0e-06, "cached": 1.5e-07},
     
-    # Xiaomi MiMo (Pioneer)
+    # Xiaomi MiMo (Gray Lite default)
     "xiaomi/mimo-v2-flash:free": {"prompt": 1.0e-07, "completion": 3.0e-07, "cached": 1.0e-08},
 }
 
@@ -478,7 +478,7 @@ class UsageTracker:
     ):
         """Track token usage and update cost counters."""
         # Calculate cost based on model-specific pricing
-        model_id = model or "x-ai/grok-4.1-fast"  # Default to Grok lite
+        model_id = model or "xiaomi/mimo-v2-flash:free"  # Default to MiMo lite
         cost = calculate_cost(model_id, input_tokens, output_tokens, cached_tokens)
 
         total_tokens = input_tokens + output_tokens + cached_tokens

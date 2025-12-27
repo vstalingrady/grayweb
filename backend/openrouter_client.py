@@ -170,7 +170,7 @@ class OpenRouterService:
         self._prompt_cache_prefixes = [
             prefix.strip().lower() for prefix in cache_prefixes.split(",") if prefix.strip()
         ]
-        self._lite_model = os.getenv("OPENROUTER_LITE_MODEL", "x-ai/grok-4.1-fast")
+        self._lite_model = os.getenv("OPENROUTER_LITE_MODEL", "xiaomi/mimo-v2-flash:free")
         self._default_model = os.getenv("OPENROUTER_DEFAULT_MODEL", self.MODEL_MAPPINGS["default"])
         # Output token budget:
         # - If OPENROUTER_MAX_TOKENS is set, we pass it through as an explicit completion cap.
@@ -228,7 +228,7 @@ class OpenRouterService:
             # Normalize model name
             model_lower = model.strip().lower()
             
-            # Handle specific Grok free model access
+            # Handle legacy Grok alias for the lite tier
             if model_lower in {"grok", "grok-lite"}:
                 base_model = self._lite_model
             # Handle tier mappings

@@ -195,14 +195,14 @@ class AIMessageGenerator:
                 "unless the user explicitly asks."
             )
 
-            # Use OpenRouter Grok (Lite tier) for proactive messaging
+            # Use OpenRouter MiMo (Lite tier) for proactive messaging
             response = await self.openrouter.generate(
                 message=user_context,
                 conversation_history=None,
                 workspace_context=None,
                 system_prompt=system_prompt,
                 time_context=time_context,
-                model="x-ai/grok-4.1-fast",  # Gray Lite tier
+                model="xiaomi/mimo-v2-flash:free",  # Gray Lite tier
             )
 
         except Exception as error:
@@ -227,7 +227,7 @@ class AIMessageGenerator:
 
         cleaned = (text or "").strip()
         if not cleaned:
-            raise RuntimeError("Grok proactive message generation returned empty content")
+            raise RuntimeError("MiMo proactive message generation returned empty content")
 
         # Post-process to avoid stale or hard-coded calendar dates like
         # "Tuesday, November 12th" that can confuse users when the actual date
