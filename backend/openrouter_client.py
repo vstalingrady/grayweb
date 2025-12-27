@@ -387,10 +387,17 @@ class OpenRouterService:
         elif trimmed_message:
             payload.append({"role": "user", "content": trimmed_message})
         
+        # Insert runtime context (time) BEFORE the user message but AFTER history.
+        # This is critical for caching: the cache prefix includes system prompt + history.
+        # If time context came before history, it would break the cache prefix every request.
         runtime_text = _trim(runtime_context)
         if runtime_text:
-            # Keep runtime context near the start so the user message remains the latest turn.
-            payload.insert(0, {"role": "system", "content": runtime_text})
+            # Find the position to insert - right before the last user message
+            # The user message was just appended above, so insert at -1 position
+            if payload:
+                payload.insert(len(payload) - 1, {"role": "system", "content": runtime_text})
+            else:
+                payload.append({"role": "system", "content": runtime_text})
 
         return payload
 
