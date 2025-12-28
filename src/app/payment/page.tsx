@@ -83,6 +83,55 @@ const PIONEER_PRICING_USD = {
     annual: { price: "$31.42", fullPrice: "$377" },
 } as const;
 
+type CurrencyKey = "idr" | "usd";
+
+function parseIdrDisplay(value: string): number {
+    const digits = value.replace(/[^\d]/g, "");
+    const amount = Number.parseInt(digits || "0", 10);
+    return Number.isFinite(amount) ? amount : 0;
+}
+
+function parseUsdDisplay(value: string): number {
+    const normalized = value.replace(/[^0-9.]/g, "");
+    const amount = Number.parseFloat(normalized || "0");
+    return Number.isFinite(amount) ? amount : 0;
+}
+
+function formatIdrDisplay(value: number, includeSuffix: boolean): string {
+    const rounded = Math.max(0, Math.round(value));
+    const formatted = new Intl.NumberFormat("id-ID").format(rounded);
+    return includeSuffix ? `Rp ${formatted},-` : `Rp ${formatted}`;
+}
+
+function formatUsdDisplay(value: number): string {
+    const rounded = Math.max(0, Math.round(value * 100) / 100);
+    const hasFraction = Math.abs(rounded - Math.round(rounded)) > 0.001;
+    const formatter = new Intl.NumberFormat("en-US", {
+        minimumFractionDigits: hasFraction ? 2 : 0,
+        maximumFractionDigits: 2,
+    });
+    return `$${formatter.format(rounded)}`;
+}
+
+function applyAffiliateDiscount(value: string, currency: CurrencyKey, rate: number): string {
+    if (rate <= 0) {
+        return value;
+    }
+    if (currency === "idr") {
+        const includeSuffix = value.includes(",-");
+        const base = parseIdrDisplay(value);
+        if (base <= 0) {
+            return value;
+        }
+        return formatIdrDisplay(base * (1 - rate), includeSuffix);
+    }
+    const base = parseUsdDisplay(value);
+    if (base <= 0) {
+        return value;
+    }
+    return formatUsdDisplay(base * (1 - rate));
+}
+
 
 const PAYMENT_METHODS: PaymentMethod[] = [
     {
@@ -168,6 +217,7 @@ function PaymentContent() {
     const [methodGroup, setMethodGroup] = useState<"global" | "wallet" | "va">("wallet");
     const [bankSearch, setBankSearch] = useState<string>("");
     const [isIndonesia, setIsIndonesia] = useState<boolean | null>(null);
+    const [affiliateDiscountRate, setAffiliateDiscountRate] = useState(0);
 
     const [status, setStatus] = useState<PaymentStatus>("idle");
     const [chargeData, setChargeData] = useState<ChargeResponse | null>(null);
@@ -205,6 +255,42 @@ function PaymentContent() {
             })
             .catch(() => setIsIndonesia(true)); // Default to Indonesia on error
     }, []);
+
+    useEffect(() => {
+        let isActive = true;
+        const controller = new AbortController();
+        const loadAffiliateOffer = async () => {
+            try {
+                const params = new URLSearchParams();
+                params.set("billing_cycle", billingCycle);
+                const response = await fetch(`/api/p/affiliate/offer?${params.toString()}`, {
+                    signal: controller.signal,
+                    cache: "no-store",
+                });
+                if (!response.ok) {
+                    if (isActive) {
+                        setAffiliateDiscountRate(0);
+                    }
+                    return;
+                }
+                const payload = await response.json();
+                const rate = typeof payload?.discount_rate === "number" ? payload.discount_rate : 0;
+                if (isActive) {
+                    setAffiliateDiscountRate(rate > 0 ? rate : 0);
+                }
+            } catch {
+                if (isActive) {
+                    setAffiliateDiscountRate(0);
+                }
+            }
+        };
+
+        void loadAffiliateOffer();
+        return () => {
+            isActive = false;
+            controller.abort();
+        };
+    }, [billingCycle]);
 
     // Show Dodo for international, Midtrans for Indonesia
     const showGlobalMethods = isIndonesia === false;
@@ -251,8 +337,24 @@ function PaymentContent() {
         return PATHFINDER_PRICING;
     };
     const pricingData = getPricingData();
-    const currentPriceDisplay = pricingData[billingCycle].price;
-    const fullPriceDisplay = pricingData[billingCycle].fullPrice;
+    const currency: CurrencyKey = isIndonesia === false ? "usd" : "idr";
+    const basePriceDisplay = pricingData[billingCycle].price;
+    const baseChargeDisplay = pricingData[billingCycle].fullPrice;
+    const isAffiliateDiscountActive = affiliateDiscountRate > 0 && billingCycle === "monthly";
+    const discountedPriceDisplay = isAffiliateDiscountActive
+        ? applyAffiliateDiscount(basePriceDisplay, currency, affiliateDiscountRate)
+        : basePriceDisplay;
+    const discountedChargeDisplay = isAffiliateDiscountActive
+        ? applyAffiliateDiscount(baseChargeDisplay, currency, affiliateDiscountRate)
+        : baseChargeDisplay;
+    const showAffiliateDiscount =
+        isAffiliateDiscountActive && discountedPriceDisplay !== basePriceDisplay;
+    const monthlyBaseChargeDisplay = pricingData.monthly.fullPrice;
+    const monthlyDiscountedChargeDisplay = isAffiliateDiscountActive
+        ? applyAffiliateDiscount(monthlyBaseChargeDisplay, currency, affiliateDiscountRate)
+        : monthlyBaseChargeDisplay;
+    const showMonthlyDiscount =
+        isAffiliateDiscountActive && monthlyDiscountedChargeDisplay !== monthlyBaseChargeDisplay;
 
     // Choose features
     const features = planParam === "pioneer" ? PIONEER_FEATURES : planParam === "voyager" ? VOYAGER_FEATURES : PATHFINDER_FEATURES;
@@ -450,7 +552,12 @@ function PaymentContent() {
                         </p>
                     </header>
                     <div className={`${pricingStyles.priceBlock} ${pricingStyles.priceBlockStacked}`}>
-                        <span className={pricingStyles.priceValue}>{currentPriceDisplay}</span>
+                        {showAffiliateDiscount ? (
+                            <span className={`${pricingStyles.priceValue} ${pricingStyles.priceValueMuted}`}>
+                                {basePriceDisplay}
+                            </span>
+                        ) : null}
+                        <span className={pricingStyles.priceValue}>{discountedPriceDisplay}</span>
                         <span className={pricingStyles.priceMeta}>/ {billingCycle === "annual" ? "month" : "month"}</span>
                     </div>
                 </div>
@@ -596,7 +703,7 @@ function PaymentContent() {
 
                         <div className={`${styles.payButtonContainer} ${styles.successCtaContainer}`} aria-hidden="true">
                             <button type="button" className={styles.payButton} disabled>
-                                Subscribe for {fullPriceDisplay}
+                                Subscribe for {discountedChargeDisplay}
                             </button>
                             <div
                                 style={{
@@ -666,7 +773,13 @@ function PaymentContent() {
                                         <div className={styles.cycleHeader}>
                                             <span>Pay monthly</span>
                                         </div>
-                                        <div className={styles.cycleMeta}>{pricingData.monthly.fullPrice} per month</div>
+                                        <div className={styles.cycleMeta}>
+                                            {showMonthlyDiscount ? (
+                                                <span className={styles.cyclePriceMuted}>{monthlyBaseChargeDisplay}</span>
+                                            ) : null}
+                                            <span className={styles.cyclePriceCurrent}>{monthlyDiscountedChargeDisplay}</span>
+                                            <span className={styles.cycleCadence}>per month</span>
+                                        </div>
                                     </button>
                                     <button
                                         type="button"
@@ -680,7 +793,10 @@ function PaymentContent() {
                                                 <span className={styles.saveBadge}>Save 17%</span>
                                             </span>
                                         </div>
-                                        <div className={styles.cycleMeta}>{pricingData.annual.fullPrice} per year</div>
+                                        <div className={styles.cycleMeta}>
+                                            <span className={styles.cyclePriceCurrent}>{pricingData.annual.fullPrice}</span>
+                                            <span className={styles.cycleCadence}>per year</span>
+                                        </div>
                                     </button>
                                 </div>
                             </div>
@@ -804,7 +920,7 @@ function PaymentContent() {
                                             <Loader2 size={20} className="animate-spin" /> Processing
                                         </span>
                                     ) : (
-                                        `Subscribe for ${fullPriceDisplay}`
+                                        `Subscribe for ${discountedChargeDisplay}`
                                     )}
                                 </button>
                                 <div style={{ marginTop: "1rem", display: "flex", justifyContent: "center", gap: "0.5rem", color: "rgba(255,255,255,0.3)", fontSize: "0.8rem" }}>
