@@ -48,18 +48,15 @@ export async function GET(
   const localOrigin = request.nextUrl.host ? `http://${request.nextUrl.host}` : request.nextUrl.origin;
 
   const code = normalizeAffiliateCode(params.affiliate);
-  const redirectBaseOrigin = isLocal
-    ? localOrigin
-    : workspaceOrigin && !isWorkspaceHost
-      ? workspaceOrigin
-      : request.nextUrl.origin;
+  const redirectBaseOrigin = isLocal ? localOrigin : (workspaceOrigin ?? request.nextUrl.origin);
   const redirectTarget = new URL("/signup", redirectBaseOrigin);
 
   const response = NextResponse.redirect(redirectTarget);
 
   if (code) {
     try {
-      const trackUrl = new URL("/api/p/affiliate/track", isLocal ? localOrigin : request.nextUrl.origin);
+      const trackOrigin = isLocal ? localOrigin : (workspaceOrigin ?? request.nextUrl.origin);
+      const trackUrl = new URL("/api/p/affiliate/track", trackOrigin);
       trackUrl.searchParams.set("code", code);
       await fetch(trackUrl.toString(), { method: "POST", cache: "no-store" });
     } catch {
