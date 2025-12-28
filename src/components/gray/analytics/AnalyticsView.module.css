@@ -303,6 +303,61 @@
   color: var(--fg-muted, rgba(210, 210, 210, 0.6));
 }
 
+.analyticsForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.analyticsFormRow {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.analyticsFormField {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.analyticsInputLabel {
+  font-size: 0.6rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--fg-subtle, rgba(200, 200, 200, 0.6));
+}
+
+.analyticsInput {
+  background: rgba(12, 12, 12, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(245, 245, 245, 0.92);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+}
+
+.analyticsInput:focus {
+  outline: none;
+  border-color: rgba(145, 201, 255, 0.6);
+  box-shadow: 0 0 0 2px rgba(145, 201, 255, 0.18);
+}
+
+.analyticsCheckboxRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--fg-primary, rgba(245, 245, 245, 0.9));
+}
+
+.analyticsFormActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
 .analyticsSplit {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

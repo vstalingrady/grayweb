@@ -54,6 +54,13 @@ export async function GET(
   const response = NextResponse.redirect(redirectTarget);
 
   if (code) {
+    try {
+      const trackUrl = new URL("/api/p/affiliate/track", request.nextUrl.origin);
+      trackUrl.searchParams.set("code", code);
+      await fetch(trackUrl.toString(), { method: "POST", cache: "no-store" });
+    } catch {
+      // Swallow tracking errors; never block the redirect.
+    }
     response.cookies.set({
       name: AFFILIATE_COOKIE_NAME,
       value: code,

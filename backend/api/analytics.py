@@ -36,6 +36,7 @@ from backend.database import (
     affiliates,
     affiliate_referrals,
     affiliate_commissions,
+    affiliate_clicks,
 )
 from backend.auth import get_current_user
 
@@ -45,7 +46,7 @@ from backend.time_utils import utcnow_aware
 
 
 router = APIRouter(tags=["analytics"])
-ADMIN_ANALYTICS_EMAILS = {"vstalingrady@gmail.com"}
+ADMIN_ANALYTICS_EMAILS = {"vstalingrady@gmail.com", "test@test.com"}
 
 
 def _month_key(value: Optional[datetime]) -> Optional[str]:
@@ -86,6 +87,21 @@ def _coerce_datetime(value: Any) -> Optional[datetime]:
         except ValueError:
             return None
     return None
+
+
+def _mask_email(value: Optional[str]) -> str:
+    if not value:
+        return "anonymous"
+    normalized = value.strip().lower()
+    if "@" not in normalized:
+        return "anonymous"
+    local, domain = normalized.split("@", 1)
+    local_mask = f"{local[0]}***" if local else "***"
+    domain_parts = domain.split(".")
+    domain_head = domain_parts[0] if domain_parts else ""
+    domain_mask = f"{domain_head[0]}***" if domain_head else "***"
+    suffix = f".{domain_parts[-1]}" if len(domain_parts) > 1 else ""
+    return f"{local_mask}@{domain_mask}{suffix}"
 
 
 def _is_localhost_request(request: Request) -> bool:
@@ -552,6 +568,9 @@ async def affiliate_summary(
     commissions = await db.fetch_all(
         affiliate_commissions.select().where(affiliate_commissions.c.affiliate_id == affiliate_id)
     )
+    clicks = await db.fetch_all(
+        affiliate_clicks.select().where(affiliate_clicks.c.affiliate_id == affiliate_id)
+    )
 
     total_signups = len(referrals)
     total_conversions = sum(1 for referral in referrals if referral["conversion_at"] is not None)
@@ -560,6 +579,9 @@ async def affiliate_summary(
         for referral in referrals
         if referral["conversion_at"] is not None and referral["conversion_at"] >= window_start
     )
+    total_clicks = len(clicks)
+    signup_rate = (total_signups / total_clicks) if total_clicks > 0 else 0.0
+    conversion_rate = (total_conversions / total_clicks) if total_clicks > 0 else 0.0
 
     gross_revenue = sum(int(row["amount"]) for row in commissions)
     commission_total = sum(int(row["commission_amount"]) for row in commissions)
@@ -570,7 +592,7 @@ async def affiliate_summary(
         bucket["gross_revenue"] += int(row["amount"])
         bucket["commission_owed"] += int(row["commission_amount"])
 
-    month_series = _build_month_series(6)
+    month_series = _build_month_series(6, fields=("signups", "conversions", "gross_revenue", "commission", "clicks"))
 
     for referral in referrals:
         signup_key = _month_key(referral["attributed_at"] or referral["created_at"])
@@ -585,6 +607,23 @@ async def affiliate_summary(
         if month_key and month_key in month_series:
             month_series[month_key]["gross_revenue"] += int(commission["amount"])
             month_series[month_key]["commission"] += int(commission["commission_amount"])
+
+    for click in clicks:
+        click_key = _month_key(click["created_at"])
+        if click_key and click_key in month_series:
+            month_series[click_key]["clicks"] += 1
+
+    referral_email_map = {row["id"]: row.get("referred_email") for row in referrals}
+    recent_signups = sorted(
+        referrals,
+        key=lambda row: _coerce_datetime(row.get("attributed_at") or row.get("created_at")) or datetime.min,
+        reverse=True,
+    )[:50]
+    recent_conversions = sorted(
+        commissions,
+        key=lambda row: _coerce_datetime(row.get("created_at")) or datetime.min,
+        reverse=True,
+    )[:50]
 
     base_url = (os.getenv("NEXT_PUBLIC_SITE_URL") or os.getenv("SITE_URL") or "https://gray.alignment.id").rstrip("/")
 
@@ -601,14 +640,70 @@ async def affiliate_summary(
             "signups": total_signups,
             "conversions": total_conversions,
             "active_conversions": active_conversions,
+            "clicks": total_clicks,
+            "signup_rate": signup_rate,
+            "conversion_rate": conversion_rate,
             "gross_revenue": gross_revenue,
             "commission_owed": commission_total,
             "currency_breakdown": currency_breakdown,
         },
+        "recent_signups": [
+            {
+                "email": _mask_email(row.get("referred_email")),
+                "attributed_at": (row.get("attributed_at") or row.get("created_at")),
+            }
+            for row in recent_signups
+        ],
+        "recent_conversions": [
+            {
+                "email": _mask_email(referral_email_map.get(row.get("referral_id"))),
+                "order_id": row.get("order_id"),
+                "amount": row.get("amount"),
+                "currency": row.get("currency"),
+                "paid_at": row.get("created_at"),
+            }
+            for row in recent_conversions
+        ],
         "timeline": [
             {"month": key, **values} for key, values in sorted(month_series.items())
         ],
     }
+
+
+@router.post("/affiliate/track")
+async def track_affiliate_click(
+    request: Request,
+    db: databases.Database = Depends(get_database),
+):
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+
+    raw_code = request.query_params.get("code") or payload.get("code")
+    from backend.affiliate_utils import normalize_affiliate_code
+
+    code = normalize_affiliate_code(raw_code)
+    if not code:
+        return {"ok": True}
+
+    affiliate = await db.fetch_one(
+        affiliates.select().where(affiliates.c.code == code).where(affiliates.c.is_active.is_(True))
+    )
+    if not affiliate:
+        return {"ok": True}
+
+    await db.execute(
+        affiliate_clicks.insert().values(
+            affiliate_id=affiliate["id"],
+            referrer=request.headers.get("referer"),
+            user_agent=request.headers.get("user-agent"),
+            ip_address=request.client.host if request.client else None,
+            created_at=utcnow_aware(),
+        )
+    )
+
+    return {"ok": True}
 
 
 @router.get("/analytics/affiliates")
@@ -637,6 +732,58 @@ async def affiliate_directory(
             }
             for row in rows
         ],
+    }
+
+
+@router.post("/analytics/affiliates")
+async def create_affiliate(
+    request: Request,
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    if not _is_analytics_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    payload = await request.json()
+    from backend.affiliate_utils import normalize_affiliate_code
+
+    code = normalize_affiliate_code(payload.get("code"))
+    if not code:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid affiliate code")
+
+    existing = await db.fetch_one(affiliates.select().where(affiliates.c.code == code))
+    if existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Affiliate already exists")
+
+    display_name = payload.get("display_name")
+    owner_email = payload.get("owner_email")
+    commission_rate = float(payload.get("commission_rate") or 0)
+    discount_rate = float(payload.get("discount_rate") or 0)
+    is_active = bool(payload.get("is_active", True))
+
+    now = utcnow_aware()
+    await db.execute(
+        affiliates.insert().values(
+            code=code,
+            display_name=display_name,
+            commission_rate=commission_rate,
+            discount_rate=discount_rate,
+            owner_email=owner_email,
+            is_active=is_active,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+
+    base_url = (os.getenv("NEXT_PUBLIC_SITE_URL") or os.getenv("SITE_URL") or "https://gray.alignment.id").rstrip("/")
+    return {
+        "code": code,
+        "display_name": display_name,
+        "owner_email": owner_email,
+        "commission_rate": commission_rate,
+        "discount_rate": discount_rate,
+        "is_active": is_active,
+        "share_url": f"{base_url}/a/{code}",
     }
 
 

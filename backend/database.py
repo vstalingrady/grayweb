@@ -403,6 +403,17 @@ affiliate_commissions = sqlalchemy.Table(
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
 )
 
+affiliate_clicks = sqlalchemy.Table(
+    "affiliate_clicks",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+    sqlalchemy.Column("affiliate_id", sqlalchemy.ForeignKey("affiliates.id"), nullable=False, index=True),
+    sqlalchemy.Column("referrer", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("user_agent", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("ip_address", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+)
+
 # Chat tables
 user_data = sqlalchemy.Table(
     "user_data",

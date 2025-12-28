@@ -292,6 +292,20 @@ def run_startup_migrations():
     )
     _ensure_sqlite_index("affiliate_commissions", "ix_affiliate_commissions_affiliate_id", "affiliate_id")
 
+    _ensure_sqlite_table("affiliate_clicks", """
+        CREATE TABLE affiliate_clicks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            affiliate_id INTEGER NOT NULL,
+            referrer TEXT,
+            user_agent TEXT,
+            ip_address TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(affiliate_id) REFERENCES affiliates(id)
+        )
+    """)
+    _ensure_sqlite_index("affiliate_clicks", "ix_affiliate_clicks_affiliate_id", "affiliate_id")
+    _ensure_sqlite_index("affiliate_clicks", "ix_affiliate_clicks_created_at", "created_at")
+
 
     _ensure_sqlite_columns(
         "plans",

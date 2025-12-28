@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import {
   analyticsService,
   ApiError,
@@ -28,6 +28,16 @@ export function AffiliateAnalyticsView() {
   const [affiliateLoading, setAffiliateLoading] = useState(false);
   const [affiliateActionError, setAffiliateActionError] = useState<string | null>(null);
   const [affiliateSeedPending, setAffiliateSeedPending] = useState(false);
+  const [createPending, setCreatePending] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [newAffiliate, setNewAffiliate] = useState({
+    code: "",
+    displayName: "",
+    ownerEmail: "",
+    commissionRate: "20",
+    discountRate: "10",
+    isActive: true,
+  });
   const [showAllSections, setShowAllSections] = useState(false);
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -102,14 +112,20 @@ export function AffiliateAnalyticsView() {
   const hasAffiliateDirectory = affiliateOptions.length > 0;
   const hasTestAffiliate = affiliateOptions.some((entry) => entry.code === "test");
   const affiliateShareUrl = affiliateSummary?.affiliate.share_url ?? selectedAffiliate?.share_url ?? null;
+  const sharePreview = newAffiliate.code.trim()
+    ? `/a/${newAffiliate.code.trim().toLowerCase()}`
+    : null;
 
   const affiliatePerformanceRows = affiliateSummary
     ? [
       { label: "Affiliate code", value: affiliateSummary.affiliate.code },
       { label: "Commission rate", value: formatPercent(affiliateSummary.affiliate.commission_rate) },
       { label: "Discount rate", value: formatPercent(affiliateSummary.affiliate.discount_rate) },
+      { label: "Clicks", value: formatCount(affiliateSummary.summary.clicks) },
       { label: "Signups", value: formatCount(affiliateSummary.summary.signups) },
       { label: "Conversions", value: formatCount(affiliateSummary.summary.conversions) },
+      { label: "Signup rate", value: formatPercent(affiliateSummary.summary.signup_rate) },
+      { label: "Conversion rate", value: formatPercent(affiliateSummary.summary.conversion_rate) },
       { label: "Active (6 mo)", value: formatCount(affiliateSummary.summary.active_conversions) },
     ]
     : [];
@@ -118,6 +134,11 @@ export function AffiliateAnalyticsView() {
   const affiliateMonths = affiliateTimeline.map((entry) => formatMonthLabel(entry.month));
   const affiliateSeries = affiliateTimeline.length
     ? [
+      {
+        label: "Clicks",
+        values: affiliateTimeline.map((entry) => entry.clicks ?? 0),
+        color: "rgba(210, 210, 210, 0.75)",
+      },
       {
         label: "Signups",
         values: affiliateTimeline.map((entry) => entry.signups),
@@ -134,6 +155,7 @@ export function AffiliateAnalyticsView() {
 
   const affiliateMatrixColumns = [
     { key: "month", label: "Month" },
+    { key: "clicks", label: "Clicks" },
     { key: "signups", label: "Signups" },
     { key: "conversions", label: "Conversions" },
   ];
@@ -141,6 +163,7 @@ export function AffiliateAnalyticsView() {
     key: entry.month,
     values: {
       month: formatMonthLabel(entry.month),
+      clicks: formatCount(entry.clicks ?? 0),
       signups: formatCount(entry.signups),
       conversions: formatCount(entry.conversions),
     },
@@ -153,6 +176,37 @@ export function AffiliateAnalyticsView() {
   const affiliatePipelineConversionRows = affiliateTimeline.map((entry) => ({
     label: formatMonthLabel(entry.month),
     value: formatCount(entry.conversions),
+  }));
+
+  const recentSignupColumns = [
+    { key: "email", label: "Email" },
+    { key: "attributed_at", label: "Signed up" },
+  ];
+  const recentSignupRows = (affiliateSummary?.recent_signups ?? []).map((entry, index) => ({
+    key: `${entry.email}-${index}`,
+    values: {
+      email: entry.email,
+      attributed_at: formatDateTime(entry.attributed_at),
+    },
+  }));
+
+  const recentConversionColumns = [
+    { key: "email", label: "Email" },
+    { key: "amount", label: "Amount" },
+    { key: "order", label: "Order" },
+    { key: "paid_at", label: "Paid" },
+  ];
+  const recentConversionRows = (affiliateSummary?.recent_conversions ?? []).map((entry, index) => ({
+    key: `${entry.order_id ?? "order"}-${index}`,
+    values: {
+      email: entry.email,
+      amount:
+        entry.amount && entry.currency
+          ? formatCurrencyAmount(entry.amount, entry.currency)
+          : formatCount(entry.amount ?? 0),
+      order: entry.order_id ?? "—",
+      paid_at: formatDateTime(entry.paid_at),
+    },
   }));
 
   const affiliateCurrencyEntries = Object.entries(
@@ -243,6 +297,42 @@ export function AffiliateAnalyticsView() {
     }
   };
 
+  const handleCreateAffiliate = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!newAffiliate.code.trim()) {
+      setCreateError("Enter an affiliate code.");
+      return;
+    }
+    const commissionRate = Number(newAffiliate.commissionRate);
+    const discountRate = Number(newAffiliate.discountRate);
+    setCreatePending(true);
+    setCreateError(null);
+    try {
+      const created = await analyticsService.createAffiliate({
+        code: newAffiliate.code.trim(),
+        display_name: newAffiliate.displayName.trim() || null,
+        owner_email: newAffiliate.ownerEmail.trim() || null,
+        commission_rate: Number.isFinite(commissionRate) ? commissionRate / 100 : 0,
+        discount_rate: Number.isFinite(discountRate) ? discountRate / 100 : 0,
+        is_active: newAffiliate.isActive,
+      });
+      await refreshAffiliateDirectory(created.code);
+      setNewAffiliate((current) => ({
+        ...current,
+        code: "",
+        displayName: "",
+      }));
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setCreateError(err.message || "Unable to create affiliate.");
+      } else {
+        setCreateError("Unable to create affiliate.");
+      }
+    } finally {
+      setCreatePending(false);
+    }
+  };
+
   const affiliateSections: AnalyticsSection[] = hasAffiliateDirectory
     ? [
       {
@@ -322,6 +412,28 @@ export function AffiliateAnalyticsView() {
               emptyLabel="No affiliate history yet."
             />
           </>
+        ),
+      },
+      {
+        id: "affiliate-signups",
+        label: "Recent signups",
+        content: (
+          <AnalyticsMatrix
+            columns={recentSignupColumns}
+            rows={recentSignupRows}
+            emptyLabel="No signups yet."
+          />
+        ),
+      },
+      {
+        id: "affiliate-purchases",
+        label: "Recent purchases",
+        content: (
+          <AnalyticsMatrix
+            columns={recentConversionColumns}
+            rows={recentConversionRows}
+            emptyLabel="No purchases yet."
+          />
         ),
       },
       {
@@ -410,6 +522,91 @@ export function AffiliateAnalyticsView() {
         <h1 className={styles.analyticsTitle}>Affiliates</h1>
         <p className={styles.analyticsSubtitle}>Generated {generatedAtLabel}</p>
       </div>
+
+      <AnalyticsCard title="Create affiliate link">
+        <form className={styles.analyticsForm} onSubmit={handleCreateAffiliate}>
+          <div className={styles.analyticsFormRow}>
+            <label className={styles.analyticsFormField}>
+              <span className={styles.analyticsInputLabel}>Code</span>
+              <input
+                className={styles.analyticsInput}
+                value={newAffiliate.code}
+                onChange={(event) => setNewAffiliate((current) => ({ ...current, code: event.target.value }))}
+                placeholder="creator-name"
+                required
+              />
+            </label>
+            <label className={styles.analyticsFormField}>
+              <span className={styles.analyticsInputLabel}>Display name</span>
+              <input
+                className={styles.analyticsInput}
+                value={newAffiliate.displayName}
+                onChange={(event) => setNewAffiliate((current) => ({ ...current, displayName: event.target.value }))}
+                placeholder="Creator"
+              />
+            </label>
+            <label className={styles.analyticsFormField}>
+              <span className={styles.analyticsInputLabel}>Owner email</span>
+              <input
+                className={styles.analyticsInput}
+                type="email"
+                value={newAffiliate.ownerEmail}
+                onChange={(event) => setNewAffiliate((current) => ({ ...current, ownerEmail: event.target.value }))}
+                placeholder="name@example.com"
+              />
+            </label>
+          </div>
+          <div className={styles.analyticsFormRow}>
+            <label className={styles.analyticsFormField}>
+              <span className={styles.analyticsInputLabel}>Commission %</span>
+              <input
+                className={styles.analyticsInput}
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                value={newAffiliate.commissionRate}
+                onChange={(event) => setNewAffiliate((current) => ({ ...current, commissionRate: event.target.value }))}
+              />
+            </label>
+            <label className={styles.analyticsFormField}>
+              <span className={styles.analyticsInputLabel}>Discount %</span>
+              <input
+                className={styles.analyticsInput}
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                value={newAffiliate.discountRate}
+                onChange={(event) => setNewAffiliate((current) => ({ ...current, discountRate: event.target.value }))}
+              />
+            </label>
+            <label className={styles.analyticsFormField}>
+              <span className={styles.analyticsInputLabel}>Active</span>
+              <div className={styles.analyticsCheckboxRow}>
+                <input
+                  type="checkbox"
+                  checked={newAffiliate.isActive}
+                  onChange={(event) => setNewAffiliate((current) => ({ ...current, isActive: event.target.checked }))}
+                />
+                <span>Enabled</span>
+              </div>
+            </label>
+          </div>
+          {sharePreview ? (
+            <div className={styles.analyticsLinkRow}>
+              <span className={styles.analyticsTableLabel}>Share link</span>
+              <span className={styles.analyticsLink}>{sharePreview}</span>
+            </div>
+          ) : null}
+          <div className={styles.analyticsFormActions}>
+            <button type="submit" className={styles.analyticsButton} disabled={createPending}>
+              {createPending ? "Creating..." : "Create affiliate"}
+            </button>
+            {createError ? <span className={styles.analyticsListEmpty}>{createError}</span> : null}
+          </div>
+        </form>
+      </AnalyticsCard>
 
       {showAllSections ? (
         <div className={styles.analyticsControls}>

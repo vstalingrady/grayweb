@@ -6,7 +6,7 @@ export type NotificationPreferences = {
 };
 
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
-  device: false,
+  device: true,  // Default to true so push registration happens when browser permission is granted
   tasks: true,
   proactivity: true,
   calendarEvents: true,

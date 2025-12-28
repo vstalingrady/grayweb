@@ -610,14 +610,29 @@ export interface AffiliateAnalyticsSummary {
     signups: number;
     conversions: number;
     active_conversions: number;
+    clicks: number;
+    signup_rate: number;
+    conversion_rate: number;
     gross_revenue: number;
     commission_owed: number;
     currency_breakdown: Record<string, { gross_revenue: number; commission_owed: number }>;
   };
+  recent_signups: Array<{
+    email: string;
+    attributed_at: string | null;
+  }>;
+  recent_conversions: Array<{
+    email: string;
+    order_id: string | null;
+    amount: number | null;
+    currency: string | null;
+    paid_at: string | null;
+  }>;
   timeline: Array<{
     month: string;
     signups: number;
     conversions: number;
+    clicks: number;
     gross_revenue: number;
     commission: number;
   }>;

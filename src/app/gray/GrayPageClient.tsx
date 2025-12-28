@@ -136,6 +136,8 @@ type GrayPageClientProps = {
 
 type ViewMode = "chat" | "dashboard" | "general" | "history" | "analytics" | "affiliates";
 
+const ANALYTICS_ADMIN_EMAILS = new Set(["vstalingrady@gmail.com", "test@test.com"]);
+
 function GrayPageClientInner({
   initialTimestamp,
   activeNav = "general",
@@ -158,7 +160,8 @@ function GrayPageClientInner({
   const userId = typeof user?.id === "number" ? user.id : null;
   const normalizedTier = useMemo(() => normalizePlanTier(user), [user]);
   const hasCalendarAccess = normalizedTier === "voyager" || normalizedTier === "pioneer";
-  const isAnalyticsAdmin = (user?.email ?? "").trim().toLowerCase() === "vstalingrady@gmail.com";
+  const normalizedEmail = (user?.email ?? "").trim().toLowerCase();
+  const isAnalyticsAdmin = ANALYTICS_ADMIN_EMAILS.has(normalizedEmail);
   const resolvedTimezone = useMemo(() => {
     try {
       return Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
