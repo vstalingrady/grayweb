@@ -149,34 +149,34 @@ const BILLING_CYCLES = [
 // Dual pricing: Indonesia (IDR) and International (USD)
 const PATHFINDER_PRICING = {
     monthly: {
-        idr: { price: "Rp 77.000,-", cadence: "month" },
-        usd: { price: "$7", cadence: "month" }
+        idr: { price: "Rp 77.000,-", fullPrice: "Rp 77.000,-", cadence: "month" },
+        usd: { price: "$7", fullPrice: "$7", cadence: "month" }
     },
     annual: {
-        idr: { price: "Rp 777.000,-", cadence: "year" },
-        usd: { price: "$77", cadence: "year" }
+        idr: { price: "Rp 777.000,-", fullPrice: "Rp 924.000,-", cadence: "year" },
+        usd: { price: "$77", fullPrice: "$84", cadence: "year" }
     },
 } as const;
 
 const VOYAGER_PRICING = {
     monthly: {
-        idr: { price: "Rp 177.000,-", cadence: "month" },
-        usd: { price: "$17", cadence: "month" }
+        idr: { price: "Rp 177.000,-", fullPrice: "Rp 177.000,-", cadence: "month" },
+        usd: { price: "$17", fullPrice: "$17", cadence: "month" }
     },
     annual: {
-        idr: { price: "Rp 1.777.000,-", cadence: "year" },
-        usd: { price: "$177", cadence: "year" }
+        idr: { price: "Rp 1.777.000,-", fullPrice: "Rp 2.124.000,-", cadence: "year" },
+        usd: { price: "$177", fullPrice: "$204", cadence: "year" }
     },
 } as const;
 
 const PIONEER_PRICING = {
     monthly: {
-        idr: { price: "Rp 377.000,-", cadence: "month" },
-        usd: { price: "$37", cadence: "month" }
+        idr: { price: "Rp 377.000,-", fullPrice: "Rp 377.000,-", cadence: "month" },
+        usd: { price: "$37", fullPrice: "$37", cadence: "month" }
     },
     annual: {
-        idr: { price: "Rp 3.777.000,-", cadence: "year" },
-        usd: { price: "$377", cadence: "year" }
+        idr: { price: "Rp 3.777.000,-", fullPrice: "Rp 4.524.000,-", cadence: "year" },
+        usd: { price: "$377", fullPrice: "$444", cadence: "year" }
     },
 } as const;
 
@@ -238,9 +238,15 @@ export function PricingPlansSection() {
     const voyagerAction = getPlanAction("voyager");
     const pioneerAction = getPlanAction("pioneer");
 
-    const { price: pathfinderPrice, cadence: pathfinderCadence } = PATHFINDER_PRICING[billingCycle][currency];
-    const { price: voyagerPrice, cadence: voyagerCadence } = VOYAGER_PRICING[billingCycle][currency];
-    const { price: pioneerPrice, cadence: pioneerCadence } = PIONEER_PRICING[billingCycle][currency];
+    const { price: pathfinderPrice, fullPrice: pathfinderFullPrice, cadence: pathfinderCadence } =
+        PATHFINDER_PRICING[billingCycle][currency];
+    const { price: voyagerPrice, fullPrice: voyagerFullPrice, cadence: voyagerCadence } =
+        VOYAGER_PRICING[billingCycle][currency];
+    const { price: pioneerPrice, fullPrice: pioneerFullPrice, cadence: pioneerCadence } =
+        PIONEER_PRICING[billingCycle][currency];
+    const showPathfinderDiscount = pathfinderFullPrice && pathfinderFullPrice !== pathfinderPrice;
+    const showVoyagerDiscount = voyagerFullPrice && voyagerFullPrice !== voyagerPrice;
+    const showPioneerDiscount = pioneerFullPrice && pioneerFullPrice !== pioneerPrice;
     const annualSavingsPercent = Math.max(
         computeAnnualSavingsPercent(PATHFINDER_PRICING.monthly.idr.price, PATHFINDER_PRICING.annual.idr.price) ?? 0,
         computeAnnualSavingsPercent(VOYAGER_PRICING.monthly.idr.price, VOYAGER_PRICING.annual.idr.price) ?? 0,
@@ -348,6 +354,11 @@ export function PricingPlansSection() {
                             </header>
                             <div className={styles.priceHeader}>
                                 <div className={`${styles.priceBlock} ${styles.priceBlockStacked}`}>
+                                    {showPathfinderDiscount ? (
+                                        <span className={`${styles.priceValue} ${styles.priceValueMuted}`}>
+                                            {pathfinderFullPrice}
+                                        </span>
+                                    ) : null}
                                     <span className={styles.priceValue}>{pathfinderPrice}</span>
                                     <span className={styles.priceMeta}>/ {t(pathfinderCadence)}</span>
                                 </div>
@@ -390,6 +401,11 @@ export function PricingPlansSection() {
                             </header>
                             <div className={styles.priceHeader}>
                                 <div className={`${styles.priceBlock} ${styles.priceBlockStacked}`}>
+                                    {showVoyagerDiscount ? (
+                                        <span className={`${styles.priceValue} ${styles.priceValueMuted}`}>
+                                            {voyagerFullPrice}
+                                        </span>
+                                    ) : null}
                                     <span className={styles.priceValue}>{voyagerPrice}</span>
                                     <span className={styles.priceMeta}>/ {t(voyagerCadence)}</span>
                                 </div>
@@ -436,6 +452,11 @@ export function PricingPlansSection() {
                             </header>
                             <div className={styles.priceHeader}>
                                 <div className={`${styles.priceBlock} ${styles.priceBlockStacked}`}>
+                                    {showPioneerDiscount ? (
+                                        <span className={`${styles.priceValue} ${styles.priceValueMuted}`}>
+                                            {pioneerFullPrice}
+                                        </span>
+                                    ) : null}
                                     <span className={styles.priceValue}>{pioneerPrice}</span>
                                     <span className={styles.priceMeta}>/ {t(pioneerCadence)}</span>
                                 </div>

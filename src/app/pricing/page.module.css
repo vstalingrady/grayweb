@@ -349,6 +349,15 @@
   line-height: 1;
 }
 
+.priceValueMuted {
+  color: rgba(246, 246, 246, 0.45);
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  text-decoration-color: rgba(246, 246, 246, 0.45);
+  font-size: clamp(1.05rem, 1.6vw, 1.35rem);
+  font-weight: 500;
+}
+
 .priceMeta {
   font-size: 0.85rem;
   color: rgba(246, 246, 246, 0.7);
