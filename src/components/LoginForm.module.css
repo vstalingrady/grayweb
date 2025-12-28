@@ -151,6 +151,21 @@
   color: rgba(0, 0, 0, 0.92);
 }
 
+:global(html.light) .affiliateNotice {
+  background: rgba(255, 255, 255, 0.86);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: rgba(10, 10, 10, 0.75);
+}
+
+:global(html.light) .affiliateNoticeBadge {
+  border-color: rgba(0, 0, 0, 0.18);
+  color: rgba(10, 10, 10, 0.6);
+}
+
+:global(html.light) .affiliateNoticeText {
+  color: rgba(10, 10, 10, 0.9);
+}
+
 @keyframes authGlowPulse {
 
   0%,
@@ -835,6 +850,35 @@
 .authFooterLink:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.affiliateNotice {
+  margin-top: clamp(0.9rem, 2vw, 1.25rem);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(12, 12, 16, 0.7);
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.affiliateNoticeBadge {
+  text-transform: uppercase;
+  font-size: 0.6rem;
+  letter-spacing: 0.22em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.affiliateNoticeText {
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 600;
 }
 
 .authOrb {
