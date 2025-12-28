@@ -278,6 +278,14 @@ export function PricingPlansSection() {
     const { price: voyagerPrice, cadence: voyagerCadence } = VOYAGER_PRICING[billingCycle][currency];
     const { price: pioneerPrice, cadence: pioneerCadence } = PIONEER_PRICING[billingCycle][currency];
     const isAffiliateDiscountActive = affiliateDiscountRate > 0 && billingCycle === "monthly";
+    const affiliateDiscountPercent = Math.round(affiliateDiscountRate * 100);
+    const showAffiliateNotice = affiliateDiscountPercent > 0;
+    const affiliateNoticeTitle = isAffiliateDiscountActive
+        ? t("Affiliate discount applied")
+        : t("Affiliate discount available");
+    const affiliateNoticeDetail = isAffiliateDiscountActive
+        ? t("{percent}% off your first month", { percent: affiliateDiscountPercent })
+        : t("{percent}% off monthly plans", { percent: affiliateDiscountPercent });
     const pathfinderDiscountedPrice = isAffiliateDiscountActive
         ? applyAffiliateDiscount(pathfinderPrice, currency, affiliateDiscountRate)
         : pathfinderPrice;
@@ -392,6 +400,13 @@ export function PricingPlansSection() {
                     ))}
                 </div>
             </div>
+            {showAffiliateNotice ? (
+                <div className={styles.affiliateNotice} data-active={isAffiliateDiscountActive ? "true" : "false"}>
+                    <span className={styles.affiliateNoticeBadge}>{t("Affiliate")}</span>
+                    <span className={styles.affiliateNoticeTitle}>{affiliateNoticeTitle}</span>
+                    <span className={styles.affiliateNoticeValue}>{affiliateNoticeDetail}</span>
+                </div>
+            ) : null}
 
             <section className={styles.planGrid}>
                 <article className={styles.planCard} data-variant="muted">

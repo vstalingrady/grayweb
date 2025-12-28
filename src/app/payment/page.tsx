@@ -341,6 +341,14 @@ function PaymentContent() {
     const basePriceDisplay = pricingData[billingCycle].price;
     const baseChargeDisplay = pricingData[billingCycle].fullPrice;
     const isAffiliateDiscountActive = affiliateDiscountRate > 0 && billingCycle === "monthly";
+    const affiliateDiscountPercent = Math.round(affiliateDiscountRate * 100);
+    const hasAffiliateDiscount = affiliateDiscountPercent > 0;
+    const affiliateNoticeTitle = isAffiliateDiscountActive
+        ? t("Affiliate discount applied")
+        : t("Affiliate discount available");
+    const affiliateNoticeDetail = isAffiliateDiscountActive
+        ? t("{percent}% off your first month", { percent: affiliateDiscountPercent })
+        : t("{percent}% off monthly plans", { percent: affiliateDiscountPercent });
     const discountedPriceDisplay = isAffiliateDiscountActive
         ? applyAffiliateDiscount(basePriceDisplay, currency, affiliateDiscountRate)
         : basePriceDisplay;
@@ -536,6 +544,14 @@ function PaymentContent() {
             </div>
         );
     }
+
+    const affiliateNotice = hasAffiliateDiscount ? (
+        <div className={styles.affiliateNotice} data-active={isAffiliateDiscountActive ? "true" : "false"}>
+            <span className={styles.affiliateNoticeBadge}>{t("Affiliate")}</span>
+            <span className={styles.affiliateNoticeTitle}>{affiliateNoticeTitle}</span>
+            <span className={styles.affiliateNoticeValue}>{affiliateNoticeDetail}</span>
+        </div>
+    ) : null;
 
     const planCard = (
         <article className={`${pricingStyles.planCard} ${styles.planCard}`} data-variant={planCardVariant}>
@@ -749,6 +765,7 @@ function PaymentContent() {
             <div className={styles.mainGrid}>
                 {/* LEFT COLUMN: Summary & Features - using exact pricing page styles */}
                 <div className={styles.summaryColumn}>
+                    {affiliateNotice}
                     {planCard}
                 </div>
 

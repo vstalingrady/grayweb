@@ -218,6 +218,42 @@
   opacity: 0.4;
 }
 
+.affiliateNotice {
+  margin: 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.6rem 1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(10, 10, 12, 0.72);
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.affiliateNotice[data-active="false"] {
+  opacity: 0.7;
+}
+
+.affiliateNoticeBadge {
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 0.65rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.affiliateNoticeTitle {
+  font-weight: 600;
+}
+
+.affiliateNoticeValue {
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 600;
+}
+
 .planGrid {
   display: grid;
   gap: clamp(0.75rem, 1.5vw, 1.25rem);
