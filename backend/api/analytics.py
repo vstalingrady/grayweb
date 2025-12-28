@@ -558,6 +558,7 @@ async def affiliate_summary(
     if not affiliate:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
+    affiliate = dict(affiliate)
     affiliate_id = affiliate["id"]
     now = utcnow_aware()
     window_start = now - timedelta(days=AFFILIATE_COMMISSION_WINDOW_DAYS)
@@ -571,6 +572,9 @@ async def affiliate_summary(
     clicks = await db.fetch_all(
         affiliate_clicks.select().where(affiliate_clicks.c.affiliate_id == affiliate_id)
     )
+    referrals = [dict(row) for row in referrals]
+    commissions = [dict(row) for row in commissions]
+    clicks = [dict(row) for row in clicks]
 
     total_signups = len(referrals)
     total_conversions = sum(1 for referral in referrals if referral["conversion_at"] is not None)

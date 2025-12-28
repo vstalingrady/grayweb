@@ -156,7 +156,7 @@ const nextConfig: NextConfig = {
               // Fonts: self + Google Fonts
               "font-src 'self' https://fonts.gstatic.com",
               // XHR/Fetch: self + trusted APIs
-              `connect-src 'self' https://*.supabase.co https://*.googleusercontent.com https://www.youtube.com https://challenges.cloudflare.com wss://*.supabase.co https://api.midtrans.com https://api.sandbox.midtrans.com https://app.midtrans.com https://simulator.sandbox.midtrans.com https://gray.alignment.id${devConnectSrc}`,
+              `connect-src 'self' https://*.supabase.co https://*.googleusercontent.com https://www.youtube.com https://challenges.cloudflare.com wss://*.supabase.co https://api.midtrans.com https://api.sandbox.midtrans.com https://app.midtrans.com https://simulator.sandbox.midtrans.com https://gray.alignment.id https://api-gray.alignment.id${devConnectSrc}`,
               // Frames: limited to YouTube and Cloudflare
               "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://challenges.cloudflare.com https://api.midtrans.com https://api.sandbox.midtrans.com https://app.midtrans.com https://simulator.sandbox.midtrans.com https://gray.alignment.id",
               // Ancestors: prevent embedding
