@@ -7,7 +7,8 @@ export type SidebarNavKey =
   | "history"
   | "search"
   | "calendar"
-  | "analytics";
+  | "analytics"
+  | "affiliates";
 
 export type SidebarNavItem = {
   id: SidebarNavKey;

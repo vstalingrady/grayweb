@@ -117,6 +117,11 @@ const AnalyticsView = dynamic(
   { loading: () => null }
 );
 
+const AffiliateAnalyticsView = dynamic(
+  () => import("@/components/gray/analytics/AffiliateAnalyticsView").then((mod) => mod.AffiliateAnalyticsView),
+  { loading: () => null }
+);
+
 // Helper functions and constants imported from extracted modules
 
 type GrayPageClientProps = {
@@ -129,7 +134,7 @@ type GrayPageClientProps = {
   defaultSidebarExpandedDesktop?: boolean;
 };
 
-type ViewMode = "chat" | "dashboard" | "general" | "history" | "analytics";
+type ViewMode = "chat" | "dashboard" | "general" | "history" | "analytics" | "affiliates";
 
 function GrayPageClientInner({
   initialTimestamp,
@@ -501,7 +506,9 @@ function GrayPageClientInner({
           ? "history"
           : activeNav === "analytics"
             ? "analytics"
-            : baseViewMode);
+            : activeNav === "affiliates"
+              ? "affiliates"
+              : baseViewMode);
 
   const handleMobileHeaderSelectChat = useCallback(() => {
     setMobilePulseActive(false);
@@ -571,6 +578,9 @@ function GrayPageClientInner({
     }
     if (viewMode === "analytics") {
       return <AnalyticsView />;
+    }
+    if (viewMode === "affiliates") {
+      return <AffiliateAnalyticsView />;
     }
     if (isChatView) {
       return (
@@ -671,6 +681,17 @@ function GrayPageClientInner({
         </div>
       );
     }
+    if (viewMode === "affiliates") {
+      return (
+        <div
+          className={pageStyles.mainContent}
+          data-view={viewMode}
+          data-compact={isCompactLayout ? "true" : "false"}
+        >
+          {renderPrimaryView()}
+        </div>
+      );
+    }
     return renderPrimaryView();
   };
 
@@ -691,6 +712,17 @@ function GrayPageClientInner({
         <div
           className={pageStyles.mainContent}
           data-view="analytics"
+          data-compact={isCompactLayout ? "true" : "false"}
+        >
+          {renderPrimaryView()}
+        </div>
+      );
+    }
+    if (viewMode === "affiliates") {
+      return (
+        <div
+          className={pageStyles.mainContent}
+          data-view="affiliates"
           data-compact={isCompactLayout ? "true" : "false"}
         >
           {renderPrimaryView()}
@@ -800,7 +832,7 @@ function GrayPageClientInner({
       if (!hasCalendarAccess && item.id === "calendar") {
         return false;
       }
-      if (!isAnalyticsAdmin && item.id === "analytics") {
+      if (!isAnalyticsAdmin && (item.id === "analytics" || item.id === "affiliates")) {
         return false;
       }
       return true;
@@ -812,7 +844,7 @@ function GrayPageClientInner({
       if (!hasCalendarAccess && item.id === "calendar") {
         return false;
       }
-      if (!isAnalyticsAdmin && item.id === "analytics") {
+      if (!isAnalyticsAdmin && (item.id === "analytics" || item.id === "affiliates")) {
         return false;
       }
       return true;
@@ -915,6 +947,9 @@ function GrayPageClientInner({
     }
     if (viewMode === "analytics" || activeNav === "analytics") {
       return "Analytics";
+    }
+    if (viewMode === "affiliates" || activeNav === "affiliates") {
+      return "Affiliates";
     }
     if (activeNav === "threads") {
       return "New Chat";

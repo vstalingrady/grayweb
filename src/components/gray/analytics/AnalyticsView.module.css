@@ -65,6 +65,11 @@
   grid-template-columns: repeat(2, minmax(320px, 1fr));
 }
 
+.analyticsControls {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .analyticsCard {
   background: var(--gray-panel, rgba(18, 18, 18, 0.94));
   border: 1px solid var(--gray-border, rgba(255, 255, 255, 0.08));
@@ -75,17 +80,12 @@
   gap: 16px;
 }
 
-.analyticsCardSummary {
+.analyticsCardHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  cursor: pointer;
-  list-style: none;
-}
-
-.analyticsCardSummary::-webkit-details-marker {
-  display: none;
+  flex-wrap: wrap;
 }
 
 .analyticsCardTitle {
@@ -97,18 +97,12 @@
   color: rgba(235, 235, 235, 0.66);
 }
 
-.analyticsCardChevron {
-  width: 10px;
-  height: 10px;
-  border-right: 2px solid rgba(235, 235, 235, 0.6);
-  border-bottom: 2px solid rgba(235, 235, 235, 0.6);
-  transform: rotate(45deg);
-  transition: transform 0.2s ease;
-  flex: 0 0 auto;
+.analyticsFocusCard {
+  grid-column: 1 / -1;
 }
 
-.analyticsCard[open] .analyticsCardChevron {
-  transform: rotate(-135deg);
+.analyticsFocusHeader {
+  align-items: flex-start;
 }
 
 .analyticsCardBody {
@@ -395,6 +389,11 @@
   align-items: center;
 }
 
+.analyticsSelectRowFull {
+  width: 100%;
+  justify-content: space-between;
+}
+
 .analyticsSelectLabel {
   font-size: 0.6rem;
   letter-spacing: 0.2em;
@@ -411,6 +410,8 @@
   font-size: 0.8rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  min-width: 220px;
+  flex: 1;
 }
 
 .analyticsSelect:focus {
