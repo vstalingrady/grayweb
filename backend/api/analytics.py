@@ -38,7 +38,7 @@ from backend.database import (
     affiliate_commissions,
     affiliate_clicks,
 )
-from backend.auth import get_current_user
+from backend.auth import get_current_user, get_current_user_optional
 
 from backend.core.cors_utils import IS_PRODUCTION
 
@@ -672,6 +672,55 @@ async def affiliate_summary(
             {"month": key, **values} for key, values in sorted(month_series.items())
         ],
     }
+
+
+@router.get("/affiliate/offer")
+async def affiliate_offer(
+    request: Request,
+    db: databases.Database = Depends(get_database),
+    current_user: Optional[Dict[str, Any]] = Depends(get_current_user_optional),
+    billing_cycle: Optional[str] = None,
+    code: Optional[str] = None,
+):
+    from backend.affiliate_utils import (
+        AFFILIATE_DEFAULT_DISCOUNT_RATE,
+        extract_affiliate_code,
+        normalize_affiliate_code,
+        resolve_affiliate_discount,
+    )
+
+    cycle = (billing_cycle or "monthly").strip().lower()
+    if current_user:
+        discount_rate, affiliate_id, _ = await resolve_affiliate_discount(
+            db,
+            user_id=current_user["id"],
+            billing_cycle=cycle,
+        )
+        if discount_rate > 0 and affiliate_id:
+            affiliate = await db.fetch_one(affiliates.select().where(affiliates.c.id == affiliate_id))
+            affiliate_code = affiliate["code"] if affiliate else None
+            return {"discount_rate": float(discount_rate), "affiliate_code": affiliate_code}
+        return {"discount_rate": 0.0}
+
+    normalized_code = normalize_affiliate_code(code) if code else None
+    if not normalized_code:
+        normalized_code = extract_affiliate_code(request)
+    if not normalized_code or cycle != "monthly":
+        return {"discount_rate": 0.0}
+
+    affiliate = await db.fetch_one(
+        affiliates.select().where(affiliates.c.code == normalized_code).where(affiliates.c.is_active.is_(True))
+    )
+    if not affiliate:
+        return {"discount_rate": 0.0}
+
+    discount_rate = affiliate["discount_rate"]
+    if discount_rate is None:
+        discount_rate = AFFILIATE_DEFAULT_DISCOUNT_RATE
+    if discount_rate <= 0:
+        return {"discount_rate": 0.0}
+
+    return {"discount_rate": float(discount_rate), "affiliate_code": affiliate["code"]}
 
 
 @router.post("/affiliate/track")

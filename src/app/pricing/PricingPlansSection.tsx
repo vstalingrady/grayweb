@@ -149,41 +149,76 @@ const BILLING_CYCLES = [
 // Dual pricing: Indonesia (IDR) and International (USD)
 const PATHFINDER_PRICING = {
     monthly: {
-        idr: { price: "Rp 77.000,-", fullPrice: "Rp 77.000,-", cadence: "month" },
-        usd: { price: "$7", fullPrice: "$7", cadence: "month" }
+        idr: { price: "Rp 77.000,-", cadence: "month" },
+        usd: { price: "$7", cadence: "month" }
     },
     annual: {
-        idr: { price: "Rp 777.000,-", fullPrice: "Rp 924.000,-", cadence: "year" },
-        usd: { price: "$77", fullPrice: "$84", cadence: "year" }
+        idr: { price: "Rp 777.000,-", cadence: "year" },
+        usd: { price: "$77", cadence: "year" }
     },
 } as const;
 
 const VOYAGER_PRICING = {
     monthly: {
-        idr: { price: "Rp 177.000,-", fullPrice: "Rp 177.000,-", cadence: "month" },
-        usd: { price: "$17", fullPrice: "$17", cadence: "month" }
+        idr: { price: "Rp 177.000,-", cadence: "month" },
+        usd: { price: "$17", cadence: "month" }
     },
     annual: {
-        idr: { price: "Rp 1.777.000,-", fullPrice: "Rp 2.124.000,-", cadence: "year" },
-        usd: { price: "$177", fullPrice: "$204", cadence: "year" }
+        idr: { price: "Rp 1.777.000,-", cadence: "year" },
+        usd: { price: "$177", cadence: "year" }
     },
 } as const;
 
 const PIONEER_PRICING = {
     monthly: {
-        idr: { price: "Rp 377.000,-", fullPrice: "Rp 377.000,-", cadence: "month" },
-        usd: { price: "$37", fullPrice: "$37", cadence: "month" }
+        idr: { price: "Rp 377.000,-", cadence: "month" },
+        usd: { price: "$37", cadence: "month" }
     },
     annual: {
-        idr: { price: "Rp 3.777.000,-", fullPrice: "Rp 4.524.000,-", cadence: "year" },
-        usd: { price: "$377", fullPrice: "$444", cadence: "year" }
+        idr: { price: "Rp 3.777.000,-", cadence: "year" },
+        usd: { price: "$377", cadence: "year" }
     },
 } as const;
+
+type CurrencyKey = "idr" | "usd";
 
 function parseIdrDisplay(value: string): number {
     const digits = value.replace(/[^\d]/g, "");
     const amount = Number.parseInt(digits || "0", 10);
     return Number.isFinite(amount) ? amount : 0;
+}
+
+function parseUsdDisplay(value: string): number {
+    const normalized = value.replace(/[^0-9.]/g, "");
+    const amount = Number.parseFloat(normalized || "0");
+    return Number.isFinite(amount) ? amount : 0;
+}
+
+function formatIdrDisplay(value: number): string {
+    const rounded = Math.max(0, Math.round(value));
+    const formatted = new Intl.NumberFormat("id-ID").format(rounded);
+    return `Rp ${formatted},-`;
+}
+
+function formatUsdDisplay(value: number): string {
+    const rounded = Math.max(0, Math.round(value * 100) / 100);
+    const formatter = new Intl.NumberFormat("en-US", {
+        minimumFractionDigits: rounded % 1 === 0 ? 0 : 2,
+        maximumFractionDigits: 2,
+    });
+    return `$${formatter.format(rounded)}`;
+}
+
+function applyAffiliateDiscount(value: string, currency: CurrencyKey, rate: number): string {
+    if (rate <= 0) {
+        return value;
+    }
+    const base = currency === "idr" ? parseIdrDisplay(value) : parseUsdDisplay(value);
+    if (base <= 0) {
+        return value;
+    }
+    const discounted = base * (1 - rate);
+    return currency === "idr" ? formatIdrDisplay(discounted) : formatUsdDisplay(discounted);
 }
 
 function computeAnnualSavingsPercent(monthlyDisplay: string, annualDisplay: string): number | undefined {
@@ -209,6 +244,7 @@ export function PricingPlansSection() {
     const { t } = useI18n();
     const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
     const [isIndonesia, setIsIndonesia] = useState<boolean | null>(null);
+    const [affiliateDiscountRate, setAffiliateDiscountRate] = useState(0);
 
     // Fetch geo data on mount
     useEffect(() => {
@@ -219,7 +255,7 @@ export function PricingPlansSection() {
     }, []);
 
     // Determine currency based on region (default to IDR during loading)
-    const currency = isIndonesia === false ? "usd" : "idr";
+    const currency: CurrencyKey = isIndonesia === false ? "usd" : "idr";
     const currentPlan = normalizePlanTier(user);
     const currentPlanLevel = PLAN_TIER_LEVELS[currentPlan] ?? 0;
     const paidCardBodyClassName = styles.cardBody;
@@ -238,15 +274,22 @@ export function PricingPlansSection() {
     const voyagerAction = getPlanAction("voyager");
     const pioneerAction = getPlanAction("pioneer");
 
-    const { price: pathfinderPrice, fullPrice: pathfinderFullPrice, cadence: pathfinderCadence } =
-        PATHFINDER_PRICING[billingCycle][currency];
-    const { price: voyagerPrice, fullPrice: voyagerFullPrice, cadence: voyagerCadence } =
-        VOYAGER_PRICING[billingCycle][currency];
-    const { price: pioneerPrice, fullPrice: pioneerFullPrice, cadence: pioneerCadence } =
-        PIONEER_PRICING[billingCycle][currency];
-    const showPathfinderDiscount = pathfinderFullPrice && pathfinderFullPrice !== pathfinderPrice;
-    const showVoyagerDiscount = voyagerFullPrice && voyagerFullPrice !== voyagerPrice;
-    const showPioneerDiscount = pioneerFullPrice && pioneerFullPrice !== pioneerPrice;
+    const { price: pathfinderPrice, cadence: pathfinderCadence } = PATHFINDER_PRICING[billingCycle][currency];
+    const { price: voyagerPrice, cadence: voyagerCadence } = VOYAGER_PRICING[billingCycle][currency];
+    const { price: pioneerPrice, cadence: pioneerCadence } = PIONEER_PRICING[billingCycle][currency];
+    const isAffiliateDiscountActive = affiliateDiscountRate > 0 && billingCycle === "monthly";
+    const pathfinderDiscountedPrice = isAffiliateDiscountActive
+        ? applyAffiliateDiscount(pathfinderPrice, currency, affiliateDiscountRate)
+        : pathfinderPrice;
+    const voyagerDiscountedPrice = isAffiliateDiscountActive
+        ? applyAffiliateDiscount(voyagerPrice, currency, affiliateDiscountRate)
+        : voyagerPrice;
+    const pioneerDiscountedPrice = isAffiliateDiscountActive
+        ? applyAffiliateDiscount(pioneerPrice, currency, affiliateDiscountRate)
+        : pioneerPrice;
+    const showPathfinderDiscount = isAffiliateDiscountActive && pathfinderDiscountedPrice !== pathfinderPrice;
+    const showVoyagerDiscount = isAffiliateDiscountActive && voyagerDiscountedPrice !== voyagerPrice;
+    const showPioneerDiscount = isAffiliateDiscountActive && pioneerDiscountedPrice !== pioneerPrice;
     const annualSavingsPercent = Math.max(
         computeAnnualSavingsPercent(PATHFINDER_PRICING.monthly.idr.price, PATHFINDER_PRICING.annual.idr.price) ?? 0,
         computeAnnualSavingsPercent(VOYAGER_PRICING.monthly.idr.price, VOYAGER_PRICING.annual.idr.price) ?? 0,
@@ -275,6 +318,43 @@ export function PricingPlansSection() {
             }
         }
     };
+
+    useEffect(() => {
+        let isActive = true;
+        const controller = new AbortController();
+
+        const fetchAffiliateOffer = async () => {
+            try {
+                const params = new URLSearchParams();
+                params.set("billing_cycle", billingCycle);
+                const response = await fetch(`/api/p/affiliate/offer?${params.toString()}`, {
+                    signal: controller.signal,
+                    cache: "no-store",
+                });
+                if (!response.ok) {
+                    if (isActive) {
+                        setAffiliateDiscountRate(0);
+                    }
+                    return;
+                }
+                const payload = await response.json();
+                const rate = typeof payload?.discount_rate === "number" ? payload.discount_rate : 0;
+                if (isActive) {
+                    setAffiliateDiscountRate(rate > 0 ? rate : 0);
+                }
+            } catch {
+                if (isActive) {
+                    setAffiliateDiscountRate(0);
+                }
+            }
+        };
+
+        void fetchAffiliateOffer();
+        return () => {
+            isActive = false;
+            controller.abort();
+        };
+    }, [billingCycle, user?.id]);
 
 
     return (
@@ -356,10 +436,10 @@ export function PricingPlansSection() {
                                 <div className={`${styles.priceBlock} ${styles.priceBlockStacked}`}>
                                     {showPathfinderDiscount ? (
                                         <span className={`${styles.priceValue} ${styles.priceValueMuted}`}>
-                                            {pathfinderFullPrice}
+                                            {pathfinderPrice}
                                         </span>
                                     ) : null}
-                                    <span className={styles.priceValue}>{pathfinderPrice}</span>
+                                    <span className={styles.priceValue}>{pathfinderDiscountedPrice}</span>
                                     <span className={styles.priceMeta}>/ {t(pathfinderCadence)}</span>
                                 </div>
                             </div>
@@ -403,10 +483,10 @@ export function PricingPlansSection() {
                                 <div className={`${styles.priceBlock} ${styles.priceBlockStacked}`}>
                                     {showVoyagerDiscount ? (
                                         <span className={`${styles.priceValue} ${styles.priceValueMuted}`}>
-                                            {voyagerFullPrice}
+                                            {voyagerPrice}
                                         </span>
                                     ) : null}
-                                    <span className={styles.priceValue}>{voyagerPrice}</span>
+                                    <span className={styles.priceValue}>{voyagerDiscountedPrice}</span>
                                     <span className={styles.priceMeta}>/ {t(voyagerCadence)}</span>
                                 </div>
                             </div>
@@ -454,10 +534,10 @@ export function PricingPlansSection() {
                                 <div className={`${styles.priceBlock} ${styles.priceBlockStacked}`}>
                                     {showPioneerDiscount ? (
                                         <span className={`${styles.priceValue} ${styles.priceValueMuted}`}>
-                                            {pioneerFullPrice}
+                                            {pioneerPrice}
                                         </span>
                                     ) : null}
-                                    <span className={styles.priceValue}>{pioneerPrice}</span>
+                                    <span className={styles.priceValue}>{pioneerDiscountedPrice}</span>
                                     <span className={styles.priceMeta}>/ {t(pioneerCadence)}</span>
                                 </div>
                             </div>
