@@ -45,17 +45,21 @@ export async function GET(
   const forwardedPort = request.headers.get("x-forwarded-port") ?? undefined;
   const workspaceOrigin = resolveWorkspaceOrigin(requestHost, forwardedProto, forwardedPort);
   const isWorkspaceHost = isGrayWorkspaceHost(requestHost);
+  const localOrigin = request.nextUrl.host ? `http://${request.nextUrl.host}` : request.nextUrl.origin;
 
   const code = normalizeAffiliateCode(params.affiliate);
-  const redirectTarget = workspaceOrigin && !isLocal && !isWorkspaceHost
-    ? new URL("/signup", workspaceOrigin)
-    : new URL("/signup", request.nextUrl.origin);
+  const redirectBaseOrigin = isLocal
+    ? localOrigin
+    : workspaceOrigin && !isWorkspaceHost
+      ? workspaceOrigin
+      : request.nextUrl.origin;
+  const redirectTarget = new URL("/signup", redirectBaseOrigin);
 
   const response = NextResponse.redirect(redirectTarget);
 
   if (code) {
     try {
-      const trackUrl = new URL("/api/p/affiliate/track", request.nextUrl.origin);
+      const trackUrl = new URL("/api/p/affiliate/track", isLocal ? localOrigin : request.nextUrl.origin);
       trackUrl.searchParams.set("code", code);
       await fetch(trackUrl.toString(), { method: "POST", cache: "no-store" });
     } catch {
