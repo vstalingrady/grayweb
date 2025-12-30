@@ -262,12 +262,27 @@ class ProactivityEngine:
 
         cadence = (payload.get("cadence") or "").strip().lower()
         if cadence in {"manual", "paused"} and not force:
+            logger.info(
+                "Skipping proactivity send (cadence is paused/manual)",
+                extra={
+                    "event_type": "proactivity_cadence_skip",
+                    "user_id": user_id,
+                    "cadence": cadence,
+                },
+            )
             return None
 
         current_window = self._current_window_bounds(payload, timezone)
         should_send = force or current_window is not None
 
         if not should_send:
+            logger.info(
+                "Skipping proactivity send (outside time window)",
+                extra={
+                    "event_type": "proactivity_window_skip",
+                    "user_id": user_id,
+                },
+            )
             return None
 
         if not force:
@@ -275,7 +290,7 @@ class ProactivityEngine:
             if inactive_days > 0:
                 last_user_message_at = await self._last_user_message_timestamp(user_id)
                 if not last_user_message_at:
-                    logger.debug(
+                    logger.info(
                         "Skipping proactivity send (no recent user activity)",
                         extra={
                             "event_type": "proactivity_inactivity_skip",
@@ -288,7 +303,7 @@ class ProactivityEngine:
 
                 cutoff = datetime.now(dt_timezone.utc) - timedelta(days=inactive_days)
                 if last_user_message_at < cutoff:
-                    logger.debug(
+                    logger.info(
                         "Skipping proactivity send (user inactive)",
                         extra={
                             "event_type": "proactivity_inactivity_skip",
@@ -454,11 +469,17 @@ class ProactivityEngine:
 
     @staticmethod
     def _inactive_days_threshold() -> int:
-        raw = os.getenv("PROACTIVITY_INACTIVE_DAYS", "7")
+        """Return the inactivity threshold in days. Set to 0 to disable.
+        
+        Default is 30 days - users who haven't messaged in 30 days are
+        considered churned. The design doc suggests "absence-based" nudges
+        after ~3 days, so we want to be generous here.
+        """
+        raw = os.getenv("PROACTIVITY_INACTIVE_DAYS", "30")
         try:
             return int(raw)
         except (TypeError, ValueError):
-            return 7
+            return 30
 
     def _already_sent_in_window(
         self,
