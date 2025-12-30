@@ -132,8 +132,8 @@ class ProactivityEngine:
             return True
 
         if not inserted:
-            logger.debug(
-                "Skipping duplicate proactivity send (delivery_key reserved)",
+            logger.info(
+                "Skipping duplicate proactivity send (delivery_key already reserved)",
                 extra={
                     "event_type": "proactivity_dedup_skipped",
                     "user_id": user_id,
@@ -285,35 +285,10 @@ class ProactivityEngine:
             )
             return None
 
-        if not force:
-            inactive_days = self._inactive_days_threshold()
-            if inactive_days > 0:
-                last_user_message_at = await self._last_user_message_timestamp(user_id)
-                if not last_user_message_at:
-                    logger.info(
-                        "Skipping proactivity send (no recent user activity)",
-                        extra={
-                            "event_type": "proactivity_inactivity_skip",
-                            "user_id": user_id,
-                            "inactive_days": inactive_days,
-                            "reason": "no_user_messages",
-                        },
-                    )
-                    return None
+        # REMOVED: Inactivity check was blocking active users from receiving pings.
+        # The design doc says absence-based nudges should be a FEATURE, not a blocker.
+        # If we need to limit pings to churned users, do it in the scheduler, not here.
 
-                cutoff = datetime.now(dt_timezone.utc) - timedelta(days=inactive_days)
-                if last_user_message_at < cutoff:
-                    logger.info(
-                        "Skipping proactivity send (user inactive)",
-                        extra={
-                            "event_type": "proactivity_inactivity_skip",
-                            "user_id": user_id,
-                            "inactive_days": inactive_days,
-                            "last_user_message_at": last_user_message_at.isoformat(),
-                            "reason": "stale_user_messages",
-                        },
-                    )
-                    return None
 
         # Generate delivery_key FIRST - this is our deduplication key
         delivery_key = None
@@ -577,6 +552,14 @@ class ProactivityEngine:
         if delivery_key:
             reserved = await self._reserve_delivery_key(user_id, delivery_key, source)
             if not reserved:
+                logger.info(
+                    "Skipping proactivity send (delivery key already used)",
+                    extra={
+                        "event_type": "proactivity_delivery_key_skip",
+                        "user_id": user_id,
+                        "delivery_key": delivery_key,
+                    },
+                )
                 return None
 
         # Persist the message to general chat history. Use the canonical
