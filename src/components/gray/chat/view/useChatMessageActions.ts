@@ -141,7 +141,8 @@ export const useChatMessageActions = ({
       pendingHistorySyncRef.current = false;
 
       const payload = buildConversationHistoryPayload(messages);
-      void chatService.overwriteConversationHistory(conversationId, payload).catch((error) => {
+      // Pass allowTruncate: true since this sync is triggered by explicit user action
+      void chatService.overwriteConversationHistory(conversationId, payload, { allowTruncate: true }).catch((error) => {
         console.warn("Failed to sync conversation history:", error);
       });
     }, 250);

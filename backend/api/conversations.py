@@ -569,7 +569,11 @@ async def overwrite_conversation_history(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Replace the full message history for a conversation."""
-    return await _overwrite_conversation_history_logic(conversation_id, payload, current_user)
+    # Extract allow_truncate from payload (defaults to False if not present)
+    allow_truncate = getattr(payload, "allow_truncate", False)
+    return await _overwrite_conversation_history_logic(
+        conversation_id, payload, current_user, allow_truncate=allow_truncate
+    )
 
 
 @router.patch("/api/conversation/{conversation_id}/metadata")

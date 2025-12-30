@@ -30,7 +30,9 @@ export const useConversationSync = ({
     (conversationId: string, payload: ConversationHistoryEntryPayload[]) => {
       void (async () => {
         try {
-          await chatService.overwriteConversationHistory(conversationId, payload);
+          // Pass allowTruncate: true since this sync is triggered by explicit user action
+          // (deletion, edit, regeneration) and the smaller payload is intentional
+          await chatService.overwriteConversationHistory(conversationId, payload, { allowTruncate: true });
         } catch (error) {
           console.warn("Failed to sync conversation history after deletion:", error);
         }

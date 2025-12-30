@@ -92,3 +92,7 @@ class MessageCreateRequest(BaseModel):
 
 class ConversationHistoryPayload(BaseModel):
     messages: List[Dict[str, Any]]
+    # Set to True when the truncation is intentional (e.g., user deleted a message)
+    # This bypasses the "suspicious truncation" safety guard
+    allow_truncate: bool = False
+

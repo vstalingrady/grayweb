@@ -55,11 +55,15 @@ export class ChatService {
 
     async overwriteConversationHistory(
         conversationId: string,
-        messages: { role: 'user' | 'model'; text: string }[]
+        messages: { role: 'user' | 'model'; text: string }[],
+        options?: { allowTruncate?: boolean }
     ): Promise<void> {
         await apiFetch<void>(`/api/conversation/${encodeURIComponent(conversationId)}/history`, {
             method: 'PUT',
-            body: JSON.stringify({ messages }),
+            body: JSON.stringify({
+                messages,
+                allow_truncate: options?.allowTruncate ?? false
+            }),
         });
     }
 
