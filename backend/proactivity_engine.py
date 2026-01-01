@@ -369,6 +369,21 @@ class ProactivityEngine:
             fallback = settings.get("time")
             if fallback:
                 times = [fallback]
+        # If still no times but we have start_time (common for "auto" cadence),
+        # generate a default check-in time 1 hour after start_time
+        if not times:
+            start_time = settings.get("start_time")
+            if start_time and isinstance(start_time, str):
+                try:
+                    parts = start_time.split(":")
+                    if len(parts) >= 2:
+                        hour = int(parts[0])
+                        minute = int(parts[1])
+                        # Add 1 hour for the check-in time
+                        check_hour = (hour + 1) % 24
+                        times = [f"{check_hour:02d}:{minute:02d}"]
+                except (ValueError, TypeError):
+                    pass
         return times or []
 
     async def _last_notification_timestamp(self, user_id: int) -> Optional[datetime]:
