@@ -1146,7 +1146,7 @@ function GrayPageClientInner({
       typeof Notification !== "undefined" &&
       window.isSecureContext !== false &&
       Notification.permission === "default" &&
-      !notificationPreferences.device
+      notificationPreferences.device
     ) {
       void requestNotificationPermission().then((permission) => {
         if (permission === "granted") {

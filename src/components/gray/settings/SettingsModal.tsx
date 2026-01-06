@@ -457,7 +457,8 @@ export function SettingsModal({
   }, [onClose, router]);
 
   const handleToggleDeviceNotifications = async () => {
-    const wantsEnabled = !notificationPreferences.device;
+    const isEnabled = notificationPreferences.device && notificationPermission === "granted";
+    const wantsEnabled = !isEnabled;
     if (!wantsEnabled) {
       setNotificationPreference("device", false);
       return;

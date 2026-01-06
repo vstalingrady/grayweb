@@ -92,7 +92,8 @@ export function DashboardPulseGrid({
   const shouldShowNotificationBanner =
     shouldPromptForProactivityAlerts &&
     notificationPermission !== "unsupported" &&
-    (!notificationPreferences.device || notificationPermission !== "granted");
+    notificationPreferences.device &&
+    notificationPermission !== "granted";
 
   const notificationBannerLabel =
     notificationPermission === "denied"
