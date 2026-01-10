@@ -13,7 +13,7 @@ export default function ConfirmDeletePage() {
   useEffect(() => {
     // Ensure all auth state is cleared immediately
     clearSupabaseAuthStorage();
-    clearAuthCookies();
+    void clearAuthCookies();
 
     // Redirect to login after 2.5 seconds
     const timeout = setTimeout(() => {

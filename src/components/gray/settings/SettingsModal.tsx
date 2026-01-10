@@ -449,8 +449,8 @@ export function SettingsModal({
     } catch (error) {
       console.error("Failed to log out:", error);
     } finally {
-      clearAuthCookies();
       clearSupabaseAuthStorage();
+      await clearAuthCookies();
       onClose();
       router.push("/login");
     }

@@ -198,7 +198,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
           setUser(null);
           // Ensure any stale auth state is cleared so server and client stay in sync.
           clearSupabaseAuthStorage();
-          clearAuthCookies();
+          void clearAuthCookies();
           if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
             window.location.href = '/login';
           }
@@ -216,7 +216,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
           // Keep Supabase + Gray session cookies aligned: if the token is gone, treat the
           // user as logged out everywhere so they aren't stuck in a half-logged-in state.
           clearSupabaseAuthStorage();
-          clearAuthCookies();
+          void clearAuthCookies();
           if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
             window.location.href = '/login';
           }
@@ -486,7 +486,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
           console.warn('Failed to sign out after account deletion:', supabaseError);
         }
       }
-      clearAuthCookies();
+      await clearAuthCookies();
       clearSupabaseAuthStorage();
       setUser(null);
     } catch (err) {

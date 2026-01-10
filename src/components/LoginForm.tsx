@@ -478,7 +478,7 @@ export default function LoginForm({
             SUPABASE_STORAGE_KEYS.forEach((key) => {
               window.localStorage.removeItem(key);
             });
-            clearAuthCookies();
+            void clearAuthCookies();
           } else {
             await persistAuthCookies(
               data.session?.user?.email ?? data.user?.email ?? trimmedEmail,
@@ -525,7 +525,7 @@ export default function LoginForm({
             SUPABASE_STORAGE_KEYS.forEach((key) => {
               window.localStorage.removeItem(key);
             });
-            clearAuthCookies();
+            void clearAuthCookies();
           } else {
             await persistAuthCookies(sessionEmail, data.session?.access_token ?? null);
           }

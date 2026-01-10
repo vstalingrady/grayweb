@@ -110,7 +110,7 @@ export const persistAuthCookies = async (
   return syncServerSession(accessToken);
 };
 
-export const clearAuthCookies = () => {
+export const clearAuthCookies = async (): Promise<void> => {
   expireLegacyCookie("gray-auth");
   expireLegacyCookie("gray-auth-email");
 
@@ -119,12 +119,17 @@ export const clearAuthCookies = () => {
   }
 
   const csrfHeaders = getCsrfHeaders();
-  void fetch("/api/auth/session", {
-    method: "DELETE",
-    headers: {
-      ...csrfHeaders,
-    },
-    credentials: "same-origin",
-    cache: "no-store",
-  }).catch(() => undefined);
+  try {
+    await fetch("/api/auth/session", {
+      method: "DELETE",
+      headers: {
+        ...csrfHeaders,
+      },
+      credentials: "same-origin",
+      cache: "no-store",
+      keepalive: true,
+    });
+  } catch {
+    // Ignore network errors; cookies are already cleared client-side.
+  }
 };

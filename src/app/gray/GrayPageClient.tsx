@@ -11,6 +11,7 @@ import {
 import { requestNotificationPermission } from "@/lib/notificationUtils";
 import { formatDisplayName } from "@/lib/names";
 import { clearAuthCookies } from "@/lib/auth/cookies";
+import { clearSupabaseAuthStorage } from "@/lib/supabaseStorage";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import pageStyles from "./GrayPageLayout.module.css";
 import greetingStyles from "@/components/gray/Greeting.module.css";
@@ -956,7 +957,8 @@ function GrayPageClientInner({
     } catch (error) {
       console.error("Failed to log out:", error);
     } finally {
-      clearAuthCookies();
+      clearSupabaseAuthStorage();
+      await clearAuthCookies();
       router.push("/login");
     }
   }, [router]);
