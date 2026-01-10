@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useState, type MouseEvent } from "react";
 import styles from "./AnalyticsView.module.css";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
@@ -37,6 +38,20 @@ export const formatMonthLabel = (value: string) => {
   }
   const date = new Date(Number(year), monthIndex, 1);
   return date.toLocaleString("en-US", { month: "short" });
+};
+
+export const formatDayLabel = (value: string) => {
+  const [year, month, day] = value.split("-");
+  const monthIndex = Number(month) - 1;
+  const dayIndex = Number(day);
+  if (!Number.isFinite(monthIndex) || !Number.isFinite(dayIndex)) {
+    return value;
+  }
+  const date = new Date(Number(year), monthIndex, dayIndex);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString("en-US", { month: "short", day: "numeric" });
 };
 
 export const formatCurrencyAmount = (value: number, currency: string) => {
@@ -188,17 +203,35 @@ type LineChartProps = {
   series: LineChartSeries[];
   height?: number;
   formatTick?: (value: number) => string;
+  showLegend?: boolean;
 };
 
-export const LineChart = ({ xLabels, series, height = 200, formatTick = formatCount }: LineChartProps) => {
+export const LineChart = ({
+  xLabels,
+  series,
+  height = 200,
+  formatTick = formatCount,
+  showLegend = true,
+}: LineChartProps) => {
   const width = 640;
   const padding = { top: 20, right: 24, bottom: 32, left: 44 };
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
 
-  const maxValue = Math.max(1, ...series.flatMap((entry) => entry.values));
-  const pointsCount = Math.max(1, xLabels.length);
+  const pointsCount = Math.min(
+    xLabels.length,
+    ...series.map((entry) => entry.values.length)
+  );
+  const resolvedLabels = xLabels.slice(0, pointsCount);
+  const resolvedSeries = series.map((entry) => ({
+    ...entry,
+    values: entry.values.slice(0, pointsCount),
+  }));
+  const maxValue = Math.max(1, ...resolvedSeries.flatMap((entry) => entry.values));
   const stepX = pointsCount > 1 ? plotWidth / (pointsCount - 1) : 0;
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const rectRef = useRef<DOMRect | null>(null);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
   const resolvePoint = (value: number, index: number) => {
     const x = padding.left + stepX * index;
@@ -216,6 +249,23 @@ export const LineChart = ({ xLabels, series, height = 200, formatTick = formatCo
       .join(" ");
   };
 
+  const handleMouseMove = (event: MouseEvent<SVGSVGElement>) => {
+    if (!svgRef.current || pointsCount <= 0) {
+      return;
+    }
+    const rect = svgRef.current.getBoundingClientRect();
+    rectRef.current = rect;
+    const x = event.clientX - rect.left;
+    const xValue = (x / rect.width) * width;
+    const index = stepX > 0 ? Math.round((xValue - padding.left) / stepX) : 0;
+    const clampedIndex = Math.max(0, Math.min(pointsCount - 1, index));
+    setActiveIndex(clampedIndex);
+  };
+
+  const handleMouseLeave = () => {
+    setActiveIndex(null);
+  };
+
   const tickCount = 4;
   const ticks = Array.from({ length: tickCount + 1 }, (_, index) => {
     const ratio = index / tickCount;
@@ -225,30 +275,62 @@ export const LineChart = ({ xLabels, series, height = 200, formatTick = formatCo
   });
 
   const labelIndices = new Set<number>();
-  if (xLabels.length <= 5) {
-    xLabels.forEach((_, index) => labelIndices.add(index));
+  if (resolvedLabels.length <= 5) {
+    resolvedLabels.forEach((_, index) => labelIndices.add(index));
   } else {
     labelIndices.add(0);
-    labelIndices.add(Math.floor((xLabels.length - 1) / 2));
-    labelIndices.add(xLabels.length - 1);
+    labelIndices.add(Math.floor((resolvedLabels.length - 1) / 2));
+    labelIndices.add(resolvedLabels.length - 1);
   }
+
+  const tooltipData =
+    activeIndex !== null && resolvedLabels[activeIndex]
+      ? {
+        label: resolvedLabels[activeIndex],
+        entries: resolvedSeries.map((entry) => ({
+          label: entry.label,
+          value: entry.values[activeIndex] ?? 0,
+          color: entry.color,
+        })),
+      }
+      : null;
+
+  const tooltipPosition = (() => {
+    if (!tooltipData || activeIndex === null || !rectRef.current) {
+      return null;
+    }
+    const rect = rectRef.current;
+    const scaleX = rect.width / width;
+    const scaleY = rect.height / height;
+    const primaryValue = resolvedSeries[0]?.values[activeIndex] ?? 0;
+    const point = resolvePoint(primaryValue, activeIndex);
+    const rawLeft = point.x * scaleX;
+    const left = Math.max(16, Math.min(rect.width - 16, rawLeft));
+    const top = Math.max(12, point.y * scaleY);
+    return { left, top };
+  })();
 
   return (
     <div className={styles.analyticsChart}>
-      <div className={styles.analyticsChartLegend}>
-        {series.map((entry) => (
-          <div key={entry.label} className={styles.analyticsChartLegendItem}>
-            <span className={styles.analyticsChartSwatch} style={{ background: entry.color }} />
-            <span>{entry.label}</span>
-          </div>
-        ))}
-      </div>
+      {showLegend ? (
+        <div className={styles.analyticsChartLegend}>
+          {resolvedSeries.map((entry) => (
+            <div key={entry.label} className={styles.analyticsChartLegendItem}>
+              <span className={styles.analyticsChartSwatch} style={{ background: entry.color }} />
+              <span>{entry.label}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
       <div className={styles.analyticsChartCanvas}>
         <svg
+          ref={svgRef}
           className={styles.analyticsChartSvg}
           viewBox={`0 0 ${width} ${height}`}
           role="img"
           aria-label="Analytics chart"
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
         >
           {ticks.map((tick) => (
             <g key={tick.value}>
@@ -284,7 +366,17 @@ export const LineChart = ({ xLabels, series, height = 200, formatTick = formatCo
             y2={height - padding.bottom}
           />
 
-          {xLabels.map((label, index) =>
+          {activeIndex !== null ? (
+            <line
+              className={styles.analyticsChartHoverLine}
+              x1={padding.left + stepX * activeIndex}
+              y1={padding.top}
+              x2={padding.left + stepX * activeIndex}
+              y2={height - padding.bottom}
+            />
+          ) : null}
+
+          {resolvedLabels.map((label, index) =>
             labelIndices.has(index) ? (
               <text
                 key={label}
@@ -298,7 +390,7 @@ export const LineChart = ({ xLabels, series, height = 200, formatTick = formatCo
             ) : null
           )}
 
-          {series.map((entry) => (
+          {resolvedSeries.map((entry) => (
             <g key={entry.label}>
               <path
                 className={styles.analyticsChartLine}
@@ -309,13 +401,19 @@ export const LineChart = ({ xLabels, series, height = 200, formatTick = formatCo
               />
               {entry.values.map((value, index) => {
                 const point = resolvePoint(value, index);
+                const isActive = activeIndex === index;
                 return (
                   <circle
                     key={`${entry.label}-${index}`}
-                    className={styles.analyticsChartDot}
+                    className={[
+                      styles.analyticsChartDot,
+                      isActive ? styles.analyticsChartDotActive : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
                     cx={point.x}
                     cy={point.y}
-                    r={4}
+                    r={isActive ? 5 : 4}
                     fill={entry.color}
                   />
                 );
@@ -323,6 +421,26 @@ export const LineChart = ({ xLabels, series, height = 200, formatTick = formatCo
             </g>
           ))}
         </svg>
+        {tooltipData && tooltipPosition ? (
+          <div
+            className={styles.analyticsChartTooltip}
+            style={{ left: tooltipPosition.left, top: tooltipPosition.top }}
+          >
+            <div className={styles.analyticsChartTooltipTitle}>{tooltipData.label}</div>
+            {tooltipData.entries.map((entry) => (
+              <div key={entry.label} className={styles.analyticsChartTooltipRow}>
+                <span
+                  className={styles.analyticsChartTooltipSwatch}
+                  style={{ background: entry.color }}
+                />
+                <span>{entry.label}</span>
+                <span className={styles.analyticsChartTooltipValue}>
+                  {formatTick(entry.value)}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   );

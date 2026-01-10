@@ -72,9 +72,11 @@ def _get_api_logger():
     return create_logger("backend.api")
 
 def _get_deps():
-    tier_conversation_token_limit = lambda plan_tier: _tier_conversation_token_limit(  # noqa: E731
+    tier_conversation_token_limit = lambda plan_tier, model_id=None: _tier_conversation_token_limit(  # noqa: E731
         plan_tier,
         normalize_fn=normalize_plan_tier,
+        model_id=model_id,
+        model_limit_fn=OPENROUTER_SERVICE.get_model_context_limit if model_id else None,
     )
 
     return {
@@ -147,7 +149,6 @@ async def stream_ai_response(
     api_logger = _get_api_logger()
     
     conversation_history = deps["normalize_conversation_history"](conversation_history)
-    history_token_budget = deps["tier_conversation_token_limit"](plan_tier)
     normalized_tier = normalize_plan_tier(plan_tier)
     has_calendar_access = normalized_tier in ("voyager", "pioneer")
 
@@ -171,6 +172,8 @@ async def stream_ai_response(
         is_onboarding_tool=is_onboarding_tool,
         maps_enabled=maps_enabled,
     )
+
+    history_token_budget = deps["tier_conversation_token_limit"](plan_tier, model)
     
     if maps_enabled:
         tools = deps["add_maps_tool_if_needed"](tools, maps_enabled)

@@ -36,9 +36,11 @@ export function middleware(request: NextRequest) {
         "/reference",
         "/payment",
     ];
-    const isAppPath = noIndexPathPrefixes.some(
-        (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
-    );
+    const isGrayMarketingPath = pathname === "/gray" || pathname === "/gray/";
+    const isAppPath =
+        noIndexPathPrefixes.some(
+            (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+        ) && !isGrayMarketingPath;
     const isMainHost = !isPaymentSubdomain && !isGraySubdomain;
     const shouldNoIndex = !isLocal && (isPaymentSubdomain || isGraySubdomain || (isMainHost && isAppPath));
     const applyRobotsHeader = (response: NextResponse) => {

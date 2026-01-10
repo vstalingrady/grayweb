@@ -174,15 +174,6 @@ class OpenRouterService:
         ]
         self._lite_model = os.getenv("OPENROUTER_LITE_MODEL", "xiaomi/mimo-v2-flash:free")
         self._default_model = os.getenv("OPENROUTER_DEFAULT_MODEL", self.MODEL_MAPPINGS["default"])
-        # Output token budget:
-        # - If OPENROUTER_MAX_TOKENS is set, we pass it through as an explicit completion cap.
-        # - If it's unset/empty/<=0, omit the parameter entirely so only provider/LLM limits apply.
-        max_tokens_env = (os.getenv("OPENROUTER_MAX_TOKENS") or "").strip()
-        self._max_tokens: Optional[int] = None
-        if max_tokens_env:
-            parsed = _int_env("OPENROUTER_MAX_TOKENS", 0)
-            if parsed > 0:
-                self._max_tokens = parsed
         # Keep a small window for the free/lite path, but widen it for Pioneer-grade models
         # so onboarding context is not dropped mid-flow.
         self._max_history_lite = _int_env("OPENROUTER_MAX_HISTORY_MESSAGES", 10)
@@ -544,8 +535,6 @@ class OpenRouterService:
                 "allow_fallbacks": True,
             },
         }
-        if self._max_tokens is not None:
-            payload["max_tokens"] = self._max_tokens
 
         # Request usage stats (OpenRouter uses stream_options for this)
         if include_usage:
@@ -704,8 +693,6 @@ class OpenRouterService:
             # https://openrouter.ai/docs/transforms
             "transforms": ["middle-out"],
         }
-        if self._max_tokens is not None:
-            payload["max_tokens"] = self._max_tokens
 
         # Request usage stats (OpenRouter uses stream_options for this)
         if include_usage:

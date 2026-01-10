@@ -124,12 +124,10 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
     [currentLevel, setModelTier, setSelectedModelId]
   );
 
-  const toggleAllModels = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (currentLevel >= PLAN_TIER_LEVELS["pathfinder"]) {
-      setShowAllModels((prev) => !prev);
-    }
-  }, [currentLevel]);
+  const toggleAllModels = useCallback((event: React.MouseEvent) => {
+    event.stopPropagation();
+    setShowAllModels((prev) => !prev);
+  }, []);
 
   const handleGroupToggle = useCallback((groupId: string) => {
     setExpandedGroupId((prev) => (prev === groupId ? null : groupId));
@@ -389,23 +387,10 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
               <div className={styles.divider} />
 
               {/* All Models */}
-              {/*
-                Scout users can see the affordance but should not be able to expand the list.
-                Clicking routes to pricing, matching the locked "upgrade" UX.
-              */}
               <button
-                className={`${styles.actionItem} ${currentLevel < PLAN_TIER_LEVELS["pathfinder"] ? styles.menuItemLocked : ''}`}
+                className={styles.actionItem}
                 type="button"
-                onClick={(event) => {
-                  if (currentLevel < PLAN_TIER_LEVELS["pathfinder"]) {
-                    event.stopPropagation();
-                    if (typeof window !== "undefined") {
-                      window.location.href = "/pricing";
-                    }
-                    return;
-                  }
-                  toggleAllModels(event);
-                }}
+                onClick={toggleAllModels}
               >
                 <Box size={16} />
                 <span>{t("All Models")}</span>
@@ -419,6 +404,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                       <span>{t("Upgrade")}</span>
                       <Lock size={14} className={styles.upgradePillIcon} />
                     </a>
+                    <ChevronRight size={14} className={styles.actionUpgradeArrow} />
                   </span>
                 ) : (
                   <ChevronRight size={14} className={styles.actionArrow} />

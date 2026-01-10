@@ -153,12 +153,10 @@
 
 :global(html.light) .affiliateNotice {
   background: rgba(255, 255, 255, 0.86);
-  border-color: rgba(0, 0, 0, 0.12);
   color: rgba(10, 10, 10, 0.75);
 }
 
 :global(html.light) .affiliateNoticeBadge {
-  border-color: rgba(0, 0, 0, 0.18);
   color: rgba(10, 10, 10, 0.6);
 }
 
@@ -859,7 +857,7 @@
   gap: 0.6rem;
   padding: 0.55rem 0.9rem;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: none;
   background: rgba(12, 12, 16, 0.7);
   font-size: 0.78rem;
   letter-spacing: 0.05em;
@@ -872,7 +870,7 @@
   letter-spacing: 0.22em;
   padding: 0.2rem 0.5rem;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: none;
   color: rgba(255, 255, 255, 0.6);
 }
 

@@ -404,11 +404,13 @@
 
 .analyticsChartCanvas {
   padding: 2px;
+  position: relative;
 }
 
 .analyticsChartSvg {
   width: 100%;
   height: auto;
+  cursor: crosshair;
 }
 
 .analyticsChartAxis {
@@ -429,6 +431,60 @@
 .analyticsChartDot {
   stroke: rgba(10, 10, 10, 0.6);
   stroke-width: 1.2;
+}
+
+.analyticsChartDotActive {
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 1.6;
+}
+
+.analyticsChartHoverLine {
+  stroke: rgba(255, 255, 255, 0.35);
+  stroke-width: 1;
+  stroke-dasharray: 4 6;
+}
+
+.analyticsChartTooltip {
+  position: absolute;
+  transform: translate(-50%, -110%);
+  background: rgba(10, 10, 10, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+  min-width: 160px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  color: rgba(245, 245, 245, 0.95);
+}
+
+.analyticsChartTooltipTitle {
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(210, 210, 210, 0.8);
+}
+
+.analyticsChartTooltipRow {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+}
+
+.analyticsChartTooltipSwatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.analyticsChartTooltipValue {
+  font-weight: 600;
+  color: rgba(245, 245, 245, 0.95);
 }
 
 .analyticsChartLabel {

@@ -709,34 +709,38 @@ async def get_conversation_usage(
             _row_get(current_user, "subscription_expires_at")
         )
 
-        tier_context_limit = tier_conversation_token_limit(user_tier)
-        
+        preferred_model = _row_get(current_user, "preferred_model")
         provider = os.getenv("AI_PROVIDER", "openrouter")
-        model_name = os.getenv("AI_MODEL_NAME", None)
-        
+        model_name = preferred_model or os.getenv("AI_MODEL_NAME", None)
+
+        tier_context_limit = tier_conversation_token_limit(user_tier, model_name)
+
         model_context_limit = tier_context_limit
         context_warning = None
         suggested_models = None
-        
-        if user_tier == "pioneer" and model_name:
+
+        if model_name:
             model_context_limit = OPENROUTER_SERVICE.get_model_context_limit(model_name)
-            
-            if total_tokens > model_context_limit:
-                higher_context_models = []
-                for model_id, limit in OPENROUTER_SERVICE.MODEL_CONTEXT_LIMITS.items():
-                    if limit > model_context_limit:
-                        friendly_name = model_id.split("/")[-1] if "/" in model_id else model_id
-                        higher_context_models.append({
-                            "model_id": model_id,
-                            "name": friendly_name,
-                            "context_limit": limit
-                        })
-                
-                higher_context_models.sort(key=lambda x: x["context_limit"], reverse=True)
-                
-                if higher_context_models:
-                    context_warning = f"This conversation ({total_tokens:,} tokens) exceeds {model_name}'s context limit ({model_context_limit:,} tokens). Consider switching models."
-                    suggested_models = higher_context_models[:3]
+
+        if user_tier in ("voyager", "pioneer") and model_name and total_tokens > model_context_limit:
+            higher_context_models = []
+            for model_id, limit in OPENROUTER_SERVICE.MODEL_CONTEXT_LIMITS.items():
+                if limit > model_context_limit:
+                    friendly_name = model_id.split("/")[-1] if "/" in model_id else model_id
+                    higher_context_models.append({
+                        "model_id": model_id,
+                        "name": friendly_name,
+                        "context_limit": limit
+                    })
+
+            higher_context_models.sort(key=lambda x: x["context_limit"], reverse=True)
+
+            if higher_context_models:
+                context_warning = (
+                    f"This conversation ({total_tokens:,} tokens) exceeds {model_name}'s context limit "
+                    f"({model_context_limit:,} tokens). Consider switching models."
+                )
+                suggested_models = higher_context_models[:3]
         
         return {
             "conversation_id": conversation_id,

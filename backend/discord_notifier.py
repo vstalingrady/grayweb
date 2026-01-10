@@ -17,6 +17,7 @@ _PAYMENTS_WEBHOOK_ENV_VARS = ("DISCORD_PAYMENTS_WEBHOOK_URL", "DISCORD_WEBHOOK_U
 _ALERTS_WEBHOOK_ENV_VARS = ("DISCORD_ALERTS_WEBHOOK_URL", "DISCORD_WEBHOOK_URL")
 _HIRING_WEBHOOK_ENV_VARS = ("DISCORD_HIRING_WEBHOOK_URL", "DISCORD_WEBHOOK_URL")
 _HIRING_MENTION_ENV_VARS = ("DISCORD_HIRING_MENTION", "DISCORD_USER_ID")
+_ALERTS_MENTION_ENV_VARS = ("DISCORD_ALERTS_MENTION", "DISCORD_USER_ID")
 
 
 def get_discord_webhook_url() -> Optional[str]:
@@ -48,6 +49,16 @@ def get_discord_hiring_mention() -> Optional[str]:
     if explicit:
         return explicit
     user_id = (os.getenv(_HIRING_MENTION_ENV_VARS[1]) or "").strip()
+    if user_id:
+        return f"<@{user_id}>"
+    return None
+
+
+def get_discord_alerts_mention() -> Optional[str]:
+    explicit = (os.getenv(_ALERTS_MENTION_ENV_VARS[0]) or "").strip()
+    if explicit:
+        return explicit
+    user_id = (os.getenv(_ALERTS_MENTION_ENV_VARS[1]) or "").strip()
     if user_id:
         return f"<@{user_id}>"
     return None
@@ -258,6 +269,9 @@ def build_alert_webhook_payload(
     severity: str = "warning",
     fields: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    mention = get_discord_alerts_mention()
+    content = mention or None
+    allowed_mentions = _allowed_mentions_for_content(content)
     embed_fields: list[Dict[str, Any]] = []
     if fields:
         for key, value in fields.items():
@@ -265,8 +279,8 @@ def build_alert_webhook_payload(
                 continue
             embed_fields.append({"name": str(key), "value": str(value), "inline": True})
 
-    return {
-        "content": None,
+    payload: Dict[str, Any] = {
+        "content": content,
         "embeds": [
             {
                 "title": title,
@@ -277,6 +291,9 @@ def build_alert_webhook_payload(
             }
         ],
     }
+    if allowed_mentions:
+        payload["allowed_mentions"] = allowed_mentions
+    return payload
 
 
 def should_send_alert(*, dedupe_key: str) -> bool:

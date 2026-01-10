@@ -308,6 +308,18 @@ class ProactivityEngine:
             delivery_key=delivery_key,
         )
 
+    @staticmethod
+    def _parse_time_value(value: Any) -> Optional[Tuple[int, int]]:
+        if not value or not isinstance(value, str):
+            return None
+        parts = value.split(":")
+        if len(parts) < 2:
+            return None
+        try:
+            return int(parts[0]), int(parts[1])
+        except (TypeError, ValueError):
+            return None
+
     def _current_window_bounds(
         self,
         settings: Dict[str, Any],
@@ -325,17 +337,53 @@ class ProactivityEngine:
             else:
                 local_now = local_now.astimezone(local_tz)
 
+        cadence = (settings.get("cadence") or "").strip().lower()
+        if cadence == "auto":
+            start_parts = self._parse_time_value(settings.get("start_time"))
+            end_parts = self._parse_time_value(settings.get("end_time"))
+            if start_parts and end_parts:
+                start_hour, start_minute = start_parts
+                end_hour, end_minute = end_parts
+                start_candidate = local_now.replace(
+                    hour=start_hour,
+                    minute=start_minute,
+                    second=0,
+                    microsecond=0,
+                )
+                end_candidate = local_now.replace(
+                    hour=end_hour,
+                    minute=end_minute,
+                    second=0,
+                    microsecond=0,
+                )
+                crosses_midnight = end_candidate <= start_candidate
+
+                window_start_base: Optional[datetime] = None
+                window_end: Optional[datetime] = None
+                if crosses_midnight:
+                    if local_now >= start_candidate:
+                        window_start_base = start_candidate
+                        window_end = end_candidate + timedelta(days=1)
+                    elif local_now <= end_candidate:
+                        window_start_base = start_candidate - timedelta(days=1)
+                        window_end = end_candidate
+                else:
+                    if start_candidate <= local_now <= end_candidate:
+                        window_start_base = start_candidate
+                        window_end = end_candidate
+
+                if window_start_base and window_end:
+                    window_start = window_start_base + timedelta(hours=1)
+                    if window_start <= local_now <= window_end:
+                        return window_start, window_end
+
         # Allow a grace period after the scheduled time, but never send early.
         tolerance_after = timedelta(minutes=30)
         for time_str in self._extract_times(settings):
-            parts = time_str.split(":")
-            if len(parts) < 2:
+            parts = self._parse_time_value(time_str)
+            if not parts:
                 continue
-            try:
-                target_hour = int(parts[0])
-                target_minute = int(parts[1])
-            except (TypeError, ValueError):
-                continue
+            target_hour, target_minute = parts
             target_time = local_now.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
             window_start = target_time
             window_end = target_time + tolerance_after

@@ -50,6 +50,7 @@ type GrayDashboardViewProps = {
   livePlans?: PlanItem[];
   onSelectPulse: (id: string) => void;
   proactivityFallback: ProactivityItem | null;
+  isProactivityLoaded: boolean;
   onProactivitySelect?: (next: ProactivityItem) => void;
   onProactivityRemove?: () => void;
   onTestProactivity?: (proactivityId: string) => void;
@@ -84,6 +85,7 @@ export function GrayDashboardView({
   isCurrentPulseEditable,
   livePlans,
   proactivityFallback,
+  isProactivityLoaded,
   onProactivitySelect,
   onProactivityRemove,
   onDeletePlan,
@@ -191,10 +193,15 @@ export function GrayDashboardView({
     onClearSelection: () => { },
   });
 
-  const displayProactivity =
-    hasPulseData && isCurrentPulseEditable
-      ? currentPulse?.proactivity ?? proactivityFallback
-      : proactivityFallback;
+  const displayProactivity = useMemo(() => {
+    if (isProactivityLoaded) {
+      return proactivityFallback ?? null;
+    }
+    if (hasPulseData && isCurrentPulseEditable) {
+      return currentPulse?.proactivity ?? proactivityFallback ?? null;
+    }
+    return proactivityFallback ?? null;
+  }, [currentPulse, hasPulseData, isCurrentPulseEditable, isProactivityLoaded, proactivityFallback]);
 
   const [isProactivityModalOpen, setIsProactivityModalOpen] = useState(false);
   const activeProactivityTimes = useMemo(() => getProactivityTimes(displayProactivity), [displayProactivity]);

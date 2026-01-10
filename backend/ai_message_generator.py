@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 import databases
 
 from backend.env_utils import ROOT_DIR
+from backend.core.stream_handlers.context import determine_provider_and_model
 from backend.gemini_client import GeminiService
 from backend.openrouter_client import OpenRouterService
 from backend.usage_tracker import UsageLimitExceeded, UsageTracker
@@ -138,10 +139,12 @@ class AIMessageGenerator:
         context_summary = ", ".join(context_summary_parts)
 
         meta_line = f"Cadence: {cadence or 'unspecified'}. Label: {label}. Date key: {date_key or 'today'}."
-        context_chunks: List[str] = [
-            f"Background context (use sparingly; do not restate unless the user mentioned it recently): "
-            f"{context_summary}. {meta_line}"
-        ]
+        context_chunks: List[str] = []
+        if chat_context:
+            context_chunks.append(f"Recent chat snippets (primary signal):\n{chat_context.strip()}")
+        else:
+            context_chunks.append("Recent chat snippets (primary signal): (none provided)")
+
         if reason:
             context_chunks.append(f"Trigger reason: {reason}")
         if tone:
@@ -150,17 +153,22 @@ class AIMessageGenerator:
             context_chunks.append(
                 f"Decision context (use only if relevant to recent chat): {decision_context}"
             )
-        if profile_context:
-            context_chunks.append(
-                f"Profile background (use lightly; avoid repeating unless relevant): {profile_context.strip()}"
-            )
         if custom_instructions:
             context_chunks.append(
                 "User preferences (use only when relevant to recent chat):\n"
                 f"{custom_instructions.strip()}"
             )
-        if chat_context:
-            context_chunks.append(f"Recent chat snippets (primary signal):\n{chat_context.strip()}")
+
+        context_chunks.append(
+            f"Background context (use sparingly; do not restate unless the user mentioned it recently): "
+            f"{context_summary}. {meta_line}"
+        )
+
+        if profile_context and not chat_context:
+            context_chunks.append(
+                "Profile background (use only when no recent chat exists; do not over-index on this): "
+                f"{profile_context.strip()}"
+            )
 
         user_context = "\n\n".join(part for part in context_chunks if part.strip())
 
@@ -171,9 +179,6 @@ class AIMessageGenerator:
             f"{base_prompt}"
         )
 
-        if not self.openrouter or not self.openrouter.available:
-            raise RuntimeError("OpenRouter is not configured for proactive messaging")
-
         if db:
             tracker = UsageTracker(db)
             try:
@@ -183,6 +188,25 @@ class AIMessageGenerator:
                 raise RuntimeError(f"Usage limit exceeded: {e}")
 
         try:
+            preferred_model = None
+            if db:
+                try:
+                    model_row = await db.fetch_one(
+                        "SELECT preferred_model FROM users WHERE id = :user_id",
+                        {"user_id": user_id},
+                    )
+                    if model_row:
+                        row = dict(model_row)
+                        raw_model = row.get("preferred_model")
+                        if isinstance(raw_model, str):
+                            preferred_model = raw_model.strip() or None
+                except Exception as exc:
+                    logger.warning(
+                        "Failed to load preferred model for user %d: %s",
+                        user_id,
+                        exc,
+                    )
+
             # Give the model temporal context for the check-in without surfacing timezone details.
             tzinfo = self._resolve_timezone(timezone_str)
             now_local = datetime.now(tzinfo)
@@ -195,18 +219,40 @@ class AIMessageGenerator:
                 "unless the user explicitly asks."
             )
 
-            # Use OpenRouter MiMo (Lite tier) for proactive messaging
-            response = await self.openrouter.generate(
-                message=user_context,
-                conversation_history=None,
-                workspace_context=None,
-                system_prompt=system_prompt,
-                time_context=time_context,
-                model="xiaomi/mimo-v2-flash:free",  # Gray Lite tier
+            provider, resolved_model, _ = determine_provider_and_model(
+                model=preferred_model,
+                openrouter_available=bool(self.openrouter and self.openrouter.available),
+                gemini_default_model=self.gemini.default_model if self.gemini else None,
+                needs_structured_tools=False,
+                is_onboarding_tool=False,
+                maps_enabled=False,
             )
 
+            if provider == "gemini":
+                if not self.gemini or not self.gemini.available:
+                    raise RuntimeError("Gemini is not configured for proactive messaging")
+                response = await self.gemini.generate(
+                    message=user_context,
+                    conversation_history=None,
+                    workspace_context=None,
+                    system_prompt=system_prompt,
+                    time_context=time_context,
+                    model=resolved_model,
+                )
+            else:
+                if not self.openrouter or not self.openrouter.available:
+                    raise RuntimeError("OpenRouter is not configured for proactive messaging")
+                response = await self.openrouter.generate(
+                    message=user_context,
+                    conversation_history=None,
+                    workspace_context=None,
+                    system_prompt=system_prompt,
+                    time_context=time_context,
+                    model=resolved_model,
+                )
+
         except Exception as error:
-            raise RuntimeError(f"OpenRouter proactive message generation failed: {error}") from error
+            raise RuntimeError(f"Proactive message generation failed: {error}") from error
 
         if isinstance(response, str):
             text = response
@@ -227,7 +273,7 @@ class AIMessageGenerator:
 
         cleaned = (text or "").strip()
         if not cleaned:
-            raise RuntimeError("MiMo proactive message generation returned empty content")
+            raise RuntimeError("Proactive message generation returned empty content")
 
         # Post-process to avoid stale or hard-coded calendar dates like
         # "Tuesday, November 12th" that can confuse users when the actual date

@@ -6,7 +6,7 @@ Extracted from main.py for better modularity.
 """
 import os
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Callable
 from importlib.util import find_spec
 
 # Google GenAI types
@@ -49,18 +49,37 @@ TIER_CONVERSATION_TOKEN_LIMITS: Dict[str, int] = {
 }
 
 
-def tier_conversation_token_limit(plan_tier: Optional[str], normalize_fn=None) -> int:
+def tier_conversation_token_limit(
+    plan_tier: Optional[str],
+    normalize_fn=None,
+    model_id: Optional[str] = None,
+    model_limit_fn: Optional[Callable[[str], int]] = None,
+) -> int:
     """Get token limit for a plan tier.
-    
+
     Args:
         plan_tier: The plan tier name
         normalize_fn: Optional function to normalize tier name (e.g., normalize_plan_tier)
+        model_id: Optional model ID to derive model-specific limits
+        model_limit_fn: Optional function to resolve a model context limit
     """
     if normalize_fn:
         normalized = normalize_fn(plan_tier)
     else:
         normalized = (plan_tier or "scout").lower()
-    return TIER_CONVERSATION_TOKEN_LIMITS.get(normalized, TIER_CONVERSATION_TOKEN_LIMITS["scout"])
+
+    base_limit = TIER_CONVERSATION_TOKEN_LIMITS.get(normalized, TIER_CONVERSATION_TOKEN_LIMITS["scout"])
+    if normalized not in ("voyager", "pioneer"):
+        return base_limit
+    if not model_id or not model_limit_fn:
+        return base_limit
+    try:
+        model_limit = int(model_limit_fn(model_id))
+    except (TypeError, ValueError):
+        return base_limit
+    if model_limit <= 0:
+        return base_limit
+    return model_limit
 
 
 # --- Function Names (for tool detection) ---

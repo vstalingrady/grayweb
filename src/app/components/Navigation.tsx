@@ -25,7 +25,7 @@ const Navigation = ({ defaultHidden = false }: NavigationProps) => {
     }
     return resolveTryGrayUrl(window.location.hostname);
   }, [hasHydrated]);
-  const grayHref = "/";
+  const grayHref = "/gray";
   const closeMenu = useCallback(() => setMenuOpen(false), []);
   const showNav = useCallback(() => setNavHidden(false), []);
 

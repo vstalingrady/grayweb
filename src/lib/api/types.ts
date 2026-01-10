@@ -586,6 +586,8 @@ export interface AnalyticsSummary {
     months: string[];
     signups: number[];
     paid_transactions: number[];
+    days?: string[];
+    daily_signups?: number[];
   };
   revenue?: {
     by_status: Record<string, number>;

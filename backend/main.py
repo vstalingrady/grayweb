@@ -370,8 +370,14 @@ from backend.core.ai_config import (
 )
 
 # tier_conversation_token_limit wrapper that uses normalize_plan_tier
-def tier_conversation_token_limit(plan_tier: Optional[str]) -> int:
-    return _tier_conversation_token_limit_base(plan_tier, normalize_fn=normalize_plan_tier)
+def tier_conversation_token_limit(plan_tier: Optional[str], model_id: Optional[str] = None) -> int:
+    model_limit_fn = OPENROUTER_SERVICE.get_model_context_limit if model_id else None
+    return _tier_conversation_token_limit_base(
+        plan_tier,
+        normalize_fn=normalize_plan_tier,
+        model_id=model_id,
+        model_limit_fn=model_limit_fn,
+    )
 
 GEMINI_SERVICE = GeminiService()
 OPENROUTER_SERVICE = OpenRouterService()

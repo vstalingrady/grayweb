@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   title: "Analytics",
 };
 
-const ANALYTICS_ADMIN_EMAILS = new Set(["vstalingrady@gmail.com", "test@test.com"]);
+const ANALYTICS_ADMIN_EMAILS = new Set(["vstalingrady@gmail.com", "test@test.com", "aurelryojonathan@gmail.com"]);
 
 export default async function AnalyticsPage() {
   const session = await readServerSession();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { analyticsService, ApiError, type AnalyticsSummary } from "@/lib/api";
 import styles from "./AnalyticsView.module.css";
 import {
@@ -11,6 +11,7 @@ import {
   LineChart,
   formatCount,
   formatDateTime,
+  formatDayLabel,
   formatMonthLabel,
   formatPercent,
   type AnalyticsSection,
@@ -24,6 +25,18 @@ export function AnalyticsView() {
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [affiliateSeedPending, setAffiliateSeedPending] = useState(false);
+  const [createPending, setCreatePending] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createdAffiliateLink, setCreatedAffiliateLink] = useState<string | null>(null);
+  const [newAffiliate, setNewAffiliate] = useState({
+    code: "",
+    displayName: "",
+    ownerEmail: "",
+    commissionRate: "20",
+    discountRate: "10",
+    isActive: true,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -56,6 +69,63 @@ export function AnalyticsView() {
       cancelled = true;
     };
   }, []);
+
+  const sharePreview = newAffiliate.code.trim()
+    ? `/a/${newAffiliate.code.trim().toLowerCase()}`
+    : null;
+
+  const handleSeedTestAffiliate = async () => {
+    setAffiliateSeedPending(true);
+    setCreateError(null);
+    try {
+      const seeded = await analyticsService.seedTestAffiliate();
+      setCreatedAffiliateLink(seeded.share_url);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setCreateError(err.message || "Unable to create test affiliate.");
+      } else {
+        setCreateError("Unable to create test affiliate.");
+      }
+    } finally {
+      setAffiliateSeedPending(false);
+    }
+  };
+
+  const handleCreateAffiliate = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!newAffiliate.code.trim()) {
+      setCreateError("Enter an affiliate code.");
+      return;
+    }
+    const commissionRate = Number(newAffiliate.commissionRate);
+    const discountRate = Number(newAffiliate.discountRate);
+    setCreatePending(true);
+    setCreateError(null);
+    try {
+      const created = await analyticsService.createAffiliate({
+        code: newAffiliate.code.trim(),
+        display_name: newAffiliate.displayName.trim() || null,
+        owner_email: newAffiliate.ownerEmail.trim() || null,
+        commission_rate: Number.isFinite(commissionRate) ? commissionRate / 100 : 0,
+        discount_rate: Number.isFinite(discountRate) ? discountRate / 100 : 0,
+        is_active: newAffiliate.isActive,
+      });
+      setCreatedAffiliateLink(created.share_url);
+      setNewAffiliate((current) => ({
+        ...current,
+        code: "",
+        displayName: "",
+      }));
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setCreateError(err.message || "Unable to create affiliate.");
+      } else {
+        setCreateError("Unable to create affiliate.");
+      }
+    } finally {
+      setCreatePending(false);
+    }
+  };
 
   const showAdminAnalytics = Boolean(summary);
   const planDistribution = summary?.user_growth?.plan_distribution ?? {};
@@ -141,6 +211,22 @@ export function AnalyticsView() {
     : [];
   const showAdminChart = adminSeries.length > 0 && adminMonths.length > 0;
 
+  const dailyDays = adminTimeline?.days ?? [];
+  const dailyLabels = dailyDays.map(formatDayLabel);
+  const dailySignups = adminTimeline?.daily_signups ?? [];
+  const dailyPointCount = Math.min(dailyLabels.length, dailySignups.length);
+  const dailySeries =
+    dailyPointCount > 0
+      ? [
+        {
+          label: "Signups",
+          values: dailySignups.slice(0, dailyPointCount),
+          color: "rgba(118, 255, 175, 0.95)",
+        },
+      ]
+      : [];
+  const showDailyChart = dailySeries.length > 0 && dailyPointCount > 0;
+
   const adminMatrixColumns = [
     { key: "month", label: "Month" },
     { key: "signups", label: "Signups" },
@@ -166,6 +252,17 @@ export function AnalyticsView() {
           <>
             <AnalyticsTable rows={userGrowthRows} />
             <AnalyticsMeter label="Paid share" value={paidShare} />
+            {showDailyChart ? (
+              <>
+                <p className={styles.analyticsSectionLabel}>Last 30 days signups</p>
+                <LineChart
+                  xLabels={dailyLabels.slice(0, dailyPointCount)}
+                  series={dailySeries}
+                  height={140}
+                  showLegend={false}
+                />
+              </>
+            ) : null}
           </>
         ),
       },
@@ -181,6 +278,15 @@ export function AnalyticsView() {
               emptyLabel="No trend data yet."
             />
           </>
+        ),
+      },
+      {
+        id: "daily-growth",
+        label: "Daily growth (30d)",
+        content: showDailyChart ? (
+          <LineChart xLabels={dailyLabels.slice(0, dailyPointCount)} series={dailySeries} />
+        ) : (
+          <p className={styles.analyticsListEmpty}>No daily signup data yet.</p>
         ),
       },
       {
@@ -276,6 +382,109 @@ export function AnalyticsView() {
           Generated {generatedAtLabel}
         </p>
       </div>
+
+      {showAdminAnalytics ? (
+        <AnalyticsCard title="Affiliate setup">
+          <form className={styles.analyticsForm} onSubmit={handleCreateAffiliate}>
+            <div className={styles.analyticsFormRow}>
+              <label className={styles.analyticsFormField}>
+                <span className={styles.analyticsInputLabel}>Code</span>
+                <input
+                  className={styles.analyticsInput}
+                  value={newAffiliate.code}
+                  onChange={(event) => setNewAffiliate((current) => ({ ...current, code: event.target.value }))}
+                  placeholder="creator-name"
+                  required
+                />
+              </label>
+              <label className={styles.analyticsFormField}>
+                <span className={styles.analyticsInputLabel}>Display name</span>
+                <input
+                  className={styles.analyticsInput}
+                  value={newAffiliate.displayName}
+                  onChange={(event) => setNewAffiliate((current) => ({ ...current, displayName: event.target.value }))}
+                  placeholder="Creator"
+                />
+              </label>
+              <label className={styles.analyticsFormField}>
+                <span className={styles.analyticsInputLabel}>Owner email</span>
+                <input
+                  className={styles.analyticsInput}
+                  type="email"
+                  value={newAffiliate.ownerEmail}
+                  onChange={(event) => setNewAffiliate((current) => ({ ...current, ownerEmail: event.target.value }))}
+                  placeholder="name@example.com"
+                />
+              </label>
+            </div>
+            <div className={styles.analyticsFormRow}>
+              <label className={styles.analyticsFormField}>
+                <span className={styles.analyticsInputLabel}>Commission %</span>
+                <input
+                  className={styles.analyticsInput}
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={newAffiliate.commissionRate}
+                  onChange={(event) => setNewAffiliate((current) => ({ ...current, commissionRate: event.target.value }))}
+                />
+              </label>
+              <label className={styles.analyticsFormField}>
+                <span className={styles.analyticsInputLabel}>Discount %</span>
+                <input
+                  className={styles.analyticsInput}
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={newAffiliate.discountRate}
+                  onChange={(event) => setNewAffiliate((current) => ({ ...current, discountRate: event.target.value }))}
+                />
+              </label>
+              <label className={styles.analyticsFormField}>
+                <span className={styles.analyticsInputLabel}>Active</span>
+                <div className={styles.analyticsCheckboxRow}>
+                  <input
+                    type="checkbox"
+                    checked={newAffiliate.isActive}
+                    onChange={(event) => setNewAffiliate((current) => ({ ...current, isActive: event.target.checked }))}
+                  />
+                  <span>Enabled</span>
+                </div>
+              </label>
+            </div>
+            {sharePreview ? (
+              <div className={styles.analyticsLinkRow}>
+                <span className={styles.analyticsTableLabel}>Share link</span>
+                <span className={styles.analyticsLink}>{sharePreview}</span>
+              </div>
+            ) : null}
+            {createdAffiliateLink ? (
+              <div className={styles.analyticsLinkRow}>
+                <span className={styles.analyticsTableLabel}>Created link</span>
+                <a className={styles.analyticsLink} href={createdAffiliateLink} target="_blank" rel="noreferrer">
+                  {createdAffiliateLink}
+                </a>
+              </div>
+            ) : null}
+            <div className={styles.analyticsFormActions}>
+              <button type="submit" className={styles.analyticsButton} disabled={createPending}>
+                {createPending ? "Creating..." : "Create affiliate"}
+              </button>
+              <button
+                type="button"
+                className={styles.analyticsButton}
+                onClick={handleSeedTestAffiliate}
+                disabled={affiliateSeedPending}
+              >
+                {affiliateSeedPending ? "Seeding test..." : "Seed test affiliate"}
+              </button>
+              {createError ? <span className={styles.analyticsListEmpty}>{createError}</span> : null}
+            </div>
+          </form>
+        </AnalyticsCard>
+      ) : null}
 
       {showAllSections ? (
         <div className={styles.analyticsControls}>

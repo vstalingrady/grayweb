@@ -9,8 +9,6 @@ export const metadata: Metadata = {
   title: "Affiliates",
 };
 
-const ANALYTICS_ADMIN_EMAILS = new Set(["vstalingrady@gmail.com", "test@test.com"]);
-
 export default async function AffiliatesPage() {
   const session = await readServerSession();
   if (!session) {
@@ -20,11 +18,6 @@ export default async function AffiliatesPage() {
   const requestHeaders = await headers();
   const host = hostFromHeaders(requestHeaders);
   if (!isGrayWorkspaceHost(host)) {
-    notFound();
-  }
-
-  const email = (session.email ?? "").trim().toLowerCase();
-  if (!ANALYTICS_ADMIN_EMAILS.has(email)) {
     notFound();
   }
 

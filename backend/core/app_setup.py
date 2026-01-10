@@ -118,6 +118,14 @@ async def initialize_proactivity_engine():
         if dispatch_source == "apscheduler":
             proactivity_scheduler = deps['ProactivitySchedulerManager'](proactivity_engine)
             await proactivity_scheduler.start()
+            try:
+                await proactivity_engine.dispatch_all_due(source="startup")
+            except Exception as exc:
+                app_logger.warning(
+                    "Proactivity startup catch-up failed: %s",
+                    exc,
+                    exc_info=True,
+                )
         else:
             app_logger.info(
                 "Skipping in-app proactivity scheduler (dispatch source: %s)",

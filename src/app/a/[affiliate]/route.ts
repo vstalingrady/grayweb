@@ -35,6 +35,33 @@ const resolveAffiliateCookieDomain = (host?: string | null): string | undefined 
   return undefined;
 };
 
+const extractAffiliateFromPath = (pathname: string): string | null => {
+  if (!pathname) {
+    return null;
+  }
+  const segments = pathname.split("/").filter(Boolean);
+  if (segments.length < 2 || segments[0] !== "a") {
+    return null;
+  }
+  return segments[1] ?? null;
+};
+
+const buildAffiliateCookie = (value: string, options: { domain?: string; secure: boolean }): string => {
+  const parts = [
+    `${AFFILIATE_COOKIE_NAME}=${encodeURIComponent(value)}`,
+    "Path=/",
+    `Max-Age=${AFFILIATE_COOKIE_MAX_AGE_SECONDS}`,
+    "SameSite=Lax",
+  ];
+  if (options.domain) {
+    parts.push(`Domain=${options.domain}`);
+  }
+  if (options.secure) {
+    parts.push("Secure");
+  }
+  return parts.join("; ");
+};
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { affiliate: string } }
@@ -47,11 +74,14 @@ export async function GET(
   const isWorkspaceHost = isGrayWorkspaceHost(requestHost);
   const localOrigin = request.nextUrl.host ? `http://${request.nextUrl.host}` : request.nextUrl.origin;
 
-  const code = normalizeAffiliateCode(params.affiliate);
+  const paramCode = normalizeAffiliateCode(params?.affiliate);
+  const pathCode = normalizeAffiliateCode(extractAffiliateFromPath(request.nextUrl.pathname));
+  const code = paramCode ?? pathCode;
   const redirectBaseOrigin = isLocal ? localOrigin : (workspaceOrigin ?? request.nextUrl.origin);
   const redirectTarget = new URL("/signup", redirectBaseOrigin);
 
   const response = NextResponse.redirect(redirectTarget);
+  response.headers.set("Cache-Control", "no-store");
 
   if (code) {
     try {
@@ -62,15 +92,13 @@ export async function GET(
     } catch {
       // Swallow tracking errors; never block the redirect.
     }
-    response.cookies.set({
-      name: AFFILIATE_COOKIE_NAME,
-      value: code,
-      maxAge: AFFILIATE_COOKIE_MAX_AGE_SECONDS,
-      path: "/",
-      sameSite: "lax",
-      secure: !isLocal,
-      domain: resolveAffiliateCookieDomain(requestHost),
-    });
+    response.headers.append(
+      "Set-Cookie",
+      buildAffiliateCookie(code, {
+        domain: resolveAffiliateCookieDomain(requestHost),
+        secure: !isLocal,
+      })
+    );
   }
 
   return response;

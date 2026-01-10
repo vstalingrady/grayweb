@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 import {
   analyticsService,
   ApiError,
@@ -27,17 +27,7 @@ export function AffiliateAnalyticsView() {
   const [selectedAffiliateCode, setSelectedAffiliateCode] = useState<string | null>(null);
   const [affiliateLoading, setAffiliateLoading] = useState(false);
   const [affiliateActionError, setAffiliateActionError] = useState<string | null>(null);
-  const [affiliateSeedPending, setAffiliateSeedPending] = useState(false);
-  const [createPending, setCreatePending] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [newAffiliate, setNewAffiliate] = useState({
-    code: "",
-    displayName: "",
-    ownerEmail: "",
-    commissionRate: "20",
-    discountRate: "10",
-    isActive: true,
-  });
+  const [isAdminMode, setIsAdminMode] = useState(false);
   const [showAllSections, setShowAllSections] = useState(false);
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -45,7 +35,8 @@ export function AffiliateAnalyticsView() {
 
   useEffect(() => {
     let cancelled = false;
-    const loadDirectory = async () => {
+    const loadAffiliateAccess = async () => {
+      setIsLoading(true);
       try {
         const directory = await analyticsService.getAffiliateDirectory();
         if (cancelled) {
@@ -53,14 +44,32 @@ export function AffiliateAnalyticsView() {
         }
         setAffiliateDirectory(directory);
         setSelectedAffiliateCode((current) => current ?? directory.affiliates?.[0]?.code ?? null);
+        setIsAdminMode(true);
         setError(null);
       } catch (errorCandidate) {
-        if (!cancelled) {
-          if (errorCandidate instanceof ApiError && (errorCandidate.status === 403 || errorCandidate.status === 404)) {
-            setError("Access restricted.");
-          } else {
-            setError("Failed to load affiliate analytics.");
+        if (cancelled) {
+          return;
+        }
+        if (errorCandidate instanceof ApiError && (errorCandidate.status === 403 || errorCandidate.status === 404)) {
+          try {
+            const summary = await analyticsService.getAffiliateSummary();
+            if (cancelled) {
+              return;
+            }
+            setAffiliateSummary(summary);
+            setIsAdminMode(false);
+            setError(null);
+          } catch (summaryError) {
+            if (!cancelled) {
+              if (summaryError instanceof ApiError && (summaryError.status === 403 || summaryError.status === 404)) {
+                setError("Access restricted.");
+              } else {
+                setError("Failed to load affiliate analytics.");
+              }
+            }
           }
+        } else {
+          setError("Failed to load affiliate analytics.");
         }
       } finally {
         if (!cancelled) {
@@ -68,13 +77,16 @@ export function AffiliateAnalyticsView() {
         }
       }
     };
-    void loadDirectory();
+    void loadAffiliateAccess();
     return () => {
       cancelled = true;
     };
   }, []);
 
   useEffect(() => {
+    if (!isAdminMode) {
+      return;
+    }
     if (!selectedAffiliateCode) {
       return;
     }
@@ -105,16 +117,15 @@ export function AffiliateAnalyticsView() {
     return () => {
       cancelled = true;
     };
-  }, [affiliateSummary?.affiliate.code, selectedAffiliateCode]);
+  }, [affiliateSummary?.affiliate.code, isAdminMode, selectedAffiliateCode]);
 
   const affiliateOptions = affiliateDirectory?.affiliates ?? [];
-  const selectedAffiliate = affiliateOptions.find((entry) => entry.code === selectedAffiliateCode) ?? null;
   const hasAffiliateDirectory = affiliateOptions.length > 0;
-  const hasTestAffiliate = affiliateOptions.some((entry) => entry.code === "test");
-  const affiliateShareUrl = affiliateSummary?.affiliate.share_url ?? selectedAffiliate?.share_url ?? null;
-  const sharePreview = newAffiliate.code.trim()
-    ? `/a/${newAffiliate.code.trim().toLowerCase()}`
+  const selectedAffiliate = hasAffiliateDirectory
+    ? affiliateOptions.find((entry) => entry.code === selectedAffiliateCode) ?? null
     : null;
+  const affiliateShareUrl = affiliateSummary?.affiliate.share_url ?? selectedAffiliate?.share_url ?? null;
+  const canSelectAffiliate = isAdminMode && hasAffiliateDirectory;
 
   const affiliatePerformanceRows = affiliateSummary
     ? [
@@ -266,104 +277,31 @@ export function AffiliateAnalyticsView() {
     },
   }));
 
-  const refreshAffiliateDirectory = async (preferredCode?: string | null) => {
-    try {
-      const directory = await analyticsService.getAffiliateDirectory();
-      setAffiliateDirectory(directory);
-      const nextCode =
-        preferredCode ??
-        selectedAffiliateCode ??
-        directory.affiliates?.[0]?.code ??
-        null;
-      if (nextCode) {
-        setSelectedAffiliateCode(nextCode);
-      }
-      setAffiliateActionError(null);
-    } catch {
-      setAffiliateActionError("Unable to refresh affiliate list.");
-    }
-  };
-
-  const handleSeedTestAffiliate = async () => {
-    setAffiliateSeedPending(true);
-    setAffiliateActionError(null);
-    try {
-      const seeded = await analyticsService.seedTestAffiliate();
-      await refreshAffiliateDirectory(seeded.code);
-    } catch {
-      setAffiliateActionError("Unable to create test affiliate.");
-    } finally {
-      setAffiliateSeedPending(false);
-    }
-  };
-
-  const handleCreateAffiliate = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!newAffiliate.code.trim()) {
-      setCreateError("Enter an affiliate code.");
-      return;
-    }
-    const commissionRate = Number(newAffiliate.commissionRate);
-    const discountRate = Number(newAffiliate.discountRate);
-    setCreatePending(true);
-    setCreateError(null);
-    try {
-      const created = await analyticsService.createAffiliate({
-        code: newAffiliate.code.trim(),
-        display_name: newAffiliate.displayName.trim() || null,
-        owner_email: newAffiliate.ownerEmail.trim() || null,
-        commission_rate: Number.isFinite(commissionRate) ? commissionRate / 100 : 0,
-        discount_rate: Number.isFinite(discountRate) ? discountRate / 100 : 0,
-        is_active: newAffiliate.isActive,
-      });
-      await refreshAffiliateDirectory(created.code);
-      setNewAffiliate((current) => ({
-        ...current,
-        code: "",
-        displayName: "",
-      }));
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setCreateError(err.message || "Unable to create affiliate.");
-      } else {
-        setCreateError("Unable to create affiliate.");
-      }
-    } finally {
-      setCreatePending(false);
-    }
-  };
-
-  const affiliateSections: AnalyticsSection[] = hasAffiliateDirectory
+  const hasAffiliateSummary = Boolean(affiliateSummary);
+  const hasAffiliateData = hasAffiliateSummary || canSelectAffiliate;
+  const affiliateSections: AnalyticsSection[] = hasAffiliateData
     ? [
       {
         id: "affiliate-performance",
         label: "Affiliate performance",
         content: (
           <>
-            <div className={styles.analyticsSelectRow}>
-              <span className={styles.analyticsSelectLabel}>Affiliate</span>
-              <select
-                className={styles.analyticsSelect}
-                value={selectedAffiliateCode ?? ""}
-                onChange={(event) => setSelectedAffiliateCode(event.target.value)}
-              >
-                {affiliateOptions.map((entry) => (
-                  <option key={entry.code} value={entry.code}>
-                    {entry.display_name ? `${entry.display_name} (${entry.code})` : entry.code}
-                  </option>
-                ))}
-              </select>
-              {!hasTestAffiliate ? (
-                <button
-                  type="button"
-                  className={styles.analyticsButton}
-                  onClick={handleSeedTestAffiliate}
-                  disabled={affiliateSeedPending}
+            {canSelectAffiliate ? (
+              <div className={styles.analyticsSelectRow}>
+                <span className={styles.analyticsSelectLabel}>Affiliate</span>
+                <select
+                  className={styles.analyticsSelect}
+                  value={selectedAffiliateCode ?? ""}
+                  onChange={(event) => setSelectedAffiliateCode(event.target.value)}
                 >
-                  {affiliateSeedPending ? "Creating test affiliate..." : "Seed test affiliate"}
-                </button>
-              ) : null}
-            </div>
+                  {affiliateOptions.map((entry) => (
+                    <option key={entry.code} value={entry.code}>
+                      {entry.display_name ? `${entry.display_name} (${entry.code})` : entry.code}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             {affiliateLoading ? (
               <p className={styles.analyticsListEmpty}>Loading affiliate details...</p>
             ) : null}
@@ -392,7 +330,9 @@ export function AffiliateAnalyticsView() {
                 ) : null}
               </>
             ) : affiliateLoading ? null : (
-              <p className={styles.analyticsListEmpty}>Select an affiliate to view performance.</p>
+              <p className={styles.analyticsListEmpty}>
+                {canSelectAffiliate ? "Select an affiliate to view performance." : "No affiliate data available."}
+              </p>
             )}
             {affiliateActionError ? (
               <p className={styles.analyticsListEmpty}>{affiliateActionError}</p>
@@ -522,91 +462,6 @@ export function AffiliateAnalyticsView() {
         <h1 className={styles.analyticsTitle}>Affiliates</h1>
         <p className={styles.analyticsSubtitle}>Generated {generatedAtLabel}</p>
       </div>
-
-      <AnalyticsCard title="Create affiliate link">
-        <form className={styles.analyticsForm} onSubmit={handleCreateAffiliate}>
-          <div className={styles.analyticsFormRow}>
-            <label className={styles.analyticsFormField}>
-              <span className={styles.analyticsInputLabel}>Code</span>
-              <input
-                className={styles.analyticsInput}
-                value={newAffiliate.code}
-                onChange={(event) => setNewAffiliate((current) => ({ ...current, code: event.target.value }))}
-                placeholder="creator-name"
-                required
-              />
-            </label>
-            <label className={styles.analyticsFormField}>
-              <span className={styles.analyticsInputLabel}>Display name</span>
-              <input
-                className={styles.analyticsInput}
-                value={newAffiliate.displayName}
-                onChange={(event) => setNewAffiliate((current) => ({ ...current, displayName: event.target.value }))}
-                placeholder="Creator"
-              />
-            </label>
-            <label className={styles.analyticsFormField}>
-              <span className={styles.analyticsInputLabel}>Owner email</span>
-              <input
-                className={styles.analyticsInput}
-                type="email"
-                value={newAffiliate.ownerEmail}
-                onChange={(event) => setNewAffiliate((current) => ({ ...current, ownerEmail: event.target.value }))}
-                placeholder="name@example.com"
-              />
-            </label>
-          </div>
-          <div className={styles.analyticsFormRow}>
-            <label className={styles.analyticsFormField}>
-              <span className={styles.analyticsInputLabel}>Commission %</span>
-              <input
-                className={styles.analyticsInput}
-                type="number"
-                min="0"
-                max="100"
-                step="0.1"
-                value={newAffiliate.commissionRate}
-                onChange={(event) => setNewAffiliate((current) => ({ ...current, commissionRate: event.target.value }))}
-              />
-            </label>
-            <label className={styles.analyticsFormField}>
-              <span className={styles.analyticsInputLabel}>Discount %</span>
-              <input
-                className={styles.analyticsInput}
-                type="number"
-                min="0"
-                max="100"
-                step="0.1"
-                value={newAffiliate.discountRate}
-                onChange={(event) => setNewAffiliate((current) => ({ ...current, discountRate: event.target.value }))}
-              />
-            </label>
-            <label className={styles.analyticsFormField}>
-              <span className={styles.analyticsInputLabel}>Active</span>
-              <div className={styles.analyticsCheckboxRow}>
-                <input
-                  type="checkbox"
-                  checked={newAffiliate.isActive}
-                  onChange={(event) => setNewAffiliate((current) => ({ ...current, isActive: event.target.checked }))}
-                />
-                <span>Enabled</span>
-              </div>
-            </label>
-          </div>
-          {sharePreview ? (
-            <div className={styles.analyticsLinkRow}>
-              <span className={styles.analyticsTableLabel}>Share link</span>
-              <span className={styles.analyticsLink}>{sharePreview}</span>
-            </div>
-          ) : null}
-          <div className={styles.analyticsFormActions}>
-            <button type="submit" className={styles.analyticsButton} disabled={createPending}>
-              {createPending ? "Creating..." : "Create affiliate"}
-            </button>
-            {createError ? <span className={styles.analyticsListEmpty}>{createError}</span> : null}
-          </div>
-        </form>
-      </AnalyticsCard>
 
       {showAllSections ? (
         <div className={styles.analyticsControls}>

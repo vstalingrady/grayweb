@@ -107,6 +107,7 @@ export function useProactivity(userId: number | null, resolvedTimezone: string) 
   }>(() => ({ userId: null, value: null }));
 
   const proactivity = userId && proactivityState.userId === userId ? proactivityState.value : null;
+  const isLoaded = Boolean(userId && proactivityState.userId === userId);
 
   const setProactivity = useCallback(
     (next: ProactivityItem | null | ((previous: ProactivityItem | null) => ProactivityItem | null)) => {
@@ -181,5 +182,6 @@ export function useProactivity(userId: number | null, resolvedTimezone: string) 
     proactivity,
     setProactivity,
     persistProactivitySettings,
+    isLoaded,
   };
 }

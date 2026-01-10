@@ -8,7 +8,7 @@ const MARKETING_DISALLOWS = [
   "/api",
   "/c",
   "/g",
-  "/gray",
+  "/gray/",
   "/login",
   "/signup",
   "/reset-password",

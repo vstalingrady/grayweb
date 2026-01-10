@@ -204,7 +204,6 @@ async def upsert_entity_reminder(
         "remind_at": normalized_remind_at,
         "delivery_mode": entity_type,
         "metadata": metadata,
-        "color": color,
         "updated_at": now,
     }
 
@@ -260,7 +259,6 @@ async def upsert_entity_reminder(
                 description=description,
                 summary=description,
                 metadata=metadata,
-                color=color,
                 updated_at=now,
             )
         )

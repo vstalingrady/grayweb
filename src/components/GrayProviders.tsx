@@ -140,8 +140,10 @@ export function GrayProviders({ viewerEmail, children }: GrayProvidersProps) {
   const isAppRoute = appRoutePrefixes.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
   );
+  const isGrayMarketingRoute =
+    !isGrayHost && (pathname === "/gray" || pathname === "/gray/");
   // Skip user loading on marketing pages to prevent auth redirects.
-  const shouldLoadUser = isGrayHost || isAppRoute;
+  const shouldLoadUser = (isGrayHost || isAppRoute) && !isGrayMarketingRoute;
   const effectiveEmail = shouldLoadUser ? viewerEmail : null;
 
   return (

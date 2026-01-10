@@ -355,6 +355,7 @@ async def _create_dodo_checkout(request: PaymentRequest, user: Dict[str, Any]) -
         "metadata": metadata,
         "allowed_payment_method_types": _get_dodo_allowed_payment_methods(),
         "feature_flags": {
+            "allow_discount_code": False,
             "allow_customer_editing_name": True,
             "always_create_new_customer": True,
         },

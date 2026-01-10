@@ -412,6 +412,11 @@
   gap: 10px;
 }
 
+.actionUpgradeArrow {
+  opacity: 0.4;
+  color: #fff;
+}
+
 .actionUpgradeRight .actionLock {
   margin-left: 0;
 }

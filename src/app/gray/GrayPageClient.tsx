@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "@/contexts/UserContext";
 import {
+  analyticsService,
   workspaceService,
 } from "@/lib/api";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
@@ -62,7 +63,6 @@ import {
 import { SignUpPromptModal } from "@/components/gray/SignUpPromptModal";
 import { GrayMobileHeader } from "./components/GrayMobileHeader";
 import { useCalendarSyncHandlers } from "./hooks/useCalendarSyncHandlers";
-import { useGoogleCalendarIntegration } from "./hooks/useGoogleCalendarIntegration";
 import { usePlanHabitActions } from "./hooks/usePlanHabitActions";
 import { useGrayLayoutState } from "./hooks/useGrayLayoutState";
 import { MobileWelcomeScreen } from "@/components/gray/chat/view/MobileWelcomeScreen";
@@ -136,7 +136,7 @@ type GrayPageClientProps = {
 
 type ViewMode = "chat" | "dashboard" | "general" | "history" | "analytics" | "affiliates";
 
-const ANALYTICS_ADMIN_EMAILS = new Set(["vstalingrady@gmail.com", "test@test.com"]);
+const ANALYTICS_ADMIN_EMAILS = new Set(["vstalingrady@gmail.com", "test@test.com", "aurelryojonathan@gmail.com"]);
 
 function GrayPageClientInner({
   initialTimestamp,
@@ -162,6 +162,7 @@ function GrayPageClientInner({
   const hasCalendarAccess = normalizedTier === "voyager" || normalizedTier === "pioneer";
   const normalizedEmail = (user?.email ?? "").trim().toLowerCase();
   const isAnalyticsAdmin = ANALYTICS_ADMIN_EMAILS.has(normalizedEmail);
+  const [hasAffiliateAccess, setHasAffiliateAccess] = useState(false);
   const resolvedTimezone = useMemo(() => {
     try {
       return Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
@@ -169,6 +170,34 @@ function GrayPageClientInner({
       return "UTC";
     }
   }, []);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setHasAffiliateAccess(false);
+      return;
+    }
+    if (isAnalyticsAdmin) {
+      setHasAffiliateAccess(true);
+      return;
+    }
+    let cancelled = false;
+    const checkAffiliateAccess = async () => {
+      try {
+        await analyticsService.getAffiliateSummary();
+        if (!cancelled) {
+          setHasAffiliateAccess(true);
+        }
+      } catch {
+        if (!cancelled) {
+          setHasAffiliateAccess(false);
+        }
+      }
+    };
+    void checkAffiliateAccess();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAnalyticsAdmin, user?.id]);
   const nowDateKey = useMemo(() => toDateKey(now), [now]);
   const todayAnchor = useMemo(() => {
     const [yearString, monthString, dayString] = nowDateKey.split("-");
@@ -203,7 +232,8 @@ function GrayPageClientInner({
   const {
     proactivity,
     setProactivity,
-    persistProactivitySettings
+    persistProactivitySettings,
+    isLoaded: isProactivityLoaded,
   } = useProactivity(userId, resolvedTimezone);
 
   const {
@@ -546,8 +576,9 @@ function GrayPageClientInner({
       currentPulse={activePulse}
       isCurrentPulseEditable={isActivePulseEditable}
       onSelectPulse={setActivePulseId}
-          proactivityFallback={proactivity}
-          onProactivitySelect={selectProactivityPreset}
+      proactivityFallback={proactivity}
+      isProactivityLoaded={isProactivityLoaded}
+      onProactivitySelect={selectProactivityPreset}
           onProactivityRemove={removeProactivity}
           onTestProactivity={handleTestProactivity}
           onSavePlan={savePlan}
@@ -563,7 +594,6 @@ function GrayPageClientInner({
           onCalendarSelectedDateChange={setCalendarSelectedDate}
           onEditHabit={editHabit}
           onDeleteHabit={deleteHabit}
-          onIntegrationAction={handleCalendarIntegration}
           onCreatePlan={handleCreatePlan}
           onCreateHabit={handleCreateHabit}
       chatBar={null}
@@ -830,29 +860,36 @@ function GrayPageClientInner({
     return deriveInitials(user?.full_name ?? viewerName) || "OP";
   }, [user, userLoading, viewerName]);
 
+  const canViewAffiliates = isAnalyticsAdmin || hasAffiliateAccess;
   const filteredSidebarItems = useMemo(() => {
     return SIDEBAR_ITEMS.filter((item) => {
       if (!hasCalendarAccess && item.id === "calendar") {
         return false;
       }
-      if (!isAnalyticsAdmin && (item.id === "analytics" || item.id === "affiliates")) {
+      if (!isAnalyticsAdmin && item.id === "analytics") {
+        return false;
+      }
+      if (!canViewAffiliates && item.id === "affiliates") {
         return false;
       }
       return true;
     });
-  }, [hasCalendarAccess, isAnalyticsAdmin]);
+  }, [canViewAffiliates, hasCalendarAccess, isAnalyticsAdmin]);
 
   const filteredRailItems = useMemo(() => {
     return SIDEBAR_RAIL_ITEMS.filter((item) => {
       if (!hasCalendarAccess && item.id === "calendar") {
         return false;
       }
-      if (!isAnalyticsAdmin && (item.id === "analytics" || item.id === "affiliates")) {
+      if (!isAnalyticsAdmin && item.id === "analytics") {
+        return false;
+      }
+      if (!canViewAffiliates && item.id === "affiliates") {
         return false;
       }
       return true;
     });
-  }, [hasCalendarAccess, isAnalyticsAdmin]);
+  }, [canViewAffiliates, hasCalendarAccess, isAnalyticsAdmin]);
 
   const historySections = useMemo(() => buildHistorySections(sessions), [sessions]);
   const isDashboardView = viewMode === "dashboard";
@@ -1169,10 +1206,6 @@ function GrayPageClientInner({
     events: calendarEvents,
     setEvents: setCalendarEvents,
   });
-
-  const handleCalendarIntegration = useGoogleCalendarIntegration(
-    hasCalendarAccess ? userId : null
-  );
 
   const handleChatSubmit = useCallback(
     async (

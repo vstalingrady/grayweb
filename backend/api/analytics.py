@@ -46,7 +46,7 @@ from backend.time_utils import utcnow_aware
 
 
 router = APIRouter(tags=["analytics"])
-ADMIN_ANALYTICS_EMAILS = {"vstalingrady@gmail.com", "test@test.com"}
+ADMIN_ANALYTICS_EMAILS = {"vstalingrady@gmail.com", "test@test.com", "aurelryojonathan@gmail.com"}
 
 
 def _month_key(value: Optional[datetime]) -> Optional[str]:
@@ -54,6 +54,15 @@ def _month_key(value: Optional[datetime]) -> Optional[str]:
         return None
     try:
         return value.strftime("%Y-%m")
+    except Exception:
+        return None
+
+
+def _day_key(value: Optional[datetime]) -> Optional[str]:
+    if not value:
+        return None
+    try:
+        return value.strftime("%Y-%m-%d")
     except Exception:
         return None
 
@@ -284,13 +293,33 @@ async def _build_analytics_summary(
             if month_key and month_key in month_series:
                 month_series[month_key]["paid_transactions"] += 1
 
+        today_start = utcnow_aware().replace(hour=0, minute=0, second=0, microsecond=0).replace(tzinfo=None)
+        day_start = today_start - timedelta(days=29)
+        day_series: Dict[str, int] = {}
+        for offset in range(30):
+            key = (day_start + timedelta(days=offset)).strftime("%Y-%m-%d")
+            day_series[key] = 0
+
+        day_rows = await db.fetch_all(
+            sqlalchemy.select(users.c.created_at).where(users.c.created_at >= day_start)
+        )
+        for row in day_rows:
+            created_at = _coerce_datetime(row["created_at"])
+            if not created_at:
+                continue
+            day_key = _day_key(created_at)
+            if day_key and day_key in day_series:
+                day_series[day_key] += 1
+
         timeseries = {
             "months": month_keys,
             "signups": [month_series[key]["signups"] for key in month_keys],
             "paid_transactions": [month_series[key]["paid_transactions"] for key in month_keys],
+            "days": list(day_series.keys()),
+            "daily_signups": [day_series[key] for key in day_series],
         }
     except Exception:
-        timeseries = {"months": [], "signups": [], "paid_transactions": []}
+        timeseries = {"months": [], "signups": [], "paid_transactions": [], "days": [], "daily_signups": []}
 
     # ========== ENGAGEMENT METRICS ==========
     engagement: Dict[str, Any] = {}

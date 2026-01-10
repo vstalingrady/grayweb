@@ -140,9 +140,28 @@ const htmlResponse = (html: string, status = 200) =>
     },
   });
 
+const resolveExternalOrigin = (request: NextRequest) => {
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const host = forwardedHost || request.headers.get("host");
+
+  if (forwardedProto && host) {
+    return `${forwardedProto}://${host}`;
+  }
+
+  return new URL(request.url).origin;
+};
+
 const buildBackendCallbackUrl = (request: NextRequest) => {
-  const base = new URL(request.url);
-  base.pathname = "/api/p/google-calendar/oauth/callback";
+  const directTarget =
+    process.env.BACKEND_URL ||
+    process.env.BACKEND_API_URL ||
+    process.env.NEXT_PUBLIC_API_URL;
+
+  const base = new URL(directTarget || resolveExternalOrigin(request));
+  base.pathname = directTarget
+    ? "/google-calendar/oauth/callback"
+    : "/api/p/google-calendar/oauth/callback";
   base.search = "";
   return base.toString();
 };
@@ -156,7 +175,8 @@ export async function GET(request: NextRequest) {
     return htmlResponse(buildErrorHtml("Missing authorization data from Google."), 400);
   }
 
-  const redirectUri = `${url.origin}${url.pathname}`;
+  const redirectOrigin = resolveExternalOrigin(request);
+  const redirectUri = `${redirectOrigin}${url.pathname}`;
 
   try {
     const backendResponse = await fetch(buildBackendCallbackUrl(request), {

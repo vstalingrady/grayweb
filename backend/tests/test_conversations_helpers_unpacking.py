@@ -57,7 +57,7 @@ def _make_helpers(*, require_owner_raises: bool, tier_limit: int = 42):
         dummy_service,
         dummy_openrouter,
         dummy_chat_sessions,
-        lambda _tier: tier_limit,
+        lambda _tier, _model=None: tier_limit,
         object(),
         object(),
         object(),
@@ -137,4 +137,3 @@ async def test_list_user_conversations_unpacking_accepts_tier_token_limit(monkey
     )
 
     assert result == []
-
