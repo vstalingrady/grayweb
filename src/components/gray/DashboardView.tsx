@@ -33,15 +33,15 @@ const CALENDAR_PANEL_HOUR_HEIGHT = 62;
 const CALENDAR_PANEL_MIN_HEIGHT_PX = 420;
 const CALENDAR_PANEL_HEIGHT_STORAGE_KEY = "gray.dashboard.calendarPanelHeightPx";
 
-const buildPanelSizingStyle = (hasChatBar: boolean) =>
-  ({
-    "--calendar-max-height": hasChatBar
-      ? CALENDAR_PANEL_MAX_HEIGHT_WITH_CHAT
-      : CALENDAR_PANEL_MAX_HEIGHT_NO_CHAT,
-    "--dashboard-panel-max-height": hasChatBar
-      ? CALENDAR_PANEL_MAX_HEIGHT_WITH_CHAT
-      : CALENDAR_PANEL_MAX_HEIGHT_NO_CHAT,
-  }) as CSSProperties & { [key: string]: string | number };
+const buildPanelSizingStyle = (hasChatBar: boolean) => {
+  const maxHeight = hasChatBar
+    ? CALENDAR_PANEL_MAX_HEIGHT_WITH_CHAT
+    : CALENDAR_PANEL_MAX_HEIGHT_NO_CHAT;
+  return {
+    "--calendar-max-height": maxHeight,
+    "--dashboard-panel-max-height": maxHeight,
+  } as CSSProperties & { [key: string]: string | number };
+};
 
 type GrayDashboardViewProps = {
   pulseEntries: PulseEntry[];
@@ -78,6 +78,8 @@ type GrayDashboardViewProps = {
   showUpgradeButton?: boolean;
   isOverlay?: boolean;
 };
+
+type DashboardTab = GrayDashboardViewProps["activeTab"];
 
 export function GrayDashboardView({
   pulseEntries,
@@ -129,12 +131,7 @@ export function GrayDashboardView({
     });
   }, [currentPulse, hasPulseData, isCurrentPulseEditable, livePlans]);
 
-  const planCalendarEvents = useMemo(() => {
-    if (activeTab !== "calendar") {
-      return [];
-    }
-    return mapPlansToCalendarEvents(displayPlans);
-  }, [activeTab, displayPlans]);
+  const planCalendarEvents = useMemo(() => mapPlansToCalendarEvents(displayPlans), [displayPlans]);
 
   const mergedEvents = useMemo(() => {
     const allEvents = [...calendarEvents, ...planCalendarEvents];
@@ -361,6 +358,25 @@ export function GrayDashboardView({
   }, []);
 
   const headerClassName = styles.pulseSurfaceHeader;
+  const renderCalendarHeader = (headerProps: {
+    activeTab: DashboardTab;
+    onSelectTab: (tab: DashboardTab) => void;
+  }) => (
+    <DashboardHeader
+      activeTab={headerProps.activeTab}
+      onSelectTab={headerProps.onSelectTab}
+      showTabs={false}
+      onGoToday={undefined}
+      viewMode={undefined}
+      onViewModeChange={undefined}
+      viewModeOptions={[]}
+      label={undefined}
+      rangeLabel={undefined}
+      className={headerClassName}
+      onUpgradeClick={onUpgradeClick}
+      showUpgradeButton={showUpgradeButton}
+    />
+  );
 
   const proactivityModal = onProactivitySelect ? (
     <ProactivitySettingsModal
@@ -390,6 +406,19 @@ export function GrayDashboardView({
   );
 
   const shouldShowPulseHeader = hasCalendarAccess || showUpgradeButton;
+  const pulseGridProps = {
+    currentDate,
+    selectedDate: calendarSelectedDate ?? currentDate,
+    viewerName: user?.full_name ?? null,
+    proactivity: displayProactivity ?? null,
+    events: mergedEvents,
+    proactivityDeliveryKeys,
+    canConfigureProactivity: Boolean(onProactivitySelect),
+    onConfigureProactivity: handleOpenProactivityModal,
+    onSelectDate: (date: Date) => onCalendarSelectedDateChange?.(date),
+    isCompactLayout,
+    onAddEvent: (date: Date) => openComposerAt(date),
+  };
 
   const pulseContent = (
     <div className={styles.dashboardViewScrollContainer}>
@@ -403,109 +432,66 @@ export function GrayDashboardView({
           showTabs={hasCalendarAccess}
         />
       ) : null}
-      <DashboardPulseGrid
-        currentDate={currentDate}
-        selectedDate={calendarSelectedDate ?? currentDate}
-        viewerName={user?.full_name ?? null}
-        proactivity={displayProactivity ?? null}
-        events={mergedEvents}
-        proactivityDeliveryKeys={proactivityDeliveryKeys}
-        canConfigureProactivity={Boolean(onProactivitySelect)}
-        onConfigureProactivity={handleOpenProactivityModal}
-        onSelectDate={(date) => onCalendarSelectedDateChange?.(date)}
-        isCompactLayout={isCompactLayout}
-        onAddEvent={(date) => openComposerAt(date)}
-      />
+      <DashboardPulseGrid {...pulseGridProps} />
     </div>
   );
 
-  const compactPulseContent = (
-    <DashboardPulseGrid
-      currentDate={currentDate}
-      selectedDate={calendarSelectedDate ?? currentDate}
-      viewerName={user?.full_name ?? null}
-      proactivity={displayProactivity ?? null}
-      events={mergedEvents}
-      proactivityDeliveryKeys={proactivityDeliveryKeys}
-      canConfigureProactivity={Boolean(onProactivitySelect)}
-      onConfigureProactivity={handleOpenProactivityModal}
-      onSelectDate={(date) => onCalendarSelectedDateChange?.(date)}
-      isCompactLayout={isCompactLayout}
-      onAddEvent={(date) => openComposerAt(date)}
-    />
-  );
+  const compactPulseContent = <DashboardPulseGrid {...pulseGridProps} />;
+
+  const calendarComposerState = {
+    isOpen: composerOpen,
+    editingEvent,
+    range: composerRange,
+    anchorRect: composerAnchorRect,
+    previewEvent: composerPreviewEvent,
+  };
+  const calendarComposerHandlers = {
+    onOpenAt: openComposerAt,
+    onEdit: editEvent,
+    onClose: closeComposer,
+    onSubmit: handleComposerSubmit,
+    onDelete: handleComposerDelete,
+    onStateChange: setComposerDraft,
+  };
+  const baseCalendarProps = {
+    initialDate: currentDate,
+    currentDate,
+    showHeaderDates: true,
+    calendars,
+    events: mergedEvents,
+    onCalendarsChange,
+    onEventsChange: onCalendarEventsChange,
+    onEventDelete: handleCalendarEventDelete,
+    onCreatePlan,
+    onCreateHabit,
+    selectedDate: calendarSelectedDate,
+    onSelectedDateChange: onCalendarSelectedDateChange,
+    composerState: calendarComposerState,
+    composerHandlers: calendarComposerHandlers,
+    hourHeight: CALENDAR_PANEL_HOUR_HEIGHT,
+    onIntegrationAction,
+    dashboardTab: "calendar" as const,
+    onSelectDashboardTab: () => {},
+    renderHeader: renderCalendarHeader,
+    embedWithinParentSurface: true,
+    surfaceClassName: styles.dashboardCalendarInnerSurface,
+  };
 
   const calendarContent = (
     <GrayDashboardCalendar
-      initialDate={currentDate}
-      currentDate={currentDate}
+      {...baseCalendarProps}
       showSidebar={true}
-      showHeaderDates={true}
       showCalendarList={hasCalendarAccess}
-      calendars={calendars}
-      events={mergedEvents}
-      onCalendarsChange={onCalendarsChange}
-      onEventsChange={onCalendarEventsChange}
-      onEventDelete={handleCalendarEventDelete}
-      onCreatePlan={onCreatePlan}
-      onCreateHabit={onCreateHabit}
-      selectedDate={calendarSelectedDate}
-      onSelectedDateChange={onCalendarSelectedDateChange}
-      composerState={{
-        isOpen: composerOpen,
-        editingEvent,
-        range: composerRange,
-        anchorRect: composerAnchorRect,
-        previewEvent: composerPreviewEvent,
-      }}
-      composerHandlers={{
-        onOpenAt: openComposerAt,
-        onEdit: editEvent,
-        onClose: closeComposer,
-        onSubmit: handleComposerSubmit,
-        onDelete: handleComposerDelete,
-        onStateChange: setComposerDraft,
-      }}
-      hourHeight={CALENDAR_PANEL_HOUR_HEIGHT}
-      onIntegrationAction={onIntegrationAction}
-      dashboardTab="calendar"
-      onSelectDashboardTab={() => { }}
-      renderHeader={(headerProps) => (
-        <DashboardHeader
-          activeTab={headerProps.activeTab}
-          onSelectTab={headerProps.onSelectTab}
-          showTabs={false}
-          onGoToday={undefined}
-          viewMode={undefined}
-          onViewModeChange={undefined}
-          viewModeOptions={[]}
-          label={undefined}
-          rangeLabel={undefined}
-          className={headerClassName}
-          onUpgradeClick={onUpgradeClick}
-          showUpgradeButton={showUpgradeButton}
-        />
-      )}
-      embedWithinParentSurface
-      surfaceClassName={styles.dashboardCalendarInnerSurface}
     />
   );
 
   const compactCalendarContent = (
-    <>
-      <DashboardHeader
-        activeTab={activeTab}
-        onSelectTab={onSelectTab}
-        showTabs={false}
-        className={headerClassName}
-        onUpgradeClick={onUpgradeClick}
-        showUpgradeButton={showUpgradeButton}
-      />
-      <div className={styles.dashboardCompactNotice}>
-        <h3>{t("Calendar works best on a wider screen")}</h3>
-        <p>{t("Expand your window or rotate your device to manage events and view the full schedule.")}</p>
-      </div>
-    </>
+    <GrayDashboardCalendar
+      {...baseCalendarProps}
+      viewModeLocked="day"
+      showSidebar={false}
+      showCalendarList={false}
+    />
   );
 
   const dashboardSurfaceClassName = styles.dashboardCalendarSurface;
