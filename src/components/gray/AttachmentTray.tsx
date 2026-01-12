@@ -2,7 +2,7 @@
 
 import { LoaderCircle, X } from "lucide-react";
 import styles from "@/components/gray/chat/ChatComposerStyles.module.css";
-import type { MediaUpload } from "@/lib/api";
+import { resolveUploadUrl, type MediaUpload } from "@/lib/api";
 import { useI18n } from "@/contexts/I18nContext";
 
 type AttachmentTrayProps = {
@@ -33,16 +33,13 @@ const AttachmentTray = ({
             {attachment.mime_type?.startsWith("image/") ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={
-                  attachment.previewUrl ||
-                  (typeof attachment.id === "number" ? `/api/uploads/${attachment.id}/file` : attachment.public_url)
-                }
+                src={attachment.previewUrl || resolveUploadUrl(attachment)}
                 alt={attachment.filename}
                 onError={(event) => {
-                  if (typeof attachment.id !== "number") {
+                  const fallback = resolveUploadUrl({ id: attachment.id });
+                  if (!fallback) {
                     return;
                   }
-                  const fallback = `/api/uploads/${attachment.id}/file`;
                   if (event.currentTarget.getAttribute("src") === fallback) {
                     return;
                   }

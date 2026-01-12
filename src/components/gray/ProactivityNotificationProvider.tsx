@@ -12,7 +12,7 @@ import {
 import { useUser } from "@/contexts/UserContext";
 import { useChatStore } from "./ChatProvider";
 import { GENERAL_CHAT_SESSION_ID } from "./chat/constants";
-import { resolveApiBaseUrl, workspaceService } from "@/lib/api";
+import { resolveApiBaseUrl } from "@/lib/api";
 import { useI18n } from "@/contexts/I18nContext";
 import { useNotificationPreferences } from "@/contexts/NotificationPreferencesContext";
 import {
@@ -32,8 +32,6 @@ const ProactivityNotificationContext = createContext<ProactivityNotificationCont
 });
 
 const MAX_RECENT_PROACTIVITY_EVENTS = 50;
-const PROACTIVITY_POLL_INTERVAL_MS = 60_000;
-
 type ProactivityPayload = {
   session_id?: string;
   message?: string;
@@ -150,8 +148,6 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
   const sseRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sseConnectionRef = useRef<EventSource | null>(null);
   const sseAttemptRef = useRef(0);
-  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pollInFlightRef = useRef(false);
   const sessionsRef = useRef(sessions);
   const isHydratingHistoryRef = useRef(false);
   const recentEventKeysRef = useRef<string[]>([]);
@@ -358,77 +354,6 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
       closeEventSource();
     };
   }, [getAuthToken, userId, handleProactivityMessage, rememberEventKey]);
-
-  useEffect(() => {
-    if (!userId || typeof window === "undefined") {
-      return;
-    }
-
-    let cancelled = false;
-
-    const pollNotifications = async () => {
-      if (pollInFlightRef.current) {
-        return;
-      }
-      pollInFlightRef.current = true;
-      try {
-        const notifications = await workspaceService.getProactivityNotifications(userId, {
-          unreadOnly: true,
-          limit: 10,
-        });
-        if (cancelled || notifications.length === 0) {
-          return;
-        }
-
-        for (const notification of notifications) {
-          const metadata = notification.metadata ?? {};
-          const deliveryKey =
-            typeof metadata.delivery_key === "string" ? metadata.delivery_key : undefined;
-          const payload: ProactivityPayload = {
-            message: notification.message,
-            delivery_key: deliveryKey,
-            sent_at: notification.sent_at,
-            timezone: typeof metadata.timezone === "string" ? metadata.timezone : undefined,
-          };
-          const eventKey = buildProactivityEventKey(payload);
-          if (!eventKey || rememberEventKey(eventKey)) {
-            handleProactivityMessage(payload);
-            if (deliveryKey) {
-              setDeliveredKeys((prev) => {
-                const next = new Set(prev);
-                next.add(deliveryKey);
-                const timezone = payload.timezone || clientTimezoneRef.current;
-                const scheduleKey = buildScheduleKeyFromDeliveryKey(deliveryKey, timezone);
-                if (scheduleKey) {
-                  next.add(scheduleKey);
-                }
-                return next;
-              });
-            }
-          }
-          await workspaceService.markProactivityNotificationRead(userId, notification.id);
-        }
-      } catch (error) {
-        console.warn("[Proactivity] Failed to poll notifications:", error);
-      } finally {
-        pollInFlightRef.current = false;
-      }
-    };
-
-    void pollNotifications();
-    if (pollTimerRef.current) {
-      clearInterval(pollTimerRef.current);
-    }
-    pollTimerRef.current = setInterval(pollNotifications, PROACTIVITY_POLL_INTERVAL_MS);
-
-    return () => {
-      cancelled = true;
-      if (pollTimerRef.current) {
-        clearInterval(pollTimerRef.current);
-        pollTimerRef.current = null;
-      }
-    };
-  }, [handleProactivityMessage, rememberEventKey, userId]);
 
   useEffect(() => {
     if (!userId || typeof window === "undefined") return;

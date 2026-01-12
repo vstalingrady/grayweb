@@ -1,7 +1,7 @@
 "use client";
 
 import styles from "@/components/gray/chat/ChatStyles.module.css";
-import type { MediaUpload } from "@/lib/api";
+import { resolveUploadUrl, type MediaUpload } from "@/lib/api";
 
 export type ChatMessageAttachmentsProps = {
   attachments: MediaUpload[];
@@ -19,17 +19,14 @@ export function ChatMessageAttachments({ attachments, t }: ChatMessageAttachment
 	        <div key={attachment.id || index} className={styles.chatMessageAttachment}>
 	          {attachment.mime_type?.startsWith("image/") ? (
 	            // eslint-disable-next-line @next/next/no-img-element -- Attachments may be user-provided URLs and need runtime fallback handling.
-	            <img
-	              src={
-	                attachment.previewUrl ||
-	                (typeof attachment.id === "number" ? `/api/uploads/${attachment.id}/file` : attachment.public_url)
-	              }
+            <img
+              src={attachment.previewUrl || resolveUploadUrl(attachment)}
               alt={t("Attachment")}
               onError={(event) => {
-                if (typeof attachment.id !== "number") {
+                const fallback = resolveUploadUrl({ id: attachment.id });
+                if (!fallback) {
                   return;
                 }
-                const fallback = `/api/uploads/${attachment.id}/file`;
                 if (event.currentTarget.getAttribute("src") === fallback) {
                   return;
                 }

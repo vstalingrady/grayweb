@@ -1,4 +1,4 @@
-export { resolveApiBaseUrl } from "./api/baseUrl";
+export { resolveApiBaseUrl, resolveApiUrl, resolveUploadUrl } from "./api/baseUrl";
 export { ApiError, ApiNetworkError, isApiNetworkError } from "./api/errors";
 export { userService } from "./api/UserService";
 export { chatService } from "./api/ChatService";

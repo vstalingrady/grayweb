@@ -25,3 +25,39 @@ export const resolveApiBaseUrl = () => {
 
   return API_BASE_OVERRIDE;
 };
+
+const ABSOLUTE_URL_PATTERN = /^[a-z][a-z0-9+.-]*:\/\//i;
+
+const isAbsoluteUrl = (value: string) =>
+  ABSOLUTE_URL_PATTERN.test(value) || value.startsWith("blob:") || value.startsWith("data:");
+
+export const resolveApiUrl = (path: string): string => {
+  if (!path) {
+    return "";
+  }
+  if (isAbsoluteUrl(path)) {
+    return path;
+  }
+  const baseUrl = resolveApiBaseUrl();
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  if (normalizedPath.startsWith(baseUrl)) {
+    return normalizedPath;
+  }
+  return `${baseUrl}${normalizedPath}`;
+};
+
+type UploadUrlInput = {
+  id?: number | string;
+  public_url?: string | null;
+};
+
+export const resolveUploadUrl = (upload: UploadUrlInput): string => {
+  if (upload.public_url) {
+    return resolveApiUrl(upload.public_url);
+  }
+  const numericId = typeof upload.id === "number" ? upload.id : Number(upload.id);
+  if (Number.isFinite(numericId) && numericId > 0) {
+    return resolveApiUrl(`/api/uploads/${numericId}/file`);
+  }
+  return "";
+};
