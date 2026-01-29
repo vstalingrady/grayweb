@@ -4,8 +4,42 @@ AI and model utility functions.
 This module provides helpers for response parsing and content extraction.
 """
 import json
+import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
+
+_PDF_EXCERPT_MAX_CHARS = int(os.getenv("OPENROUTER_PDF_CACHE_MAX_CHARS", "20000"))
+
+
+def _truncate_text(value: str) -> str:
+    if _PDF_EXCERPT_MAX_CHARS <= 0:
+        return value
+    if len(value) <= _PDF_EXCERPT_MAX_CHARS:
+        return value
+    return value[:_PDF_EXCERPT_MAX_CHARS]
+
+
+def _extract_file_text(file_payload: Dict[str, Any]) -> Optional[str]:
+    text = file_payload.get("text")
+    if isinstance(text, str) and text.strip():
+        return _truncate_text(text.strip())
+
+    content = file_payload.get("content")
+    if isinstance(content, str) and content.strip():
+        return _truncate_text(content.strip())
+
+    if isinstance(content, list):
+        parts: List[str] = []
+        for part in content:
+            if not isinstance(part, dict):
+                continue
+            part_text = part.get("text")
+            if isinstance(part_text, str) and part_text.strip():
+                parts.append(part_text.strip())
+        if parts:
+            return _truncate_text("\n".join(parts))
+
+    return None
 
 
 def openrouter_annotations_to_grounding(annotations: Optional[List[Dict[str, Any]]]) -> Optional[Dict[str, Any]]:
@@ -48,25 +82,45 @@ def openrouter_annotations_to_grounding(annotations: Optional[List[Dict[str, Any
             continue
 
         if ann_type == "file_citation" or ann_type == "file" or file_citation:
-            uri = file_citation.get("url") or file_citation.get("uri")
-            title = file_citation.get("title") or file_citation.get("filename") or uri
-            text = file_citation.get("content") or file_citation.get("text")
-            key = ("file", uri, title, text[:64] if isinstance(text, str) else None)
+            file_payload = file_citation if isinstance(file_citation, dict) else {}
+            nested_file = file_payload.get("file")
+            if isinstance(nested_file, dict):
+                file_payload = {**nested_file, **file_payload}
+
+            uri = file_payload.get("url") or file_payload.get("uri")
+            file_hash = file_payload.get("hash") if isinstance(file_payload.get("hash"), str) else None
+            title = (
+                file_payload.get("title")
+                or file_payload.get("filename")
+                or file_payload.get("name")
+                or uri
+                or file_hash
+            )
+            if title is not None and not isinstance(title, str):
+                title = str(title)
+            text = _extract_file_text(file_payload)
+
+            if not (uri or title or text):
+                continue
+
+            key = ("file", file_hash or uri or title, text[:64] if isinstance(text, str) else None)
             if key in seen:
                 continue
             seen.add(key)
             chunk_index = len(chunks)
-            chunks.append({
-                "retrieved_context": {
-                    "uri": uri,
-                    "title": title,
-                    "text": text,
-                    "document_name": title,
-                }
-            })
-            _append_support(file_citation.get("start_index") or annotation.get("start_index"),
-                           file_citation.get("end_index") or annotation.get("end_index"),
-                           chunk_index)
+            retrieved_context: Dict[str, Any] = {
+                "title": title,
+                "text": text,
+                "document_name": title,
+            }
+            if uri:
+                retrieved_context["uri"] = uri
+            chunks.append({"retrieved_context": retrieved_context})
+            _append_support(
+                file_payload.get("start_index") or annotation.get("start_index"),
+                file_payload.get("end_index") or annotation.get("end_index"),
+                chunk_index,
+            )
 
     if not chunks:
         return None
