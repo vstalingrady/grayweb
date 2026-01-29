@@ -16,7 +16,6 @@ import { useConversationSync } from "./useConversationSync";
 import { useCreateThreadSession } from "./useCreateThreadSession";
 import { useDefaultSystemPrompt } from "./useDefaultSystemPrompt";
 import { useGeneralChatOnboarding } from "./useGeneralChatOnboarding";
-import { useMapsSettings } from "./useMapsSettings";
 import { usePersistAiCreatedReminders } from "./usePersistAiCreatedReminders";
 import { useQuestionnaire } from "./useQuestionnaire";
 import { useRemoteConversations } from "./useRemoteConversations";
@@ -135,18 +134,6 @@ export const useChatProviderValue = (workspaceContext?: string): ChatContextValu
       setContextCacheIdState(null);
     }
   }, [contextCacheStorageKey]);
-  const {
-    mapsEnabled,
-    mapsWidgetEnabled,
-    mapsLatitude,
-    mapsLongitude,
-    setMapsEnabled,
-    setMapsWidgetEnabled,
-    setMapsLatitude,
-    setMapsLongitude,
-    mapPayload,
-    toggleMapsEnabled,
-  } = useMapsSettings(user, updateUser);
 
   const { remindersEnabled, toggleRemindersEnabled } = useRemindersEnabled(user?.id);
 
@@ -236,7 +223,6 @@ export const useChatProviderValue = (workspaceContext?: string): ChatContextValu
     shouldAttachWorkspaceContextForSession,
     autoWebSearchEnabled,
     webSearchEnabled,
-    mapPayload,
     remindersEnabled,
     reasoningMode,
     modelTier,
@@ -316,19 +302,9 @@ export const useChatProviderValue = (workspaceContext?: string): ChatContextValu
     uploadAttachments,
     removeAttachment,
     clearAttachments,
-    mapsEnabled,
-    mapsWidgetEnabled,
-    mapsLatitude,
-    mapsLongitude,
-    setMapsEnabled,
-    setMapsWidgetEnabled,
-    setMapsLatitude,
-    setMapsLongitude,
-    toggleMapsEnabled,
     toggleWebSearchEnabled,
     remindersEnabled,
     toggleRemindersEnabled,
-    mapPayload,
     autoWebSearchEnabled,
     setAutoWebSearchEnabled,
     webSearchEnabled,

@@ -19,6 +19,7 @@ import {
   Settings as SettingsIcon,
   Palette,
   Database,
+  Archive,
   Bell,
   Brain,
   CreditCard,
@@ -39,16 +40,16 @@ import { clearGrayLocalCache } from "@/lib/localCache";
 import { clearAuthCookies } from "@/lib/auth/cookies";
 import { clearSupabaseAuthStorage } from "@/lib/supabaseStorage";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { extractMemorySettingsFromUser } from "@/lib/memorySettings";
 import { AccountSection } from "./sections/AccountSection";
-import { ApiKeysSection } from "./sections/ApiKeysSection";
 import { DataControlsSection } from "./sections/DataControlsSection";
+import { MemorySection } from "./sections/MemorySection";
 import { ModelsSection } from "./sections/ModelsSection";
 import { NotificationsSection } from "./sections/NotificationsSection";
 import { PersonalizationSection } from "./sections/PersonalizationSection";
 import { PreferencesSection } from "./sections/PreferencesSection";
 import { derivePlanTierLabel, normalizePlanTier, PLAN_TIER_LEVELS } from "@/components/gray/utils/helperFunctions";
 import {
-  API_KEY_PROVIDERS,
   type SettingsModalProps,
   type SettingsSection,
   type ThemeMode,
@@ -57,7 +58,6 @@ import {
 const THEME_STORAGE_KEY = "gray_theme";
 const CONVERSATION_MEMORY_STORAGE_PREFIX = "gray_conversation_memory";
 const MODEL_IMPROVEMENT_STORAGE_PREFIX = "gray_model_improvement";
-const API_KEYS_STORAGE_PREFIX = "gray_api_keys";
 
 const resolveInitialTheme = (): ThemeMode => {
   if (typeof window === "undefined") {
@@ -112,7 +112,7 @@ export function SettingsModal({
       value === "preferences" ||
       value === "personalization" ||
       value === "models" ||
-      value === "api_keys" ||
+      value === "memory" ||
       value === "data_controls" ||
       value === "notifications"
     ) {
@@ -127,7 +127,6 @@ export function SettingsModal({
 
   const conversationMemoryStorageKey = `${CONVERSATION_MEMORY_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
   const modelImprovementStorageKey = `${MODEL_IMPROVEMENT_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
-  const apiKeysStorageKey = `${API_KEYS_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
 
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">(
     "unsupported"
@@ -139,10 +138,6 @@ export function SettingsModal({
   const [responseLanguage, setResponseLanguage] = useState("auto");
   const [modelSearchQuery, setModelSearchQuery] = useState("");
   const [modelsStatus, setModelsStatus] = useState<string | null>(null);
-  const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
-  const [apiKeyDrafts, setApiKeyDrafts] = useState<Record<string, string>>({});
-  const [apiKeyVisibility, setApiKeyVisibility] = useState<Record<string, boolean>>({});
-  const [apiKeyStatus, setApiKeyStatus] = useState<string | null>(null);
   const [isDeletingAllConversations, setIsDeletingAllConversations] = useState(false);
   const [isClearingLocalCache, setIsClearingLocalCache] = useState(false);
 
@@ -170,38 +165,16 @@ export function SettingsModal({
     return PLAN_TIER_LEVELS[normalized] ?? 0;
   }, [user]);
   const planLabel = useMemo(() => derivePlanTierLabel(user), [user]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    const raw = window.localStorage.getItem(apiKeysStorageKey);
-    if (!raw) {
-      setApiKeys({});
-      setApiKeyDrafts({});
-      return;
-    }
-    try {
-      const parsed = JSON.parse(raw) as unknown;
-      if (!parsed || typeof parsed !== "object") {
-        setApiKeys({});
-        setApiKeyDrafts({});
-        return;
-      }
-      const next: Record<string, string> = {};
-      for (const provider of API_KEY_PROVIDERS) {
-        const maybe = (parsed as Record<string, unknown>)[provider.id];
-        if (typeof maybe === "string" && maybe.trim().length > 0) {
-          next[provider.id] = maybe.trim();
-        }
-      }
-      setApiKeys(next);
-      setApiKeyDrafts(next);
-    } catch {
-      setApiKeys({});
-      setApiKeyDrafts({});
-    }
-  }, [apiKeysStorageKey]);
+  const accountMemorySettings = useMemo(
+    () => extractMemorySettingsFromUser(user),
+    [
+      user?.supermemory_auto_capture,
+      user?.supermemory_auto_recall,
+      user?.supermemory_capture_mode,
+      user?.supermemory_max_recall_results,
+      user?.supermemory_profile_frequency,
+    ]
+  );
 
   const handleResponseLanguageChange = (val: string) => {
     const previous = responseLanguage;
@@ -737,6 +710,17 @@ export function SettingsModal({
               <button
                 className={styles.mobileGroupItem}
                 onClick={() => {
+                  setActiveSection("memory");
+                  setMobileView("detail");
+                }}
+              >
+                <Archive className={styles.mobileGroupItemIcon} size={20} />
+                <span className={styles.mobileGroupItemLabel}>{t("Memory")}</span>
+                <ChevronRight className={styles.mobileGroupItemArrow} size={16} />
+              </button>
+              <button
+                className={styles.mobileGroupItem}
+                onClick={() => {
                   setActiveSection("data_controls");
                   setMobileView("detail");
                 }}
@@ -770,8 +754,7 @@ export function SettingsModal({
               {renderNavItem("preferences", t("Preferences"), SettingsIcon)}
               {renderNavItem("personalization", t("Personalization"), Palette)}
               {renderNavItem("models", t("Models"), Brain)}
-              {/* Hidden until backend integration complete */}
-              {/* {renderNavItem("api_keys", t("API Keys"), KeyRound)} */}
+              {renderNavItem("memory", t("Memory"), Archive)}
               {renderNavItem("data_controls", t("Data Controls"), Database)}
               {renderNavItem("notifications", t("Notifications"), Bell)}
             </div>
@@ -844,10 +827,10 @@ export function SettingsModal({
               </button>
               <h2 className={styles.mobileSettingsTitle}>
                 {activeSection === "account" ? t("Account") :
-                  activeSection === "preferences" ? t("Preferences") :
+                      activeSection === "preferences" ? t("Preferences") :
                     activeSection === "personalization" ? t("Personalization") :
                       activeSection === "models" ? t("Models") :
-                        activeSection === "api_keys" ? t("API Keys") :
+                        activeSection === "memory" ? t("Memory") :
                           activeSection === "data_controls" ? t("Data Controls") :
                             activeSection === "notifications" ? t("Notifications") : ""}
               </h2>
@@ -931,19 +914,18 @@ export function SettingsModal({
             />
           )}
 
-          {activeSection === "api_keys" && (
-            <ApiKeysSection
+          {activeSection === "memory" && (
+            <MemorySection
               t={t}
+              userId={typeof user?.id === "number" ? user.id : null}
               tierLevel={tierLevel}
-              apiKeysStorageKey={apiKeysStorageKey}
-              apiKeys={apiKeys}
-              setApiKeys={setApiKeys}
-              apiKeyDrafts={apiKeyDrafts}
-              setApiKeyDrafts={setApiKeyDrafts}
-              apiKeyVisibility={apiKeyVisibility}
-              setApiKeyVisibility={setApiKeyVisibility}
-              apiKeyStatus={apiKeyStatus}
-              setApiKeyStatus={setApiKeyStatus}
+              updateUser={updateUser}
+              accountMemorySettings={accountMemorySettings}
+              conversationMemoryEnabled={conversationMemoryEnabled}
+              setConversationMemoryEnabled={setConversationMemoryEnabled}
+              conversationMemoryStorageKey={conversationMemoryStorageKey}
+              contextCacheId={contextCacheId}
+              setContextCacheId={setContextCacheId}
               onUpgradeClick={() => router.push("/pricing")}
             />
           )}
@@ -952,21 +934,14 @@ export function SettingsModal({
             <DataControlsSection
               t={t}
               userId={typeof user?.id === "number" ? user.id : null}
-              tierLevel={tierLevel}
               updateUser={updateUser}
               modelImprovementEnabled={modelImprovementEnabled}
               setModelImprovementEnabled={setModelImprovementEnabled}
               modelImprovementStorageKey={modelImprovementStorageKey}
-              conversationMemoryEnabled={conversationMemoryEnabled}
-              setConversationMemoryEnabled={setConversationMemoryEnabled}
-              conversationMemoryStorageKey={conversationMemoryStorageKey}
-              contextCacheId={contextCacheId}
-              setContextCacheId={setContextCacheId}
               onClearLocalCache={handleClearLocalCache}
               isDeletingAllConversations={isDeletingAllConversations}
               setIsDeletingAllConversations={setIsDeletingAllConversations}
               clearAllConversations={clearAllConversations}
-              onUpgradeClick={() => router.push("/pricing")}
             />
           )}
 

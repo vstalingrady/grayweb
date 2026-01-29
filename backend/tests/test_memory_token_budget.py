@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from backend.gemini_client import GeminiService
 from backend.openrouter_client import OpenRouterService
 from backend.token_utils import trim_history_by_token_budget
 
@@ -35,18 +34,3 @@ def test_openrouter_build_messages_uses_token_budget_over_message_limit():
     assert len(messages) == len(history) + 1
     assert messages[-1]["role"] == "user"
 
-
-def test_gemini_build_contents_uses_token_budget_over_message_limit():
-    history = []
-    for index in range(25):
-        role = "user" if index % 2 == 0 else "model"
-        history.append({"role": role, "text": "hi"})
-
-    service = GeminiService()
-    contents = service._build_contents(
-        history,
-        "current",
-        history_token_budget=10_000,
-    )
-
-    assert len(contents) == len(history) + 1

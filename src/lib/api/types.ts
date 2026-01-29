@@ -28,7 +28,6 @@ export interface User {
   subscription_expires_at?: string | null;
   initials: string;
   workspace_background_id?: string | null;
-  maps_enabled: boolean;
   improve_model_for_everyone?: boolean;
   has_seen_general_chat?: boolean;
   personalization_nickname?: string | null;
@@ -49,6 +48,11 @@ export interface User {
   notification_preferences?: NotificationPreferences | null;
   conversation_memory_enabled?: boolean | null;
   auto_web_search_enabled?: boolean | null;
+  supermemory_auto_recall?: boolean | null;
+  supermemory_auto_capture?: boolean | null;
+  supermemory_capture_mode?: "all" | "everything" | null;
+  supermemory_max_recall_results?: number | null;
+  supermemory_profile_frequency?: number | null;
 }
 
 export interface ChatSession {
@@ -283,11 +287,38 @@ export interface ChatGptImportResponse {
   title_count: number;
 }
 
-export interface GroundingChunkMaps {
-  uri?: string;
-  title?: string;
-  placeId?: string;
-  googleMapsUri?: string;
+export interface SupermemorySearchResult {
+  id?: string;
+  memory: string;
+  similarity?: number;
+  updatedAt?: string;
+}
+
+export interface SupermemoryStoreResponse {
+  success: boolean;
+  message: string;
+  category?: string;
+  data?: Record<string, unknown>;
+}
+
+export interface SupermemorySearchResponse {
+  results: SupermemorySearchResult[];
+  count: number;
+}
+
+export interface SupermemoryProfileResponse {
+  static: string[];
+  dynamic: string[];
+  searchResults: SupermemorySearchResult[];
+}
+
+export interface SupermemoryForgetResponse {
+  success?: boolean;
+  message?: string;
+}
+
+export interface SupermemoryWipeResponse {
+  deletedCount: number;
 }
 
 export interface GroundingChunkWeb {
@@ -305,7 +336,6 @@ export interface GroundingChunkRetrievedContext {
 }
 
 export interface GroundingChunk {
-  maps?: GroundingChunkMaps;
   web?: GroundingChunkWeb;
   retrieved_context?: GroundingChunkRetrievedContext;
 }
@@ -323,7 +353,6 @@ export interface GroundingSearchEntryPoint {
 export interface GroundingMetadata {
   grounding_chunks?: GroundingChunk[];
   grounding_supports?: GroundingSupport[];
-  google_maps_widget_context_token?: string;
   web_search_queries?: string[];
   search_entry_point?: GroundingSearchEntryPoint;
 }
@@ -341,16 +370,22 @@ export interface ChatRequest {
   responseJsonSchema?: Record<string, unknown>;
   responseMimeType?: string;
   context_cache_id?: number;
-  maps_enabled?: boolean;
-  maps_latitude?: number;
-  maps_longitude?: number;
-  maps_widget?: boolean;
   web_search_enabled?: boolean;
+  web_search_engine?: string;
+  web_search_max_results?: number;
+  web_search_prompt?: string;
+  web_search_context_size?: string;
+  provider_routing?: Record<string, unknown>;
   file_search_enabled?: boolean;
   should_generate_title?: boolean;
   reasoning_mode?: boolean;
   reminders_enabled?: boolean;
   conversation_memory_enabled?: boolean;
+  supermemory_auto_recall?: boolean;
+  supermemory_auto_capture?: boolean;
+  supermemory_capture_mode?: "all" | "everything";
+  supermemory_max_recall_results?: number;
+  supermemory_profile_frequency?: number;
 }
 
 export interface ChatResponse {
@@ -529,7 +564,6 @@ export interface UserUpdate {
   full_name?: string;
   profile_picture_url?: string;
   workspace_background_id?: string | null;
-  maps_enabled?: boolean;
   improve_model_for_everyone?: boolean;
   has_seen_general_chat?: boolean;
   personalization_nickname?: string | null;
@@ -547,6 +581,11 @@ export interface UserUpdate {
   notification_preferences?: NotificationPreferences | null;
   conversation_memory_enabled?: boolean | null;
   auto_web_search_enabled?: boolean | null;
+  supermemory_auto_recall?: boolean | null;
+  supermemory_auto_capture?: boolean | null;
+  supermemory_capture_mode?: "all" | "everything" | null;
+  supermemory_max_recall_results?: number | null;
+  supermemory_profile_frequency?: number | null;
 }
 
 export interface AnalyticsSummary {

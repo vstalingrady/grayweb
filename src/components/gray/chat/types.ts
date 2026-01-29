@@ -104,16 +104,6 @@ export type ChatContextValue = {
     uploadAttachments: (files: FileList | File[]) => Promise<void>;
     removeAttachment: (id: number) => void;
     clearAttachments: () => void;
-    mapsEnabled: boolean;
-    mapsWidgetEnabled: boolean;
-    mapsLatitude: string;
-    mapsLongitude: string;
-    setMapsEnabled: (value: boolean) => void;
-    setMapsWidgetEnabled: (value: boolean) => void;
-    setMapsLatitude: (value: string) => void;
-    setMapsLongitude: (value: string) => void;
-    mapPayload: Record<string, number | boolean | undefined>;
-    toggleMapsEnabled: () => void;
     toggleWebSearchEnabled: () => void;
     autoWebSearchEnabled: boolean;
     setAutoWebSearchEnabled: (value: boolean) => void;

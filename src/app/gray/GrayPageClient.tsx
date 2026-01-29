@@ -173,6 +173,55 @@ function GrayPageClientInner({
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const root = document.documentElement;
+    let rafId: number | null = null;
+
+    const updateViewportHeight = () => {
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+      rafId = window.requestAnimationFrame(() => {
+        const visualHeight = window.visualViewport?.height ?? window.innerHeight;
+        const safeHeight = Math.min(window.innerHeight, visualHeight);
+        root.style.setProperty("--gray-viewport-height", `${safeHeight}px`);
+        rafId = null;
+      });
+    };
+
+    updateViewportHeight();
+    window.addEventListener("resize", updateViewportHeight);
+    window.addEventListener("orientationchange", updateViewportHeight);
+    window.addEventListener("load", updateViewportHeight);
+    window.addEventListener("pageshow", updateViewportHeight);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", updateViewportHeight);
+      window.visualViewport.addEventListener("scroll", updateViewportHeight);
+    }
+    const postLoadTimer = window.setTimeout(updateViewportHeight, 250);
+    const settleTimer = window.setTimeout(updateViewportHeight, 900);
+
+    return () => {
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+      window.clearTimeout(postLoadTimer);
+      window.clearTimeout(settleTimer);
+      window.removeEventListener("resize", updateViewportHeight);
+      window.removeEventListener("orientationchange", updateViewportHeight);
+      window.removeEventListener("load", updateViewportHeight);
+      window.removeEventListener("pageshow", updateViewportHeight);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener("resize", updateViewportHeight);
+        window.visualViewport.removeEventListener("scroll", updateViewportHeight);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!user?.id) {
       setHasAffiliateAccess(false);
       return;

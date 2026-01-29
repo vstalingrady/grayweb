@@ -7,7 +7,7 @@ This project integrates a FastAPI backend with a Next.js frontend to replace pla
 - **Real User Profiles**: Fetches user data from database instead of hardcoded names
 - **Profile Pictures**: Supports real profile images with fallback to avatars
 - **Dynamic Roles**: User roles retrieved from database
-- **AI-Powered Chat**: Real chat with Google Gemini AI integration
+- **AI-Powered Chat**: Real chat via OpenRouter with multi-model routing
 - **Conversation Persistence**: Chat history saved to the local database (SQLite by default)
 - **Markdown Support**: AI responses render with rich formatting
 - **Calendar Events**: User-specific calendar events from database
@@ -17,10 +17,10 @@ This project integrates a FastAPI backend with a Next.js frontend to replace pla
 - **Chat Sessions**: Real chat history stored in database
 - **Calendar Events**: User-specific calendar events from database
 - **Automatic User Creation**: Creates new users automatically when they first visit
-- **Gemini Multimodal**: Supports image and PDF inputs so Gray can caption media or summarize documents using the same Flash models (see `docs/gemini-multimodal.md` for details)
-- **Function Calling & Structured Output**: Gemini can invoke retrievers or tools and return schema-guaranteed JSON, so you can expose precise, parsable RAG results and actions (details in `docs/gemini-multimodal.md`).
-- **Grounding with Google Maps**: Enable Gemini’s Maps grounding tool to inject accurate location-aware context, citations, and optional widgets whenever the user asks about places (also covered in `docs/gemini-multimodal.md`).
-- **Long Context**: Gemini’s 1M+ token context window lets Gray keep entire project histories, documents, and media in a single prompt, avoiding clever truncation or RAG tricks for many workflows (see `docs/gemini-long-context.md` for details).
+- **Multimodal Inputs**: Supports image and PDF inputs so Gray can caption media or summarize documents.
+- **Function Calling & Structured Output**: Tools and JSON schemas for structured actions and responses.
+- **Web Search Grounding**: Optional OpenRouter web plugin for up-to-date info with citations.
+- **Long Context**: Context limits depend on the selected OpenRouter model.
 
 ## Getting Started
 
@@ -42,7 +42,7 @@ Create a `.env` file in the `backend/` directory:
 
 ```env
 DATABASE_URL=sqlite:///../data/users.db
-GEMINI_API_KEY=your_gemini_api_key_here
+OPENROUTER_API_KEY=your_openrouter_api_key_here
 SUPABASE_URL=your_supabase_url_here
 SUPABASE_KEY=your_supabase_anon_key_here
 # Dodo Payments (hosted checkout)
@@ -85,37 +85,22 @@ GOOGLE_TOKEN_ENCRYPTION_KEY=your_fernet_key
 # DISCORD_ALERT_MIN_LEVEL=ERROR
 ```
 
-By default responses now stream as quickly as Gemini returns them. If you ever need to
+By default responses now stream as quickly as OpenRouter returns them. If you ever need to
 slow the token firehose (for example to match a UI animation), set
 `GRAY_STREAMING_TOKEN_DELAY_SECONDS` in your `.env` to the number of seconds to wait
 between streamed chunks (e.g. `0.02` for ~50 tokens/second).
 
-Thread titles are generated from the same Gemini call that produces the reply, so there is
-no extra round trip when a conversation starts. You can opt out by setting
-`GEMINI_AUTO_THREAD_TITLES=false` if you prefer manual naming.
+Thread titles are generated from the same OpenRouter call that produces the reply, so there is
+no extra round trip when a conversation starts.
 
 #### Getting API Keys
 
-**Google Gemini API:**
+**OpenRouter API:**
 
-1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
-2. Create a new API key
-3. Replace `your_gemini_api_key_here` with your key
+1. Create an API key at [openrouter.ai/keys](https://openrouter.ai/keys)
+2. Replace `your_openrouter_api_key_here` with your key
 
-> **Tip:** The backend will look for the first non-placeholder value in
-> `GEMINI_API_KEY`, `GEMINI_API_KEY_SECONDARY`, `GEMINI_API_KEY_TERTIARY`, or `GOOGLE_API_KEY`
-> and keeps that secret synchronized on both variables so either name can hold the active key.
-
-**Anthropic Claude (optional):**
-
-1. Create an API key at [console.anthropic.com](https://console.anthropic.com/)
-2. Add `ANTHROPIC_API_KEY` to your `.env`
-3. Set `AI_PROVIDER=anthropic` to route chat and streaming requests through Claude instead of Gemini.
-   (Leave it unset or `gemini` to keep using Gemini.)
-
-Both the backend and frontend now read exclusively from the repo root `.env`, and the loader forces those values to override any pre-existing environment variables, so update the Gemini key (and other secrets) in that single file and restart the processes to pick up the change.
-
-The backend now validates that key on startup by issuing a brief prompt through `GeminiService`. Set `VALIDATE_GEMINI_ON_STARTUP=false` in `.env` if you need to skip the validation call (e.g., to avoid extra quota while iterating locally).
+Both the backend and frontend read from the repo root `.env`, and the loader forces those values to override any pre-existing environment variables, so update the OpenRouter key (and other secrets) in that single file and restart the processes to pick up the change.
 
 **Supabase (Auth):**
 

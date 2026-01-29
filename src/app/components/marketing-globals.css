@@ -3300,6 +3300,12 @@ a:hover {
     width: min(clamp(420px, 100vw, 900px), 82vh);
     margin: 0 auto;
   }
+
+  .hero-section--split .hero-split__visual.hero-visual {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+  }
 }
 
 @media (max-width: 1024px) {

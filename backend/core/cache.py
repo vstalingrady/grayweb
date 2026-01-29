@@ -15,7 +15,7 @@ class AsyncTTLCache:
     def __init__(self, ttl_seconds: int = 300, max_size: int = 256):
         self.ttl_seconds = ttl_seconds
         self.max_size = max_size
-        self.cache: Dict[str, Tuple[Any, float]] = {}
+        self.cache: Dict[str, Tuple[Any, float, str]] = {}
 
     async def get(self, key: str, fetch_func: Callable) -> Any:
         """Get value from cache or fetch it using the provided async function."""
@@ -119,6 +119,13 @@ USER_CACHE = AsyncTTLCache(ttl_seconds=300)
 USER_CACHE.ttl_seconds = 10
 CONVERSATION_OWNER_CACHE = TTLCache(ttl_seconds=900, max_size=512)
 CONVERSATION_HISTORY_CACHE = TTLCache(ttl_seconds=900, max_size=256)
+# Context cache records are immutable once created; keep a short-lived local cache
+# to reduce repeated DB hits during active sessions.
+CONTEXT_CACHE = AsyncTTLCache(ttl_seconds=900, max_size=512)
+
+
+def _context_cache_key(cache_id: int, user_id: int) -> str:
+    return f"context_cache:{user_id}:{cache_id}"
 
 
 # ==============================================================================
@@ -174,18 +181,33 @@ async def load_context_cache(cache_id: int, user_id: int, db) -> Optional[Dict[s
     """
     if cache_id is None:
         return None
-    context_cache = _get_context_cache_table()
-    record = await db.fetch_one(
-        context_cache.select().where(
-            (context_cache.c.id == cache_id)
-            & (context_cache.c.user_id == user_id)
+    cache_key = _context_cache_key(cache_id, user_id)
+
+    async def _fetch_record():
+        context_cache = _get_context_cache_table()
+        return await db.fetch_one(
+            context_cache.select().where(
+                (context_cache.c.id == cache_id)
+                & (context_cache.c.user_id == user_id)
+            )
         )
-    )
-    return record
+
+    try:
+        return await CONTEXT_CACHE.get(cache_key, _fetch_record)
+    except Exception:
+        return await _fetch_record()
+
+
+async def invalidate_context_cache(cache_id: Optional[int], user_id: Optional[int]) -> None:
+    """Invalidate a cached context cache record across workers."""
+    if not cache_id or not user_id:
+        return
+    cache_key = _context_cache_key(cache_id, user_id)
+    await CONTEXT_CACHE.invalidate_global(cache_key)
 
 
 def context_cache_contents(record: Optional[Dict[str, Any]]) -> Optional[Any]:
-    """Convert a context cache record to Gemini Content list.
+    """Convert a context cache record to an OpenRouter-compatible content list.
     
     Args:
         record: The cache record from database

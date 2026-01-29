@@ -66,6 +66,7 @@ export const PIONEER_GROUPS: ModelGroup[] = [
     label: "Moonshot AI",
     iconPath: "/logos/whitekimi.svg",
     models: [
+      { id: "moonshotai/kimi-k2.5", label: "Kimi K2.5", cost: "$$$", tierRequired: "pathfinder" },
       { id: "moonshotai/kimi-k2-0905", label: "Kimi K2", cost: "$$", tierRequired: "pathfinder" },
       { id: "moonshotai/kimi-k2-fast", label: "Kimi K2 (Fast)", cost: "$$$", tierRequired: "pathfinder" },
     ],
@@ -74,7 +75,10 @@ export const PIONEER_GROUPS: ModelGroup[] = [
     id: "minimax",
     label: "MiniMax",
     iconPath: "/logos/minimax-color.svg",
-    models: [{ id: "minimax/minimax-m2.1", label: "MiniMax M2.1", cost: "$$", tierRequired: "pathfinder" }],
+    models: [
+      { id: "minimax/minimax-m2.1", label: "MiniMax M2.1", cost: "$$", tierRequired: "pathfinder" },
+      { id: "minimax/minimax-m2-her", label: "MiniMax M2 - her", cost: "$$", tierRequired: "pathfinder" },
+    ],
   },
   {
     id: "xiaomi",

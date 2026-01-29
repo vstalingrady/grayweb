@@ -406,9 +406,6 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     if (Object.prototype.hasOwnProperty.call(userData, 'personalization_time_zone')) {
       payload.personalization_time_zone = userData.personalization_time_zone ?? null;
     }
-    if (typeof userData.maps_enabled === 'boolean') {
-      payload.maps_enabled = userData.maps_enabled;
-    }
     if (Object.prototype.hasOwnProperty.call(userData, 'preferred_model')) {
       payload.preferred_model = userData.preferred_model ?? null;
     }
@@ -441,6 +438,21 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     }
     if (Object.prototype.hasOwnProperty.call(userData, 'auto_web_search_enabled')) {
       payload.auto_web_search_enabled = userData.auto_web_search_enabled ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(userData, 'supermemory_auto_recall')) {
+      payload.supermemory_auto_recall = userData.supermemory_auto_recall ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(userData, 'supermemory_auto_capture')) {
+      payload.supermemory_auto_capture = userData.supermemory_auto_capture ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(userData, 'supermemory_capture_mode')) {
+      payload.supermemory_capture_mode = userData.supermemory_capture_mode ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(userData, 'supermemory_max_recall_results')) {
+      payload.supermemory_max_recall_results = userData.supermemory_max_recall_results ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(userData, 'supermemory_profile_frequency')) {
+      payload.supermemory_profile_frequency = userData.supermemory_profile_frequency ?? null;
     }
 
     if (Object.keys(payload).length === 0) {

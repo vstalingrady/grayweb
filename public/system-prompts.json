@@ -36,7 +36,7 @@
     "id": "Balas dengan tepat satu kata:\n- REMINDERS jika pesan mengindikasikan pengingat/rencana/kebiasaan/timer untuk disimpan.\n- NONE jika tidak."
   },
   "web_search_summary": {
-    "en": "Using Google Search, gather up-to-date information for the user's question. Return a clear factual summary with enough detail to answer the question.",
-    "id": "Dengan menggunakan Google Search, kumpulkan informasi terbaru untuk pertanyaan pengguna. Kembalikan ringkasan faktual yang jelas dan cukup detail untuk menjawab."
+    "en": "Using web search, gather up-to-date information for the user's question. Return a clear factual summary with enough detail to answer the question.",
+    "id": "Dengan menggunakan pencarian web, kumpulkan informasi terbaru untuk pertanyaan pengguna. Kembalikan ringkasan faktual yang jelas dan cukup detail untuk menjawab."
   }
 }

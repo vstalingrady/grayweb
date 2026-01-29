@@ -82,9 +82,6 @@ from backend.compat_imports import (
     serialize_reminder_row as _serialize_reminder_row,
     serialize_habit_record as _serialize_habit_record,
     datetime_to_ms as _datetime_to_ms,
-    candidate_text as _candidate_text,
-    candidate_thought as _candidate_thought,
-    candidate_grounding_payload as _candidate_grounding_payload,
     merge_extra_contents as _merge_extra_contents,
     materialize_structured_reminders as _materialize_structured_reminders,
     fallback_title_from_message as _fallback_title_from_message,
@@ -92,7 +89,6 @@ from backend.compat_imports import (
     create_calendar_event as _create_calendar_event,
     update_calendar_event as _update_calendar_event,
     delete_calendar_event as _delete_calendar_event,
-    build_maps_tool_and_config as _build_maps_tool_and_config,
     set_entity_reminder_scheduler as _set_entity_reminder_scheduler,
     set_workspace_reminder_scheduler as _set_workspace_reminder_scheduler,
     list_plans_tool as _list_plans_tool,
@@ -143,8 +139,6 @@ from backend.google_calendar import (
     encrypt_refresh_token,
     decrypt_refresh_token,
 )
-from google.genai import types
-from backend.gemini_client import GeminiAttachment, GeminiService
 from backend.openrouter_client import OpenRouterService
 from backend.usage_tracker import UsageTracker, UsageLimitExceeded
 from backend.calendar_tools import CALENDAR_TOOLS
@@ -306,36 +300,13 @@ from backend.core.chat_starter_helpers import (
 
 load_dotenv(ROOT_DIR / ".env")
 
-from backend.core.function_call_helpers import (
-    build_function_call_contents as _build_function_call_contents,
-    extract_function_call as _extract_function_call,
-    format_tool_results_for_context as _format_tool_results_for_context,
-)
-
-from backend.core.stream_handlers.hybrid import (
-    fetch_url_context_with_gemini as _fetch_url_context_with_gemini_hybrid,
-    execute_tools_with_gemini_flash as _execute_tools_with_gemini_flash_hybrid,
-    has_onboarding_tool as _has_onboarding_tool_hybrid,
-)
-from backend.core.stream_handlers.gemini_stream import stream_gemini_response
 from backend.core.stream_handlers.openrouter import stream_openrouter_response
 from backend.core.stream_handlers.context import (
     build_intent_window_text,
-    consolidate_gemini_tools,
-    add_url_context_tool_if_needed,
-    add_maps_tool_if_needed,
     determine_provider_and_model,
 )
 
 # AI Response context helpers (extracted shared logic)
-from backend.core.ai_response_context import (
-    load_context_cache as _load_context_cache_helper,
-    build_workspace_context as _build_workspace_context,
-    prepare_tool_list as _prepare_tool_list,
-    build_effective_system_prompt as _build_effective_system_prompt,
-    resolve_media_with_timing as _resolve_media_with_timing,
-    REMINDERS_DISABLED_NOTE,
-)
 
 # Initialize enhanced logging system
 app_logger = setup_logging(
@@ -360,11 +331,7 @@ app_logger.info(f"Backend starting (env={os.getenv('ENVIRONMENT', 'development')
 # AI Configuration imports (centralized in core.ai_config)
 from backend.core.ai_config import (
     AI_PROVIDER,
-    GEMINI_DEFAULT_MODEL,
-    VALIDATE_GEMINI_ON_STARTUP,
     tier_conversation_token_limit as _tier_conversation_token_limit_base,
-    get_search_tool,
-    get_url_context_tool,
     get_default_chat_tools,
     GLOBAL_SYSTEM_PROMPTS_PATH,
 )
@@ -379,15 +346,12 @@ def tier_conversation_token_limit(plan_tier: Optional[str], model_id: Optional[s
         model_limit_fn=model_limit_fn,
     )
 
-GEMINI_SERVICE = GeminiService()
 OPENROUTER_SERVICE = OpenRouterService()
 
 AI_MESSAGE_GENERATOR = AIMessageGenerator()
 
 MEDIA_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-SEARCH_TOOL = get_search_tool()
-URL_CONTEXT_TOOL = get_url_context_tool()
 DEFAULT_CHAT_TOOLS = get_default_chat_tools()
 
 from backend.core.migrations import run_startup_migrations as _run_startup_migrations
@@ -609,6 +573,11 @@ app.include_router(context_cache_router)
 from backend.api.imports import router as imports_router
 
 app.include_router(imports_router)
+
+# Supermemory routes
+from backend.api.supermemory import router as supermemory_router
+
+app.include_router(supermemory_router)
 
 # Initialize audit logger with database
 

@@ -98,31 +98,173 @@
 
 ## Web Search
 
-### Enable via Plugin
+### Model-agnostic grounding
+You can incorporate relevant web search results for any model on OpenRouter by activating and customizing the web plugin, or by appending `:online` to the model slug:
+
 ```json
 {
-  "plugins": [{ "id": "web", "max_results": 3 }]
+  "model": "openai/gpt-5.2:online"
 }
 ```
 
-### Or use `:online` model variants
-```
-model: "openai/o4-mini:online"
-```
+You can also append `:online` to `:free` model variants like so:
 
-### Response Annotations
 ```json
 {
-  "annotations": [
+  "model": "openai/gpt-oss-20b:free:online"
+}
+```
+
+Using web search will incur extra costs, even with free models.
+
+`:online` is a shortcut for using the web plugin, and is exactly equivalent to:
+
+```json
+{
+  "model": "openrouter/auto",
+  "plugins": [{ "id": "web" }]
+}
+```
+
+The web search plugin is powered by native search for Anthropic, OpenAI, Perplexity, and xAI models.
+For xAI models, the web search plugin enables both Web Search and X Search.
+For other models, the web search plugin is powered by Exa. It uses their "auto" method (a combination of keyword search and embeddings-based web search) to find the most relevant results and augment/ground your prompt.
+
+### Parsing web search results
+Web search results for all models (including native-only models like Perplexity and OpenAI Online) are available in the API and standardized by OpenRouter to follow the same annotation schema in the OpenAI Chat Completion Message type:
+
+```json
+{
+  "message": {
+    "role": "assistant",
+    "content": "Here's the latest news I found: ...",
+    "annotations": [
+      {
+        "type": "url_citation",
+        "url_citation": {
+          "url": "https://www.example.com/web-search-result",
+          "title": "Title of the web search result",
+          "content": "Content of the web search result",
+          "start_index": 100,
+          "end_index": 200
+        }
+      }
+    ]
+  }
+}
+```
+
+### Customizing the Web Plugin
+The maximum results allowed by the web plugin and the prompt used to attach them to your message stream can be customized:
+
+```json
+{
+  "model": "openai/gpt-5.2:online",
+  "plugins": [
     {
-      "type": "url_citation",
-      "url": "https://example.com",
-      "start_index": 0,
-      "end_index": 50
+      "id": "web",
+      "engine": "exa",
+      "max_results": 1,
+      "search_prompt": "Some relevant web results:"
     }
   ]
 }
 ```
+
+By default, the web plugin uses the following search prompt, using the current date:
+
+A web search was conducted on `date`. Incorporate the following web search results into your response.
+IMPORTANT: Cite them using markdown links named using the domain of the source.
+Example: [nytimes.com](https://nytimes.com/some-page).
+
+### Engine Selection
+The web search plugin supports the following options for the `engine` parameter:
+
+- `native`: Always uses the model provider's built-in web search capabilities.
+- `exa`: Uses Exa's search API for web results.
+- `undefined` (not specified): Uses native search if available for the provider, otherwise falls back to Exa.
+
+### Default Behavior
+When the `engine` parameter is not specified:
+
+- Native search is used by default for OpenAI, Anthropic, Perplexity, and xAI models that support it.
+- Exa search is used for all other models or when native search is not supported.
+
+### Forcing Engine Selection
+You can explicitly specify which engine to use:
+
+```json
+{
+  "model": "openai/gpt-5.2",
+  "plugins": [
+    {
+      "id": "web",
+      "engine": "native"
+    }
+  ]
+}
+```
+
+Or force Exa search even for models that support native search:
+
+```json
+{
+  "model": "openai/gpt-5.2",
+  "plugins": [
+    {
+      "id": "web",
+      "engine": "exa",
+      "max_results": 3
+    }
+  ]
+}
+```
+
+### Engine-Specific Pricing
+- Native search: Pricing is passed through directly from the provider (see provider-specific pricing info below).
+- Exa search: Uses OpenRouter credits at $4 per 1000 results (default 5 results = $0.02 per request).
+
+### Pricing
+#### Exa Search Pricing
+When using Exa search (either explicitly via `"engine": "exa"` or as fallback), the web plugin uses your OpenRouter credits and charges $4 per 1000 results. By default, `max_results` is set to 5, which is a maximum of $0.02 per request, in addition to the LLM usage for the search result prompt tokens.
+
+#### Native Search Pricing (Provider Passthrough)
+Some models have built-in web search. These models charge a fee based on the search context size, which determines how much search data is retrieved and processed for a query.
+
+##### Search Context Size Thresholds
+Search context can be "low", "medium", or "high" and determines how much search context is retrieved for a query:
+
+- Low: Minimal search context, suitable for basic queries
+- Medium: Moderate search context, good for general queries
+- High: Extensive search context, ideal for detailed research
+
+##### Specifying Search Context Size
+You can specify the search context size in your API request using the `web_search_options` parameter:
+
+```json
+{
+  "model": "openai/gpt-4.1",
+  "messages": [
+    {
+      "role": "user",
+      "content": "What are the latest developments in quantum computing?"
+    }
+  ],
+  "web_search_options": {
+    "search_context_size": "high"
+  }
+}
+```
+
+Native web search pricing only applies when using `"engine": "native"` or when native search is used by default for supported models. When using `"engine": "exa"`, the Exa search pricing applies instead.
+
+##### Native Web Search Pricing
+Refer to each provider's documentation for their native web search pricing info:
+
+- OpenAI Pricing
+- Anthropic Pricing
+- Perplexity Pricing
+- xAI Pricing
 
 ---
 

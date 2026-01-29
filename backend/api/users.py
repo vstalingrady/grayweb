@@ -332,6 +332,47 @@ async def update_user(
         if not isinstance(raw_value, bool):
             update_data.pop(flag_field, None)
 
+    for flag_field in ("supermemory_auto_recall", "supermemory_auto_capture"):
+        if flag_field not in update_data:
+            continue
+        raw_value = update_data.get(flag_field)
+        if raw_value is None:
+            update_data[flag_field] = None
+            continue
+        if not isinstance(raw_value, bool):
+            update_data.pop(flag_field, None)
+
+    if "supermemory_capture_mode" in update_data:
+        raw_mode = update_data.get("supermemory_capture_mode")
+        if raw_mode is None:
+            update_data["supermemory_capture_mode"] = None
+        elif isinstance(raw_mode, str):
+            normalized = raw_mode.strip().lower()
+            if normalized in {"all", "everything"}:
+                update_data["supermemory_capture_mode"] = normalized
+            else:
+                update_data.pop("supermemory_capture_mode", None)
+        else:
+            update_data.pop("supermemory_capture_mode", None)
+
+    if "supermemory_max_recall_results" in update_data:
+        raw_value = update_data.get("supermemory_max_recall_results")
+        if raw_value is None:
+            update_data["supermemory_max_recall_results"] = None
+        elif isinstance(raw_value, int):
+            update_data["supermemory_max_recall_results"] = max(1, min(raw_value, 20))
+        else:
+            update_data.pop("supermemory_max_recall_results", None)
+
+    if "supermemory_profile_frequency" in update_data:
+        raw_value = update_data.get("supermemory_profile_frequency")
+        if raw_value is None:
+            update_data["supermemory_profile_frequency"] = None
+        elif isinstance(raw_value, int):
+            update_data["supermemory_profile_frequency"] = max(1, min(raw_value, 500))
+        else:
+            update_data.pop("supermemory_profile_frequency", None)
+
     # Normalize optional text fields
     for field_name, max_length in (
         ("personalization_system_prompt_override", 8000),

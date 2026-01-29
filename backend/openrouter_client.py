@@ -4,9 +4,15 @@ from __future__ import annotations
 
 import os
 import httpx
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 from backend.token_utils import trim_history_by_token_budget
+from backend.core.file_annotation_cache import (
+    get_cached_pdf_text,
+    store_cached_pdf_text,
+    should_reuse_pdf_cache,
+)
+from backend.core.ai_utils import openrouter_annotations_to_grounding
 
 
 def _int_env(name: str, default: int) -> int:
@@ -34,6 +40,134 @@ def _trim(text: Optional[str]) -> Optional[str]:
         return None
     trimmed = text.strip()
     return trimmed if trimmed else None
+
+
+def _normalize_mime_type(value: Optional[str]) -> str:
+    return (value or "").strip().lower()
+
+
+def _is_pdf_mime(mime_type: Optional[str]) -> bool:
+    if not mime_type:
+        return False
+    normalized = _normalize_mime_type(mime_type)
+    return normalized == "application/pdf" or normalized.endswith("/pdf") or normalized.endswith("+pdf")
+
+
+def _has_pdf_attachments(attachments: Optional[List[Any]]) -> bool:
+    if not attachments:
+        return False
+    for attachment in attachments:
+        mime_type = getattr(attachment, "mime_type", None)
+        if _is_pdf_mime(mime_type):
+            return True
+    return False
+
+
+def _extract_annotations_from_message(message: Any) -> List[Dict[str, Any]]:
+    annotations: List[Dict[str, Any]] = []
+    if isinstance(message, dict):
+        message_annotations = message.get("annotations")
+        if isinstance(message_annotations, list):
+            annotations.extend([a for a in message_annotations if isinstance(a, dict)])
+        content = message.get("content")
+        if isinstance(content, list):
+            for part in content:
+                if not isinstance(part, dict):
+                    continue
+                part_annotations = part.get("annotations")
+                if isinstance(part_annotations, list):
+                    annotations.extend([a for a in part_annotations if isinstance(a, dict)])
+    return annotations
+
+
+def _extract_text_from_content(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: List[str] = []
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            text = item.get("text") or item.get("content")
+            if isinstance(text, str):
+                parts.append(text)
+        return "".join(parts)
+    return ""
+
+
+def _extract_annotations_from_delta(delta: Dict[str, Any], choice: Dict[str, Any]) -> List[Dict[str, Any]]:
+    annotations: List[Dict[str, Any]] = []
+    delta_annotations = delta.get("annotations")
+    if isinstance(delta_annotations, list):
+        annotations.extend([a for a in delta_annotations if isinstance(a, dict)])
+    content = delta.get("content")
+    if isinstance(content, list):
+        for part in content:
+            if not isinstance(part, dict):
+                continue
+            part_annotations = part.get("annotations")
+            if isinstance(part_annotations, list):
+                annotations.extend([a for a in part_annotations if isinstance(a, dict)])
+    annotations.extend(_extract_annotations_from_message(choice.get("message")))
+    return annotations
+
+
+def _needs_pdf_parser(attachments: Optional[List[Any]]) -> bool:
+    if not attachments:
+        return False
+    reuse_cache = should_reuse_pdf_cache()
+    for attachment in attachments:
+        mime_type = getattr(attachment, "mime_type", None)
+        if not _is_pdf_mime(mime_type):
+            continue
+        if not reuse_cache:
+            return True
+        cache_key = getattr(attachment, "content_hash", None)
+        cached_text = get_cached_pdf_text(cache_key)
+        if not cached_text:
+            return True
+    return False
+
+
+def _store_cached_pdf_text_from_grounding(
+    grounding_metadata: Optional[Dict[str, Any]],
+    attachments: Optional[List[Any]],
+) -> None:
+    if not grounding_metadata or not attachments:
+        return
+    chunks = grounding_metadata.get("grounding_chunks") or []
+    if not chunks:
+        return
+
+    pdf_attachments = [
+        a for a in attachments
+        if _is_pdf_mime(getattr(a, "mime_type", None))
+    ]
+    if not pdf_attachments:
+        return
+
+    for chunk in chunks:
+        retrieved = chunk.get("retrieved_context") if isinstance(chunk, dict) else None
+        if not isinstance(retrieved, dict):
+            continue
+        text = retrieved.get("text")
+        if not isinstance(text, str) or not text.strip():
+            continue
+        title = retrieved.get("document_name") or retrieved.get("title")
+        title_normalized = str(title).strip().lower() if title else None
+
+        matched = False
+        for attachment in pdf_attachments:
+            filename = (getattr(attachment, "filename", None) or "").strip().lower()
+            if title_normalized and filename and title_normalized not in filename:
+                continue
+            cache_key = getattr(attachment, "content_hash", None)
+            store_cached_pdf_text(cache_key, text)
+            matched = True
+
+        if not matched and len(pdf_attachments) == 1:
+            cache_key = getattr(pdf_attachments[0], "content_hash", None)
+            store_cached_pdf_text(cache_key, text)
 
 
 class OpenRouterService:
@@ -67,9 +201,11 @@ class OpenRouterService:
         "deepseek-r1": "deepseek/deepseek-r1",
         # Moonshot / Kimi models
         "kimi-k2": "moonshotai/kimi-k2-0905",  # Non-reasoning variant
+        "kimi-k2.5": "moonshotai/kimi-k2.5",
         "kimi-k2-fast": "moonshotai/kimi-k2-0905",
         "kimi-k2-thinking": "moonshotai/kimi-k2-thinking",  # Always-reasoning variant
         "moonshotai/kimi-k2-fast": "moonshotai/kimi-k2-0905",
+        "moonshotai/kimi-k2.5": "moonshotai/kimi-k2.5",
         # xAI Grok models
         "grok-4": "x-ai/grok-4.1-fast",
         "grok-4.1": "x-ai/grok-4.1-fast",
@@ -133,11 +269,13 @@ class OpenRouterService:
         "openai/gpt-4-turbo": 128_000,
         "openai/gpt-4o-mini": 128_000,
         # Kimi models (262k context)
+        "moonshotai/kimi-k2.5": 262_144,
         "moonshotai/kimi-k2-0905": 262_144,
         "moonshotai/kimi-k2-thinking": 262_144,
         "moonshotai/kimi-k2-fast": 262_144,
         # MiniMax models
         "minimax/minimax-m2.1": 205_000,
+        "minimax/minimax-m2-her": 65_536,
         # xAI Grok models
         "x-ai/grok-4.1-fast": 2_000_000,  # 2M context
         "x-ai/grok-3": 131_072,
@@ -153,13 +291,16 @@ class OpenRouterService:
         return cls.MODEL_CONTEXT_LIMITS.get(model_id, 2_000_000)
 
     def __init__(self) -> None:
-        self._api_key = _trim(os.getenv("OPENROUTER_API_KEY"))
-        self._enabled = (os.getenv("OPENROUTER_ENABLED") or "true").strip().lower() not in {
-            "0",
-            "false",
-            "no",
-            "off",
-        }
+        provider = (os.getenv("AI_PROVIDER") or "openrouter").strip().lower()
+        api_key = _trim(os.getenv("OPENROUTER_API_KEY"))
+        if not api_key and provider == "moltbot":
+            api_key = _trim(os.getenv("MOLTBOT_GATEWAY_TOKEN") or os.getenv("MOLTBOT_API_KEY"))
+        self._provider = provider
+        self._api_key = api_key
+        enabled_raw = (
+            os.getenv("MOLTBOT_ENABLED") if provider == "moltbot" else os.getenv("OPENROUTER_ENABLED")
+        ) or "true"
+        self._enabled = enabled_raw.strip().lower() not in {"0", "false", "no", "off"}
         self._prompt_cache_enabled = (os.getenv("OPENROUTER_PROMPT_CACHE") or "true").strip().lower() not in {
             "0",
             "false",
@@ -174,6 +315,10 @@ class OpenRouterService:
         ]
         self._lite_model = os.getenv("OPENROUTER_LITE_MODEL", "xiaomi/mimo-v2-flash:free")
         self._default_model = os.getenv("OPENROUTER_DEFAULT_MODEL", self.MODEL_MAPPINGS["default"])
+        base_url = os.getenv("OPENROUTER_BASE_URL")
+        if provider == "moltbot":
+            base_url = os.getenv("MOLTBOT_BASE_URL") or base_url or "http://127.0.0.1:18789/v1"
+        self._base_url = (base_url or self.BASE_URL).rstrip("/")
         # Keep a small window for the free/lite path, but widen it for Pioneer-grade models
         # so onboarding context is not dropped mid-flow.
         self._max_history_lite = _int_env("OPENROUTER_MAX_HISTORY_MESSAGES", 10)
@@ -200,7 +345,11 @@ class OpenRouterService:
 
     @property
     def available(self) -> bool:
-        return self._enabled and self._api_key is not None and len(self._api_key) > 0
+        if not self._enabled:
+            return False
+        if self._provider == "moltbot":
+            return True
+        return self._api_key is not None and len(self._api_key) > 0
 
     @property
     def lite_model(self) -> str:
@@ -344,36 +493,66 @@ class OpenRouterService:
         # If we have attachments, we need to construct a multipart message
         if attachments:
             import base64
-            
+
             content_parts: List[Dict[str, Any]] = []
-            
-            # Add images first (common practice for VLM context)
+            file_parts: List[Dict[str, Any]] = []
+            image_parts: List[Dict[str, Any]] = []
+            cached_pdf_parts: List[Dict[str, Any]] = []
+            reuse_pdf_cache = should_reuse_pdf_cache()
+
             for attachment in attachments:
-                # We expect attachment to be a GeminiAttachment-like object with .data and .mime_type
-                if hasattr(attachment, "data") and hasattr(attachment, "mime_type"):
-                    mime_type = attachment.mime_type
-                    # Only support images for now via standard image_url
-                    if mime_type.startswith("image/"):
-                        b64_data = base64.b64encode(attachment.data).decode("utf-8")
-                        content_parts.append({
+                # We expect attachment to be an attachment-like object with .data and .mime_type
+                if not hasattr(attachment, "data") or not hasattr(attachment, "mime_type"):
+                    continue
+                mime_type = _normalize_mime_type(attachment.mime_type)
+                if not mime_type:
+                    continue
+
+                if mime_type.startswith("image/"):
+                    b64_data = base64.b64encode(attachment.data).decode("utf-8")
+                    image_parts.append(
+                        {
                             "type": "image_url",
-                            "image_url": {
-                                "url": f"data:{mime_type};base64,{b64_data}"
-                            }
+                            "image_url": {"url": f"data:{mime_type};base64,{b64_data}"},
+                        }
+                    )
+                    continue
+
+                if _is_pdf_mime(mime_type):
+                    filename = getattr(attachment, "filename", None) or "document.pdf"
+                    cache_key = getattr(attachment, "content_hash", None)
+                    cached_text = get_cached_pdf_text(cache_key) if reuse_pdf_cache else None
+                    if cached_text:
+                        cached_pdf_parts.append({
+                            "type": "text",
+                            "text": f"[Cached PDF content: {filename}]\n{cached_text}",
                         })
-                    # TODO: add text/pdf support if OpenRouter models support it generically or via text injection
-            
-            # Add text message last
+                    else:
+                        b64_data = base64.b64encode(attachment.data).decode("utf-8")
+                        file_parts.append(
+                            {
+                                "type": "file",
+                                "file": {
+                                    "filename": filename,
+                                    "file_data": f"data:{mime_type};base64,{b64_data}",
+                                },
+                            }
+                        )
+
+            # Text first, then files, then images (OpenRouter recommendation).
             if trimmed_message:
-                content_parts.append({
-                    "type": "text",
-                    "text": trimmed_message
-                })
-            
+                content_parts.append({"type": "text", "text": trimmed_message})
+            if cached_pdf_parts:
+                content_parts.extend(cached_pdf_parts)
+            if file_parts:
+                content_parts.extend(file_parts)
+            if image_parts:
+                content_parts.extend(image_parts)
+
             if content_parts:
                 payload.append({"role": "user", "content": content_parts})
-            elif trimmed_message: # Fallback if no valid attachments processed
-                 payload.append({"role": "user", "content": trimmed_message})
+            elif trimmed_message:  # Fallback if no valid attachments processed
+                payload.append({"role": "user", "content": trimmed_message})
 
         elif trimmed_message:
             payload.append({"role": "user", "content": trimmed_message})
@@ -424,18 +603,23 @@ class OpenRouterService:
             return None
         return "<context>\n" + trimmed + "\n</context>"
 
-    def _build_headers(self) -> Dict[str, str]:
+    def _build_headers(self, extra_headers: Optional[Dict[str, str]] = None) -> Dict[str, str]:
         """Build request headers for OpenRouter API."""
         headers = {
-            "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
         }
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
         
         # Add optional OpenRouter-specific headers for better analytics
         if self._site_url:
             headers["HTTP-Referer"] = self._site_url
         if self._site_name:
             headers["X-Title"] = self._site_name
+        if extra_headers:
+            for key, value in extra_headers.items():
+                if isinstance(value, str) and value.strip():
+                    headers[key] = value
         
         return headers
 
@@ -487,6 +671,34 @@ class OpenRouterService:
             
         return json_schema
 
+    def _merge_plugins(
+        self,
+        plugins: Optional[List[Dict[str, Any]]],
+        attachments: Optional[List[Any]],
+        response_format: Optional[Dict[str, Any]] = None,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Merge caller-provided plugins with attachment/format-driven plugins."""
+        plugin_list = list(plugins) if plugins else []
+
+        if _needs_pdf_parser(attachments):
+            has_file_parser = any(p.get("id") == "file-parser" for p in plugin_list)
+            if not has_file_parser:
+                engine = os.getenv("OPENROUTER_PDF_ENGINE", "").strip()
+                file_plugin: Dict[str, Any] = {"id": "file-parser"}
+                if engine:
+                    file_plugin["pdf"] = {"engine": engine}
+                plugin_list.append(file_plugin)
+
+        # Use response healing when strict JSON output is requested.
+        if response_format:
+            response_type = (response_format.get("type") or "").strip().lower()
+            if response_type in {"json_object", "json_schema"}:
+                has_healing = any(p.get("id") == "response-healing" for p in plugin_list)
+                if not has_healing:
+                    plugin_list.append({"id": "response-healing"})
+
+        return plugin_list or None
+
     async def generate(
         self,
         message: str,
@@ -495,14 +707,20 @@ class OpenRouterService:
         system_prompt: Optional[str] = None,
         time_context: Optional[str] = None,
         model: Optional[str] = None,
+        attachments: Optional[List[Any]] = None,
         include_usage: bool = False,
         response_format: Optional[Dict[str, Any]] = None,
         tools: Optional[List[Any]] = None,
         tool_choice: Optional[str] = "auto",
         plugins: Optional[List[Dict[str, Any]]] = None,
+        provider_routing: Optional[Dict[str, Any]] = None,
+        web_search_options: Optional[Dict[str, Any]] = None,
+        return_metadata: bool = False,
         *,
         history_token_budget: Optional[int] = None,
-    ) -> str:
+        user: Optional[str] = None,
+        extra_headers: Optional[Dict[str, str]] = None,
+    ) -> str | Tuple[str, Optional[Dict[str, Any]]]:
         """Generate a complete response from OpenRouter."""
         if not self.available:
             raise RuntimeError("OpenRouter client is not configured (missing API key)")
@@ -514,6 +732,7 @@ class OpenRouterService:
             conversation_history,
             message,
             history_limit,
+            attachments=attachments,
             history_token_budget=history_token_budget,
             runtime_context=runtime_context,
         )
@@ -525,22 +744,33 @@ class OpenRouterService:
             messages = [{"role": "user", "content": message}]
 
         # Build request payload
+        provider_preferences: Dict[str, Any] = {
+            "sort": "price",  # Prioritize cheapest provider
+            "allow_fallbacks": True,
+        }
+        if provider_routing:
+            provider_preferences.update(provider_routing)
+
         payload: Dict[str, Any] = {
             "model": resolved_model,
             "messages": messages,
             "temperature": self._temperature,
             # OpenRouter optimizations: https://openrouter.ai/docs/provider-routing
-            "provider": {
-                "sort": "price",  # Prioritize cheapest provider
-                "allow_fallbacks": True,
-            },
+            "provider": provider_preferences,
+            # Compress long contexts automatically (middle-out)
+            "transforms": ["middle-out"],
         }
+
+        if user:
+            payload["user"] = user
 
         # Request usage stats (OpenRouter uses stream_options for this)
         if include_usage:
             payload["stream_options"] = {"include_usage": True}
         if response_format:
             payload["response_format"] = response_format
+        if web_search_options:
+            payload["web_search_options"] = web_search_options
             
         openai_tools = self._convert_tools_to_openai_format(tools)
         if openai_tools:
@@ -549,8 +779,9 @@ class OpenRouterService:
                 payload["tool_choice"] = tool_choice
 
         # Add plugins for web search, etc.
-        if plugins:
-            payload["plugins"] = plugins
+        merged_plugins = self._merge_plugins(plugins, attachments, response_format=response_format)
+        if merged_plugins:
+            payload["plugins"] = merged_plugins
 
         # Add system prompt if provided - this is the STABLE content we want to cache.
         # It includes the base instructions and workspace context, but NOT time_context (which is volatile).
@@ -570,17 +801,21 @@ class OpenRouterService:
 
         client = await self._get_client()
         response = await client.post(
-            f"{self.BASE_URL}/chat/completions",
-            headers=self._build_headers(),
+            f"{self._base_url}/chat/completions",
+            headers=self._build_headers(extra_headers),
             json=payload,
         )
         response.raise_for_status()
         data = response.json()
         
+        annotations: List[Dict[str, Any]] = []
+        usage_payload = data.get("usage") if isinstance(data, dict) else None
+
         # Extract content from response
         if "choices" in data and len(data["choices"]) > 0:
             choice = data["choices"][0]
             message_data = choice.get("message", {})
+            annotations = _extract_annotations_from_message(message_data)
             
             # Check for tool calls
             if message_data.get("tool_calls"):
@@ -589,10 +824,22 @@ class OpenRouterService:
                 # the tool calls or handle this differently in the caller.
                 # For now, let's return a JSON string representation of tool calls if content is empty
                 import json
-                return json.dumps({"tool_calls": message_data["tool_calls"]})
+                result_text = json.dumps({"tool_calls": message_data["tool_calls"]})
+                if return_metadata:
+                    grounding_metadata = openrouter_annotations_to_grounding(annotations)
+                    _store_cached_pdf_text_from_grounding(grounding_metadata, attachments)
+                    return result_text, {"annotations": annotations, "usage": usage_payload}
+                return result_text
             
-            return message_data.get("content") or ""
+            result_text = _extract_text_from_content(message_data.get("content"))
+            if return_metadata:
+                grounding_metadata = openrouter_annotations_to_grounding(annotations)
+                _store_cached_pdf_text_from_grounding(grounding_metadata, attachments)
+                return result_text, {"annotations": annotations, "usage": usage_payload}
+            return result_text
         
+        if return_metadata:
+            return "", {"annotations": annotations, "usage": usage_payload}
         return ""
 
     async def stream(
@@ -611,8 +858,11 @@ class OpenRouterService:
         reasoning_mode: bool = False,
         attachments: Optional[List[Any]] = None,
         provider_routing: Optional[Dict[str, Any]] = None,
+        web_search_options: Optional[Dict[str, Any]] = None,
         *,
         history_token_budget: Optional[int] = None,
+        user: Optional[str] = None,
+        extra_headers: Optional[Dict[str, str]] = None,
     ) -> AsyncIterator[str | Dict[str, Any]]:
         """Stream response chunks from OpenRouter.
         
@@ -694,11 +944,16 @@ class OpenRouterService:
             "transforms": ["middle-out"],
         }
 
+        if user:
+            payload["user"] = user
+
         # Request usage stats (OpenRouter uses stream_options for this)
         if include_usage:
             payload["stream_options"] = {"include_usage": True}
         if response_format:
             payload["response_format"] = response_format
+        if web_search_options:
+            payload["web_search_options"] = web_search_options
 
         openai_tools = self._convert_tools_to_openai_format(tools)
         if openai_tools:
@@ -707,8 +962,9 @@ class OpenRouterService:
                 payload["tool_choice"] = tool_choice
 
         # Add plugins for web search, etc.
-        if plugins:
-            payload["plugins"] = plugins
+        merged_plugins = self._merge_plugins(plugins, attachments, response_format=response_format)
+        if merged_plugins:
+            payload["plugins"] = merged_plugins
 
         # Add reasoning mode if enabled
         # Note: Per xAI docs, grok-4 and grok-4-fast don't support reasoning_effort param
@@ -741,8 +997,8 @@ class OpenRouterService:
         client = await self._get_client()
         async with client.stream(
             "POST",
-            f"{self.BASE_URL}/chat/completions",
-            headers=self._build_headers(),
+            f"{self._base_url}/chat/completions",
+            headers=self._build_headers(extra_headers),
             json=payload,
         ) as response:
             response.raise_for_status()
@@ -784,6 +1040,13 @@ class OpenRouterService:
                                 delta = choice.get("delta", {})
                                 content = delta.get("content")
                                 tool_calls = delta.get("tool_calls")
+                                annotations = _extract_annotations_from_delta(delta, choice)
+                                if annotations:
+                                    _store_cached_pdf_text_from_grounding(
+                                        openrouter_annotations_to_grounding(annotations),
+                                        attachments,
+                                    )
+                                    yield {"annotations": annotations}
                                 
                                 if tool_calls:
                                     yield {"tool_calls": tool_calls}

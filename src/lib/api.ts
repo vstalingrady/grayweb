@@ -6,5 +6,6 @@ export { dashboardService } from "./api/DashboardService";
 export { calendarService } from "./api/CalendarService";
 export { workspaceService } from "./api/WorkspaceService";
 export { utilityService } from "./api/UtilityService";
+export { supermemoryService } from "./api/SupermemoryService";
 export { analyticsService } from "./api/AnalyticsService";
 export * from "./api/types";

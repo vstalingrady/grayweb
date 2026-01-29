@@ -47,15 +47,6 @@ export function ChatMessageGroundingPanel({
     metadata?.grounding_chunks ??
     (metadata as { groundingChunks?: GroundingMetadata["grounding_chunks"] })?.groundingChunks ??
     [];
-  const mapSources = chunks
-    .map((chunk) => chunk?.maps)
-    .filter((maps): maps is NonNullable<(typeof chunks)[number]["maps"]> => Boolean(maps));
-
-  const widgetToken =
-    metadata?.google_maps_widget_context_token ??
-    (metadata as { googleMapsWidgetContextToken?: string })?.googleMapsWidgetContextToken ??
-    null;
-  const hasWidget = Boolean(widgetToken);
 
   const filteredQueries =
     searchQueries.filter((query) => {
@@ -71,7 +62,7 @@ export function ChatMessageGroundingPanel({
 
   const sourceCards = buildGroundingSourceCards(metadata, t);
 
-  if (sourceCards.length === 0 && mapSources.length === 0 && filteredQueries.length === 0 && !hasWidget && !sanitizedSearchEntryHtml) {
+  if (sourceCards.length === 0 && filteredQueries.length === 0 && !sanitizedSearchEntryHtml) {
     return null;
   }
 
@@ -170,33 +161,6 @@ export function ChatMessageGroundingPanel({
               );
             })}
           </div>
-        </div>
-      ) : null}
-      {mapSources.length > 0 ? (
-        <div className={styles.chatGroundingSources}>
-          {mapSources.map((maps, index) => {
-            const label = maps.title ?? maps.placeId ?? t("Maps source");
-            const href = maps.uri ?? maps.googleMapsUri ?? undefined;
-            return (
-              <div key={`${messageId}-maps-source-${index}`} className={styles.chatGroundingSource}>
-                {href ? (
-                  <a href={href} target="_self" rel="noreferrer" className={styles.chatGroundingLink}>
-                    <span translate="no">Google Maps</span> · {label}
-                  </a>
-                ) : (
-                  <span className={styles.chatGroundingPlain}>
-                    <span translate="no">Google Maps</span> · {label}
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      ) : null}
-      {hasWidget ? (
-        <div className={styles.chatGroundingWidget}>
-          <span>{t("Widget token:")}</span>
-          <code>{widgetToken}</code>
         </div>
       ) : null}
     </div>

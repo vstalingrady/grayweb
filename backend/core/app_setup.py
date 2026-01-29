@@ -22,10 +22,6 @@ def _get_deps():
         init_audit_logger,
         proactivity_realtime_broker,
         AI_MESSAGE_GENERATOR,
-        AI_PROVIDER,
-        VALIDATE_GEMINI_ON_STARTUP,
-        GEMINI_SERVICE,
-        GEMINI_DEFAULT_MODEL,
     )
     from backend.core.env_helpers import proactivity_dispatch_source
     from backend.compat_imports import (
@@ -81,6 +77,7 @@ async def disconnect_database():
     db = deps['database']
     db_logger = deps['db_logger']
     app_logger = deps['app_logger']
+    from backend.supermemory import SUPERMEMORY_SERVICE
     
     global proactivity_scheduler, reminder_scheduler
     
@@ -99,8 +96,14 @@ async def disconnect_database():
     except Exception as e:
         db_logger.error(f"Database disconnection failed on shutdown: {e}")
 
+    try:
+        await SUPERMEMORY_SERVICE.close()
+        app_logger.info("Supermemory client closed")
+    except Exception as e:
+        app_logger.warning(f"Supermemory shutdown failed: {e}")
+
 async def initialize_proactivity_engine():
-    """Initialize the hybrid proactivity engine + scheduler."""
+    """Initialize the proactivity engine + scheduler."""
     deps = _get_deps()
     db = deps['database']
     app_logger = deps['app_logger']
@@ -146,23 +149,6 @@ async def initialize_proactivity_engine():
         app_logger.error(f"Failed to initialize proactivity engine: {e}", exc_info=True)
         _sync_scheduler_state_to_main(None, None, None)
 
-async def validate_gemini_api_key_on_startup():
-    deps = _get_deps()
-    app_logger = deps['app_logger']
-    gemini_service = deps['GEMINI_SERVICE']
-    
-    if deps['AI_PROVIDER'] != "gemini" or not deps['VALIDATE_GEMINI_ON_STARTUP']:
-        return
-
-    if not gemini_service or not gemini_service.available:
-        app_logger.warning("Gemini validation skipped; no API key configured")
-        return
-
-    try:
-        await gemini_service.validate_connection()
-    except Exception as exc:
-        app_logger.error(f"Gemini API validation failed: {exc}", exc_info=True)
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Centralized startup/shutdown context manager."""
@@ -178,7 +164,6 @@ async def lifespan(app: FastAPI):
     
     await asyncio.gather(
         initialize_proactivity_engine(),
-        validate_gemini_api_key_on_startup(),
     )
     
     try:

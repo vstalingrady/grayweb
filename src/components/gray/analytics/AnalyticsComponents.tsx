@@ -230,8 +230,8 @@ export const LineChart = ({
   const maxValue = Math.max(1, ...resolvedSeries.flatMap((entry) => entry.values));
   const stepX = pointsCount > 1 ? plotWidth / (pointsCount - 1) : 0;
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const rectRef = useRef<DOMRect | null>(null);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<{ left: number; top: number } | null>(null);
 
   const resolvePoint = (value: number, index: number) => {
     const x = padding.left + stepX * index;
@@ -254,16 +254,34 @@ export const LineChart = ({
       return;
     }
     const rect = svgRef.current.getBoundingClientRect();
-    rectRef.current = rect;
     const x = event.clientX - rect.left;
     const xValue = (x / rect.width) * width;
     const index = stepX > 0 ? Math.round((xValue - padding.left) / stepX) : 0;
     const clampedIndex = Math.max(0, Math.min(pointsCount - 1, index));
     setActiveIndex(clampedIndex);
+
+    const primaryValue = resolvedSeries[0]?.values[clampedIndex] ?? 0;
+    const point = resolvePoint(primaryValue, clampedIndex);
+    const scaleX = rect.width / width;
+    const scaleY = rect.height / height;
+    const rawLeft = point.x * scaleX;
+    const left = Math.max(16, Math.min(rect.width - 16, rawLeft));
+    const top = Math.max(12, point.y * scaleY);
+    setTooltipPosition((previous) => {
+      if (
+        previous &&
+        Math.abs(previous.left - left) < 0.5 &&
+        Math.abs(previous.top - top) < 0.5
+      ) {
+        return previous;
+      }
+      return { left, top };
+    });
   };
 
   const handleMouseLeave = () => {
     setActiveIndex(null);
+    setTooltipPosition(null);
   };
 
   const tickCount = 4;
@@ -294,21 +312,6 @@ export const LineChart = ({
         })),
       }
       : null;
-
-  const tooltipPosition = (() => {
-    if (!tooltipData || activeIndex === null || !rectRef.current) {
-      return null;
-    }
-    const rect = rectRef.current;
-    const scaleX = rect.width / width;
-    const scaleY = rect.height / height;
-    const primaryValue = resolvedSeries[0]?.values[activeIndex] ?? 0;
-    const point = resolvePoint(primaryValue, activeIndex);
-    const rawLeft = point.x * scaleX;
-    const left = Math.max(16, Math.min(rect.width - 16, rawLeft));
-    const top = Math.max(12, point.y * scaleY);
-    return { left, top };
-  })();
 
   return (
     <div className={styles.analyticsChart}>

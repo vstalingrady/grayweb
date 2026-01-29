@@ -449,6 +449,11 @@
   border-color: rgba(255, 255, 255, 0.25);
 }
 
+.settingsSelectTrigger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .settingsUpgradeCard {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -731,6 +736,10 @@
   line-height: 1.5;
 }
 
+.settingsItemDescriptionPre {
+  white-space: pre-line;
+}
+
 /* Personalization Settings specific styles */
 .settingsTextarea {
   background: transparent;
@@ -833,6 +842,10 @@
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.settingsFlexRowWrap {
+  flex-wrap: wrap;
 }
 
 .settingsActionChevron {

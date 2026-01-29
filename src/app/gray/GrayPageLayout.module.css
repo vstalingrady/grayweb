@@ -62,9 +62,11 @@
   .page {
     overflow: hidden;
     height: 100vh;
-    height: 100dvh;
+    height: 100svh;
+    height: var(--gray-viewport-height, 100svh);
     max-height: 100vh;
-    max-height: 100dvh;
+    max-height: 100svh;
+    max-height: var(--gray-viewport-height, 100svh);
     position: relative;
     width: 100%;
   }
@@ -113,7 +115,8 @@
     display: flex;
     overflow-x: hidden;
     height: 100vh;
-    height: 100dvh;
+    height: 100svh;
+    height: var(--gray-viewport-height, 100svh);
   }
 
   .layout[data-mobile-sidebar="true"] .main {
@@ -127,7 +130,8 @@
     padding-top: 48px;
     padding-top: calc(48px + env(safe-area-inset-top));
     height: 100vh;
-    height: 100dvh;
+    height: 100svh;
+    height: var(--gray-viewport-height, 100svh);
   }
 
   .layout[data-mobile-sidebar="true"][data-sidebar-expanded="true"] .main {

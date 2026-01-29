@@ -7,34 +7,17 @@ Extracted from main.py for better modularity.
 import os
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Callable
-from importlib.util import find_spec
-
-# Google GenAI types
-if find_spec("google.genai") is not None:
-    from google.genai import types
-else:
-    types = None  # type: ignore
 
 # Path setup
 ROOT_DIR = Path(__file__).parent.parent.parent
 
 # --- Provider & Model Configuration ---
 
-AI_PROVIDER = (os.getenv("AI_PROVIDER") or "openrouter").strip().lower()
-LITE_TIER_PROVIDER = (os.getenv("LITE_TIER_PROVIDER") or "openrouter").strip().lower()
+AI_PROVIDER = "openrouter"
 
 # Model identifiers
-REMINDER_MODEL = os.getenv("REMINDER_MODEL", "models/gemini-flash-lite-latest")
 GROK_TOOL_MODEL = os.getenv("GROK_TOOL_MODEL", "x-ai/grok-4.1-fast")
 OPENROUTER_LITE_MODEL = os.getenv("OPENROUTER_LITE_MODEL", "xiaomi/mimo-v2-flash:free")
-GEMINI_DEFAULT_MODEL = os.getenv("GEMINI_DEFAULT_MODEL", "models/gemini-flash-lite-latest")
-GEMINI_LIGHT_MODEL = os.getenv("GEMINI_LIGHT_MODEL", "models/gemini-flash-lite-latest")
-GEMINI_PRO_MODEL = os.getenv("GEMINI_PRO_MODEL", "models/gemini-3-pro-preview")
-
-# Validation flag
-VALIDATE_GEMINI_ON_STARTUP = os.getenv("VALIDATE_GEMINI_ON_STARTUP", "true").strip().lower() not in {
-    "0", "false", "no", "off",
-}
 
 
 # --- Tier Configuration ---
@@ -140,38 +123,15 @@ REMINDER_RESPONSE_FORMAT = {
 
 
 # --- Tool Definitions ---
-# These are lazily initialized since they require google.genai types
 
-_SEARCH_TOOL = None
-_URL_CONTEXT_TOOL = None
 _DEFAULT_CHAT_TOOLS = None
-
-
-def get_search_tool():
-    """Get the Google Search tool instance."""
-    global _SEARCH_TOOL
-    if _SEARCH_TOOL is None and types is not None:
-        _SEARCH_TOOL = types.Tool(google_search=types.GoogleSearch())
-    return _SEARCH_TOOL
-
-
-def get_url_context_tool():
-    """Get the URL Context tool instance."""
-    global _URL_CONTEXT_TOOL
-    if _URL_CONTEXT_TOOL is None and types is not None:
-        try:
-            _URL_CONTEXT_TOOL = types.Tool(url_context=types.UrlContext())
-        except (AttributeError, TypeError):
-            _URL_CONTEXT_TOOL = None
-    return _URL_CONTEXT_TOOL
 
 
 def get_default_chat_tools():
     """Get the default chat tools list."""
     global _DEFAULT_CHAT_TOOLS
     if _DEFAULT_CHAT_TOOLS is None:
-        search = get_search_tool()
-        _DEFAULT_CHAT_TOOLS = [search] if search else []
+        _DEFAULT_CHAT_TOOLS = []
     return _DEFAULT_CHAT_TOOLS
 
 

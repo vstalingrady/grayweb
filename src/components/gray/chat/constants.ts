@@ -77,12 +77,6 @@ export const SELF_CONTEXT_PATTERNS: RegExp[] = [
     /\bwhat do you know about my calendar\b/i,
 ];
 
-export const MAP_TRIGGER_PATTERN =
-    /\b(?:nearby|around|directions|route|map|maps|location|locations|address|restaurant|cafe|diner|bar|hotel|airport|station|train|bus|metro|tram|park|museum|landmark|beach|mall|district|city|town|village|neighborhood|venue|street)\b/i;
-
-export const MAP_TRIGGER_PHRASE =
-    /\b(?:near me|near here|around here|close to|within (?:a )?(?:mile|km|block|minute|minutes)|walking distance|driving distance|in (?:the )?(?:area|neighborhood|city))\b/i;
-
 // Reminder-related patterns
 export const EMPTY_CODE_FENCE_REGEX = /```(?:[a-zA-Z0-9_-]+)?\s*```/g;
 export const REMINDER_PRE_BLOCK_REGEX = /(?:```[a-z0-9_-]*[^\S\r\n]*\n\s*)?gray[._](?:reminder|plan|habit)\s*$/i;

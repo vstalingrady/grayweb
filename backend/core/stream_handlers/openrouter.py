@@ -14,8 +14,7 @@ from google.genai import types
 api_logger = logging.getLogger("backend.api")
 
 # Import helpers
-from backend.core.function_call_helpers import format_tool_results_for_context
-from backend.core.ai_utils import materialize_structured_reminders
+from backend.core.ai_utils import materialize_structured_reminders, openrouter_annotations_to_grounding, validate_json_text_against_schema
 
 
 def _coerce_int(value: Any) -> int:
@@ -51,15 +50,19 @@ async def stream_openrouter_response(
     media_attachments: List[Any],
     history_token_budget: int,
     user_id: int,
+    user: Optional[str] = None,
     needs_structured_tools: bool,
     is_onboarding_tool: bool,
     response_format: Optional[Dict[str, Any]] = None,
+    response_schema: Optional[Dict[str, Any]] = None,
     provider_routing: Optional[Dict[str, Any]] = None,
+    web_search_plugin: Optional[List[Dict[str, Any]]] = None,
+    web_search_options: Optional[Dict[str, Any]] = None,
+    extra_headers: Optional[Dict[str, str]] = None,
     execute_function_call_fn=None,
     db=None,
     user_timezone: Optional[str] = None,
-    hybrid_tool_results: Optional[List[Dict[str, Any]]] = None,
-    hybrid_tool_cards: Optional[List[Dict[str, Any]]] = None,
+    plan_tier: Optional[str] = None,
     usage_tracker_cls=None,
 ) -> AsyncGenerator[Tuple[str, Any], None]:
     """Wrapper for _stream_openrouter_response_impl to maintain compatibility."""
@@ -73,20 +76,24 @@ async def stream_openrouter_response(
         model=model,
         tool_list=tool_list,
         search_enabled=search_enabled,
+        web_search_plugin=web_search_plugin,
+        web_search_options=web_search_options,
         reasoning_mode=reasoning_mode,
         media_attachments=media_attachments,
         history_token_budget=history_token_budget,
         user_id=user_id,
+        user=user,
         needs_structured_tools=needs_structured_tools,
         is_onboarding_tool=is_onboarding_tool,
         response_format=response_format,
+        response_schema=response_schema,
         provider_routing=provider_routing,
         execute_function_call_fn=execute_function_call_fn,
         db=db,
         user_timezone=user_timezone,
-        hybrid_tool_results=hybrid_tool_results,
-        hybrid_tool_cards=hybrid_tool_cards,
+        plan_tier=plan_tier,
         usage_tracker_cls=usage_tracker_cls,
+        extra_headers=extra_headers,
     ):
         yield event
 
@@ -105,17 +112,20 @@ async def _stream_openrouter_response_impl(
     media_attachments: List[Any],
     history_token_budget: int,
     user_id: int,
+    user: Optional[str] = None,
     needs_structured_tools: bool,
     is_onboarding_tool: bool,
     response_format: Optional[Dict[str, Any]] = None,
+    response_schema: Optional[Dict[str, Any]] = None,
     provider_routing: Optional[Dict[str, Any]] = None,
+    web_search_plugin: Optional[List[Dict[str, Any]]] = None,
+    web_search_options: Optional[Dict[str, Any]] = None,
+    extra_headers: Optional[Dict[str, str]] = None,
     # Tool execution function passed in to avoid circular imports
     execute_function_call_fn=None,
     db=None,
     user_timezone: Optional[str] = None,
-    # Hybrid flow data
-    hybrid_tool_results: Optional[List[Dict[str, Any]]] = None,
-    hybrid_tool_cards: Optional[List[Dict[str, Any]]] = None,
+    plan_tier: Optional[str] = None,
     # Usage tracking
     usage_tracker_cls=None,
 ) -> AsyncGenerator[Tuple[str, Any], None]:
@@ -146,29 +156,13 @@ async def _stream_openrouter_response_impl(
     total_completion_tokens = 0
     total_cached_tokens = 0
     
-    # Apply hybrid tool results to workspace context if provided
-    hybrid_workspace_context = workspace_context
-    if hybrid_tool_results:
-        tool_context = format_tool_results_for_context(hybrid_tool_results)
-        if tool_context:
-            hybrid_workspace_context = "\n\n".join(filter(None, [
-                workspace_context,
-                tool_context,
-            ]))
-        # Clear tool_list for hybrid mode - tools already executed
-        tool_list = []
-    
-    # Emit pre-executed tool cards
-    if hybrid_tool_cards:
-        for card in hybrid_tool_cards:
-            yield ("reminders", [card])
-    
     # Multi-turn loop for tool handling
     current_history = list(conversation_history) if conversation_history else []
-    max_tool_turns = 5 if not hybrid_tool_results else 1
+    max_tool_turns = 5
     yielded_any_tokens = False
     total_accumulated = ""
     current_message = message
+    annotations_accumulated: List[Dict[str, Any]] = []
     
     for turn in range(max_tool_turns + 1):
         accumulated = ""
@@ -203,7 +197,7 @@ async def _stream_openrouter_response_impl(
         async for chunk in openrouter_service.stream(
             current_message,
             current_history,
-            hybrid_workspace_context,
+            workspace_context,
             run_system_prompt,
             time_context,
             model,
@@ -211,17 +205,26 @@ async def _stream_openrouter_response_impl(
             response_format=response_format,
             tools=tool_list,
             tool_choice="auto",
-            plugins=[{"id": "web", "max_results": 5}] if search_enabled else None,
+            plugins=web_search_plugin if search_enabled else None,
+            web_search_options=web_search_options if search_enabled else None,
             reasoning_mode=reasoning_mode,
             attachments=media_attachments,
             history_token_budget=history_token_budget,
             provider_routing=provider_routing,
+            user=user,
+            extra_headers=extra_headers,
         ):
             if isinstance(chunk, dict):
                 # Handle usage statistics
                 if "usage" in chunk:
                     turn_usage = chunk["usage"]
                     yield ("usage", chunk["usage"])
+                    continue
+
+                if "annotations" in chunk and isinstance(chunk.get("annotations"), list):
+                    annotations_accumulated.extend(
+                        [a for a in chunk["annotations"] if isinstance(a, dict)]
+                    )
                     continue
                 
                 # Handle native streaming tool calls
@@ -399,11 +402,11 @@ async def _stream_openrouter_response_impl(
                 )
 
                 # Create a FunctionCall compatible object
-                gemini_fc = types.FunctionCall(name=tool_name, args=tool_args)
+                tool_call = types.FunctionCall(name=tool_name, args=tool_args)
 
                 try:
                     tool_result = await execute_function_call_fn(
-                        gemini_fc, user_id, db, user_timezone=user_timezone
+                        tool_call, user_id, db, user_timezone=user_timezone, plan_tier=plan_tier
                     )
 
                     # Emit tool cards
@@ -478,15 +481,43 @@ async def _stream_openrouter_response_impl(
             )
         except Exception as error:
             api_logger.warning(f"Failed to track OpenRouter usage: {error}", extra={"user_id": user_id})
+    grounding_metadata = openrouter_annotations_to_grounding(annotations_accumulated)
+    final_text = total_accumulated
+
     if response_format:
-        text, structured_reminders = materialize_structured_reminders(total_accumulated)
+        final_text, structured_reminders = materialize_structured_reminders(final_text)
+        if response_schema:
+            is_valid, error = validate_json_text_against_schema(final_text, response_schema)
+            if not is_valid:
+                api_logger.warning(
+                    f"OpenRouter JSON validation failed: {error}",
+                    extra={"event_type": "openrouter_json_validation_failed", "error": error},
+                )
+                repair_prompt = (
+                    "Fix the following JSON so it matches the provided schema. "
+                    "Return ONLY valid JSON that conforms to the schema.\n\n"
+                    f"Schema:\n{json.dumps(response_schema)}\n\nJSON:\n{final_text}"
+                )
+                repaired = await openrouter_service.generate(
+                    repair_prompt,
+                    conversation_history=None,
+                    workspace_context=None,
+                    system_prompt="You are a JSON repair assistant.",
+                    time_context=None,
+                    model=resolved_model,
+                    response_format=response_format,
+                    provider_routing=provider_routing,
+                    return_metadata=False,
+                )
+                if isinstance(repaired, str) and repaired.strip():
+                    final_text = repaired
         yield ("final", {
-            "text": text,
-            "grounding_metadata": None,
+            "text": final_text,
+            "grounding_metadata": grounding_metadata,
             "reminders": structured_reminders if structured_reminders else None
         })
     else:
-        if yielded_any_tokens and not total_accumulated.strip():
-            total_accumulated = "Done."
-            yield ("delta", total_accumulated)
-        yield ("final", {"text": total_accumulated, "grounding_metadata": None})
+        if yielded_any_tokens and not final_text.strip():
+            final_text = "Done."
+            yield ("delta", final_text)
+        yield ("final", {"text": final_text, "grounding_metadata": grounding_metadata})

@@ -1,5 +1,11 @@
 import { useCallback, useRef, type MutableRefObject } from "react";
 import { chatService, type MediaUpload, type User } from "@/lib/api";
+import {
+  buildMemorySettingsStorageKey,
+  extractMemorySettingsFromUser,
+  loadMemorySettings,
+  mergeMemorySettings,
+} from "@/lib/memorySettings";
 import { buildLocalTimeContextWithOverrides } from "@/lib/timeContext";
 import type { ChatMessage, ChatSession, ChatRole } from "../types";
 import {
@@ -51,7 +57,6 @@ type UseSendGeneralMessageOptions = {
   shouldAttachWorkspaceContextForSession: (sessionId: string, message: string) => boolean;
   autoWebSearchEnabled: boolean;
   webSearchEnabled: boolean;
-  mapPayload: Record<string, number | boolean | undefined>;
   remindersEnabled: boolean;
   reasoningMode: boolean;
   modelTier: "lite" | "pro" | "pioneer";
@@ -81,7 +86,6 @@ export const useSendGeneralMessage = ({
   shouldAttachWorkspaceContextForSession,
   autoWebSearchEnabled,
   webSearchEnabled,
-  mapPayload,
   remindersEnabled,
   reasoningMode,
   modelTier,
@@ -169,6 +173,9 @@ export const useSendGeneralMessage = ({
           const timeContext = buildLocalTimeContextWithOverrides(undefined, {
             timeZone: effectiveTimeZone,
           });
+          const localMemorySettings = loadMemorySettings(buildMemorySettingsStorageKey(resolvedUser.id));
+          const accountMemorySettings = extractMemorySettingsFromUser(resolvedUser);
+          const memorySettings = mergeMemorySettings(localMemorySettings, accountMemorySettings);
 
           const currentProfileHash = computeProfileHash(resolvedUser);
           const isFirstMessage = generalSession.messages.length <= 1;
@@ -205,11 +212,15 @@ export const useSendGeneralMessage = ({
             time_context: timeContext,
             timezone: effectiveTimeZone,
             conversation_memory_enabled: conversationMemoryEnabled,
+            supermemory_auto_recall: memorySettings.autoRecall,
+            supermemory_auto_capture: memorySettings.autoCapture,
+            supermemory_capture_mode: memorySettings.captureMode,
+            supermemory_max_recall_results: memorySettings.maxRecallResults,
+            supermemory_profile_frequency: memorySettings.profileFrequency,
             context_cache_id: contextCacheId ?? undefined,
             attachments: attachmentPayloads,
             should_generate_title: shouldGenerateTitle,
             web_search_enabled: shouldUseWebSearch,
-            ...mapPayload,
             reasoning_mode: reasoningMode,
             reminders_enabled: remindersEnabled,
             model: selectedModelId ?? modelTier,
@@ -330,7 +341,6 @@ export const useSendGeneralMessage = ({
       defaultSystemPrompt,
       ensureGeneralSession,
       generalConversationIdRef,
-      mapPayload,
       markAutoStreamTriggered,
       markHasSeenGeneralChat,
       modelTier,

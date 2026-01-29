@@ -79,8 +79,9 @@ export const PATHFINDER_FEATURES: FeatureItem[] = [
     },
     {
         id: "longer_memory",
-        label: "256,000 token memory",
+        label: "Long-term memory",
         icon: Pin,
+        subtext: "256,000 token context",
     },
     { id: "reasoning_mode", label: "Reasoning mode", icon: Brain },
     { id: "everything_in_scout", label: "Everything in Scout", icon: Plus, variant: "inherit" },
@@ -100,8 +101,9 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
     },
     {
         id: "longer_memory",
-        label: "2M token memory",
+        label: "Near-infinite memory",
         icon: Pin,
+        subtext: "2M token context",
     },
     {
         id: "calendar_access",
@@ -135,6 +137,12 @@ export const PIONEER_FEATURES: FeatureItem[] = [
         label: "36x more messages",
         icon: MessageSquare,
         subtext: "Built for heavy daily use",
+    },
+    {
+        id: "near_infinite_memory",
+        label: "Near-infinite memory",
+        icon: Pin,
+        subtext: "2M token context",
     },
     { id: "priority", label: "Priority during busy times", icon: Headphones },
     { id: "early_access", label: "Early access", icon: FlaskConical },

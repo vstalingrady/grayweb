@@ -10,19 +10,8 @@ from pathlib import Path
 from typing import Optional
 
 # Lazy-loaded dependencies
-_gemini_service = None
 _openrouter_service = None
 _logger = None
-
-
-def _get_gemini_service():
-    """Lazily get Gemini service."""
-    global _gemini_service
-    if _gemini_service is None:
-        from backend.gemini_client import GeminiService
-        _gemini_service = GeminiService()
-    return _gemini_service
-
 
 def _get_openrouter_service():
     """Lazily get OpenRouter service."""
@@ -48,12 +37,6 @@ def _load_prompt_from_json(path, key, fallback, locale="en"):
     return load_prompt_from_json(path, key, fallback, locale=locale)
 
 
-def _candidate_text(candidate):
-    """Extract text from candidate."""
-    from backend.core.ai_utils import candidate_text
-    return candidate_text(candidate)
-
-
 def _clean_title(raw_title: str) -> Optional[str]:
     """Clean and normalize a generated title."""
     candidate = (raw_title or "").strip()
@@ -71,7 +54,7 @@ async def generate_chat_title_inline(
     response_text: str,
     prompt_locale: str = "en",
     *,
-    gemini_service=None,
+    user_id: Optional[int] = None,
     openrouter_service=None,
     prompts_path=None,
 ) -> Optional[str]:
@@ -84,7 +67,6 @@ async def generate_chat_title_inline(
         message: The user's message
         response_text: The assistant's response
         prompt_locale: Locale for prompt template
-        gemini_service: Optional pre-configured Gemini service
         openrouter_service: Optional pre-configured OpenRouter service
         prompts_path: Optional path to prompts JSON
         
@@ -94,7 +76,6 @@ async def generate_chat_title_inline(
     logger = _get_logger()
     
     # Use provided services or get defaults
-    GEMINI_SERVICE = gemini_service or _get_gemini_service()
     OPENROUTER_SERVICE = openrouter_service or _get_openrouter_service()
     
     # Get prompts path
@@ -114,26 +95,9 @@ async def generate_chat_title_inline(
     transcript = f"User: {message}\nAssistant: {response_text}"
     
     try:
-        if GEMINI_SERVICE and GEMINI_SERVICE.available:
-            try:
-                # Use user-requested model: models/gemini-flash-lite-latest
-                response = await GEMINI_SERVICE.generate(
-                    message=transcript,
-                    conversation_history=None,
-                    workspace_context=None,
-                    system_prompt=prompt_template,
-                    time_context=None,
-                    model="models/gemini-flash-lite-latest",
-                )
-                if response and response.candidates:
-                    return _clean_title(_candidate_text(response.candidates[0]))
-            except Exception as e:
-                logger.warning(f"Gemini title generation failed: {e}")
-
-        # Fallback to OpenRouter if Gemini fails
         if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
             title_model = os.getenv("OPENROUTER_TITLE_MODEL", "google/gemini-3-flash-preview")
-            
+
             raw_title = await OPENROUTER_SERVICE.generate(
                 transcript,
                 conversation_history=None,
@@ -145,6 +109,7 @@ async def generate_chat_title_inline(
                 response_format=None,
                 tools=None,
                 tool_choice=None,
+                user=f"gray-user:{user_id}" if user_id is not None else None,
             )
             cleaned = _clean_title(raw_title)
             if cleaned:

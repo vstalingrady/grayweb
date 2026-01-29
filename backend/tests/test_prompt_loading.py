@@ -58,15 +58,11 @@ def test_generate_chat_title_inline_prefers_openrouter_when_available():
             assert kwargs.get("tool_choice") is None
             return "Test Title"
 
-    class StubGemini:
-        available = False
-
     async def run():
         title = await generate_chat_title_inline(
             "hi", 
             "hello", 
             prompt_locale="en",
-            gemini_service=StubGemini(),
             openrouter_service=StubOpenRouter(),
         )
         assert title == "Test Title"

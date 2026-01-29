@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   hostFromHeaders,
-  isGrayWorkspaceHost,
   isLocalHostname,
   resolveWorkspaceOrigin,
 } from "@/lib/grayRouting";
@@ -71,7 +70,6 @@ export async function GET(
   const forwardedProto = request.headers.get("x-forwarded-proto") ?? undefined;
   const forwardedPort = request.headers.get("x-forwarded-port") ?? undefined;
   const workspaceOrigin = resolveWorkspaceOrigin(requestHost, forwardedProto, forwardedPort);
-  const isWorkspaceHost = isGrayWorkspaceHost(requestHost);
   const localOrigin = request.nextUrl.host ? `http://${request.nextUrl.host}` : request.nextUrl.origin;
 
   const paramCode = normalizeAffiliateCode(params?.affiliate);

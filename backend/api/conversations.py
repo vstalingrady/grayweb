@@ -48,7 +48,6 @@ def _get_conversation_helpers():
         _handle_conversation_store_error,
         database,
         app_logger,
-        GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
         tier_conversation_token_limit,
@@ -91,7 +90,6 @@ def _get_conversation_helpers():
         _row_get,
         database,
         app_logger,
-        GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
         tier_conversation_token_limit,
@@ -131,7 +129,6 @@ async def create_conversation_message(
         _row_get,
         database,
         app_logger,
-        GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
         tier_conversation_token_limit,
@@ -191,7 +188,6 @@ async def get_conversation(
         _row_get,
         database,
         app_logger,
-        GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
         tier_conversation_token_limit,
@@ -267,7 +263,6 @@ async def create_conversation(
         _row_get,
         database,
         app_logger,
-        GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
         tier_conversation_token_limit,
@@ -322,7 +317,6 @@ async def delete_conversation(
         _row_get,
         database,
         app_logger,
-        GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
         tier_conversation_token_limit,
@@ -384,7 +378,6 @@ async def delete_all_conversations(
         _row_get,
         database,
         app_logger,
-        GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
         tier_conversation_token_limit,
@@ -456,7 +449,6 @@ async def _overwrite_conversation_history_logic(
         _row_get,
         database,
         app_logger,
-        GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
         tier_conversation_token_limit,
@@ -602,7 +594,6 @@ async def update_conversation(
         _row_get,
         database,
         app_logger,
-        GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
         tier_conversation_token_limit,
@@ -643,7 +634,6 @@ async def update_conversation_metadata(
         _row_get,
         database,
         app_logger,
-        GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
         tier_conversation_token_limit,
@@ -683,7 +673,6 @@ async def get_conversation_usage(
         _row_get,
         database,
         app_logger,
-        GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
         tier_conversation_token_limit,
@@ -784,7 +773,6 @@ async def compress_conversation(
         _row_get,
         database,
         app_logger,
-        GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
         tier_conversation_token_limit,
@@ -822,21 +810,22 @@ Conversation:
 Summary:"""
         
         summary_text = ""
-        if GEMINI_SERVICE.available:
+        if OPENROUTER_SERVICE.available:
             try:
-                summary_response = await GEMINI_SERVICE.generate(
+                summary_response = await OPENROUTER_SERVICE.generate(
                     summary_prompt,
                     conversation_history=[],
                     workspace_context=None,
                     system_prompt=None,
                     time_context="UTC",
                     model=None,
+                    user=f"gray-user:{current_user['id']}",
                 )
-                summary_text = getattr(summary_response, "text", "") or ""
-            except Exception as gemini_error:
+                summary_text = summary_response if isinstance(summary_response, str) else summary_response[0]
+            except Exception as summary_error:
                 api_logger.warning(
-                    "Gemini summary generation failed; skipping compression",
-                    extra={"error": str(gemini_error)},
+                    "OpenRouter summary generation failed; skipping compression",
+                    extra={"error": str(summary_error)},
                 )
         
         if not summary_text:
@@ -897,7 +886,6 @@ async def create_chat_session(
         _row_get,
         database,
         app_logger,
-        GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
         tier_conversation_token_limit,
@@ -945,7 +933,6 @@ async def list_user_conversations(
         _row_get,
         database,
         app_logger,
-        GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
         tier_conversation_token_limit,

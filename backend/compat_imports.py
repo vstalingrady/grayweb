@@ -93,9 +93,6 @@ from backend.core.serializers import (
 
 # AI utilities
 from backend.core.ai_utils import (
-    candidate_grounding_payload,
-    candidate_text,
-    candidate_thought,
     fallback_title_from_message,
     materialize_structured_reminders,
     merge_extra_contents,
@@ -137,7 +134,6 @@ from backend.core.workspace_tools import (
     update_plan_tool,
     update_reminder_tool,
 )
-from backend.core.stream_handlers.context import build_maps_tool_and_config
 
 # General conversation
 from backend.core.general_conversation import (
@@ -242,9 +238,6 @@ __all__ = [
     "serialize_habit_record",
     "datetime_to_ms",
     # AI utilities
-    "candidate_text",
-    "candidate_thought",
-    "candidate_grounding_payload",
     "merge_extra_contents",
     "materialize_structured_reminders",
     "fallback_title_from_message",
@@ -254,7 +247,6 @@ __all__ = [
     "create_calendar_event",
     "update_calendar_event",
     "delete_calendar_event",
-    "build_maps_tool_and_config",
     # Entity reminders
     "set_entity_reminder_scheduler",
     # Workspace tools

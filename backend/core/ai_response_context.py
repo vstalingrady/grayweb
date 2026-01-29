@@ -7,14 +7,8 @@ Consolidates duplicated context building, tool preparation, and limit checking.
 from typing import Any, Dict, List, Optional, Tuple
 import time
 import logging
-from importlib.util import find_spec
 
 import databases
-
-if find_spec("google.genai") is not None:
-    from google.genai import types
-else:
-    types = None  # type: ignore
 
 # Get logger from parent module
 api_logger = logging.getLogger("gray.api")
@@ -40,7 +34,7 @@ async def load_context_cache(
         row_get_fn: Function to get row fields (_row_get)
     
     Returns:
-        Tuple of (cached_contents for Gemini, cache_text_block for context)
+        Tuple of (cached_contents for OpenRouter, cache_text_block for context)
     """
     if not context_cache_id:
         return None, None
@@ -112,7 +106,6 @@ def prepare_tool_list(
     search_tool: Any,
     plan_tools: List[Any],
     calendar_tools: List[Any],
-    maps_tools: List[Any],
     search_enabled: bool,
     needs_structured_tools: bool,
     is_onboarding_tool: bool,
@@ -126,7 +119,6 @@ def prepare_tool_list(
         search_tool: Search tool (to filter if disabled)
         plan_tools: Plan/reminder tools
         calendar_tools: Calendar tools
-        maps_tools: Maps tools
         search_enabled: Whether search is enabled
         needs_structured_tools: Whether structured tools are needed
         is_onboarding_tool: Whether in onboarding mode
@@ -142,7 +134,7 @@ def prepare_tool_list(
             base_tools = [t for t in base_tools if t != search_tool]
     
     # Common tool list
-    tool_list = [*base_tools, *maps_tools]
+    tool_list = [*base_tools]
     
     # Add structured tools when needed (but not for onboarding)
     if needs_structured_tools and not is_onboarding_tool:

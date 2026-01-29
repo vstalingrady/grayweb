@@ -9,8 +9,6 @@ import {
     GREETING_PATTERN,
     SELF_CONTEXT_PATTERNS,
     WORKSPACE_CONTEXT_KEYWORDS,
-    MAP_TRIGGER_PATTERN,
-    MAP_TRIGGER_PHRASE,
     LOW_SIGNAL_TITLE_WORDS,
     GENERAL_SESSION_TITLE,
     GRAY_TITLE_HTML_CAPTURE_REGEX,
@@ -212,14 +210,6 @@ export const shouldIncludeWorkspaceContext = (message: string, context: string |
     }
 
     return WORKSPACE_CONTEXT_KEYWORDS.some((keyword) => punctuationTrimmed.includes(keyword));
-};
-
-export const shouldAutoEnableMapsForMessage = (message: string) => {
-    const normalized = message.trim().toLowerCase();
-    if (!normalized) {
-        return false;
-    }
-    return MAP_TRIGGER_PATTERN.test(normalized) || MAP_TRIGGER_PHRASE.test(normalized);
 };
 
 export const formatConversationTitle = (raw: string): string => {

@@ -18,6 +18,7 @@ from backend.time_utils import utcnow
 from backend.models import ContextCache, ContextCacheBase
 
 from backend.core.serializers import serialize_context_cache as _serialize_context_cache
+from backend.core.cache import invalidate_context_cache
 
 router = APIRouter(tags=["context-cache"])
 
@@ -82,3 +83,4 @@ async def delete_context_cache(
         raise HTTPException(status_code=404, detail="Context cache not found.")
     require_same_user(payload["user_id"], current_user)
     await db.execute(context_cache.delete().where(context_cache.c.id == cache_id))
+    await invalidate_context_cache(cache_id, payload.get("user_id"))

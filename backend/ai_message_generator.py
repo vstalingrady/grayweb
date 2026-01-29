@@ -19,7 +19,6 @@ import databases
 
 from backend.env_utils import ROOT_DIR
 from backend.core.stream_handlers.context import determine_provider_and_model
-from backend.gemini_client import GeminiService
 from backend.openrouter_client import OpenRouterService
 from backend.usage_tracker import UsageLimitExceeded, UsageTracker
 
@@ -31,7 +30,6 @@ class AIMessageGenerator:
 
     def __init__(self) -> None:
         self.openrouter = OpenRouterService()
-        self.gemini = GeminiService()
         prompts_path = ROOT_DIR / "public" / "system-prompts.json"
         try:
             raw = prompts_path.read_text(encoding="utf-8")
@@ -84,16 +82,20 @@ class AIMessageGenerator:
         )
 
         try:
-            if self.gemini and self.gemini.available:
-                response = await self.gemini.generate(
+            if self.openrouter and self.openrouter.available:
+                summary_model = os.getenv(
+                    "OPENROUTER_SUMMARY_MODEL",
+                    "google/gemini-3-flash-preview",
+                )
+                response = await self.openrouter.generate(
                     message=f"Here is the conversation to summarize:\n\n{transcript}",
-                    system_prompt=system_prompt,
-                    model="models/gemini-flash-latest",
                     conversation_history=None,
                     workspace_context=None,
-                    time_context=None
+                    system_prompt=system_prompt,
+                    time_context=None,
+                    model=summary_model,
                 )
-                return response.text if response else None
+                return response if isinstance(response, str) else None
         except Exception as e:
             logger.warning("Summary generation failed: %s", e)
             return None
@@ -222,34 +224,20 @@ class AIMessageGenerator:
             provider, resolved_model, _ = determine_provider_and_model(
                 model=preferred_model,
                 openrouter_available=bool(self.openrouter and self.openrouter.available),
-                gemini_default_model=self.gemini.default_model if self.gemini else None,
                 needs_structured_tools=False,
                 is_onboarding_tool=False,
-                maps_enabled=False,
             )
 
-            if provider == "gemini":
-                if not self.gemini or not self.gemini.available:
-                    raise RuntimeError("Gemini is not configured for proactive messaging")
-                response = await self.gemini.generate(
-                    message=user_context,
-                    conversation_history=None,
-                    workspace_context=None,
-                    system_prompt=system_prompt,
-                    time_context=time_context,
-                    model=resolved_model,
-                )
-            else:
-                if not self.openrouter or not self.openrouter.available:
-                    raise RuntimeError("OpenRouter is not configured for proactive messaging")
-                response = await self.openrouter.generate(
-                    message=user_context,
-                    conversation_history=None,
-                    workspace_context=None,
-                    system_prompt=system_prompt,
-                    time_context=time_context,
-                    model=resolved_model,
-                )
+            if not self.openrouter or not self.openrouter.available:
+                raise RuntimeError("OpenRouter is not configured for proactive messaging")
+            response = await self.openrouter.generate(
+                message=user_context,
+                conversation_history=None,
+                workspace_context=None,
+                system_prompt=system_prompt,
+                time_context=time_context,
+                model=resolved_model,
+            )
 
         except Exception as error:
             raise RuntimeError(f"Proactive message generation failed: {error}") from error

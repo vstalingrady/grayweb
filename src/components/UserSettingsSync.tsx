@@ -3,6 +3,14 @@
 import { useEffect, useRef } from "react";
 import { useI18n } from "@/contexts/I18nContext";
 import { useUser } from "@/contexts/UserContext";
+import {
+  buildMemorySettingsStorageKey,
+  extractMemorySettingsFromUser,
+  loadMemorySettings,
+  mergeMemorySettings,
+  parseMemorySettings,
+  saveMemorySettings,
+} from "@/lib/memorySettings";
 
 type ThemeMode = "light" | "dark" | "system";
 
@@ -84,6 +92,14 @@ export function UserSettingsSync() {
       const improvementKey = `${MODEL_IMPROVEMENT_STORAGE_PREFIX}:${user.id}`;
       writeLocalStorage(improvementKey, user.improve_model_for_everyone ? "1" : "0");
     }
+
+    const accountMemorySettings = extractMemorySettingsFromUser(user);
+    if (accountMemorySettings) {
+      const memoryKey = buildMemorySettingsStorageKey(user.id);
+      const localSettings = loadMemorySettings(memoryKey);
+      const mergedSettings = mergeMemorySettings(localSettings, accountMemorySettings);
+      saveMemorySettings(memoryKey, mergedSettings);
+    }
   }, [
     locale,
     setLocale,
@@ -91,6 +107,11 @@ export function UserSettingsSync() {
     user?.id,
     user?.improve_model_for_everyone,
     user?.preferred_response_language,
+    user?.supermemory_auto_capture,
+    user?.supermemory_auto_recall,
+    user?.supermemory_capture_mode,
+    user?.supermemory_max_recall_results,
+    user?.supermemory_profile_frequency,
     user?.theme_mode,
     user?.ui_locale,
   ]);
@@ -112,6 +133,11 @@ export function UserSettingsSync() {
       preferred_response_language?: "auto" | "en" | "id" | null;
       conversation_memory_enabled?: boolean | null;
       improve_model_for_everyone?: boolean | null;
+      supermemory_auto_recall?: boolean | null;
+      supermemory_auto_capture?: boolean | null;
+      supermemory_capture_mode?: "all" | "everything" | null;
+      supermemory_max_recall_results?: number | null;
+      supermemory_profile_frequency?: number | null;
     } = {};
 
     if (!isThemeMode(user.theme_mode)) {
@@ -151,6 +177,33 @@ export function UserSettingsSync() {
       }
     }
 
+    const memorySettingsKey = buildMemorySettingsStorageKey(user.id);
+    const rawMemorySettings = readLocalStorage(memorySettingsKey);
+    if (rawMemorySettings) {
+      try {
+        const parsed = parseMemorySettings(JSON.parse(rawMemorySettings));
+        if (typeof user.supermemory_auto_recall !== "boolean") {
+          pending.supermemory_auto_recall = parsed.autoRecall;
+        }
+        if (typeof user.supermemory_auto_capture !== "boolean") {
+          pending.supermemory_auto_capture = parsed.autoCapture;
+        }
+        const hasCaptureMode =
+          user.supermemory_capture_mode === "all" || user.supermemory_capture_mode === "everything";
+        if (!hasCaptureMode) {
+          pending.supermemory_capture_mode = parsed.captureMode;
+        }
+        if (typeof user.supermemory_max_recall_results !== "number") {
+          pending.supermemory_max_recall_results = parsed.maxRecallResults;
+        }
+        if (typeof user.supermemory_profile_frequency !== "number") {
+          pending.supermemory_profile_frequency = parsed.profileFrequency;
+        }
+      } catch {
+        // ignore invalid local memory settings
+      }
+    }
+
     if (Object.keys(pending).length === 0) {
       return;
     }
@@ -163,6 +216,11 @@ export function UserSettingsSync() {
     user?.id,
     user?.improve_model_for_everyone,
     user?.preferred_response_language,
+    user?.supermemory_auto_capture,
+    user?.supermemory_auto_recall,
+    user?.supermemory_capture_mode,
+    user?.supermemory_max_recall_results,
+    user?.supermemory_profile_frequency,
     user?.theme_mode,
     user?.ui_locale,
   ]);

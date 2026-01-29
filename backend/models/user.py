@@ -32,7 +32,6 @@ class UserBase(BaseModel):
     plan_tier: Optional[str] = None
     subscription_expires_at: Optional[datetime] = None
     workspace_background_id: Optional[str] = None
-    maps_enabled: Optional[bool] = False
     improve_model_for_everyone: Optional[bool] = False
     has_seen_general_chat: Optional[bool] = False
     personalization_nickname: Optional[str] = None
@@ -56,6 +55,11 @@ class UserBase(BaseModel):
     notification_preferences: Optional[Dict[str, bool]] = None
     conversation_memory_enabled: Optional[bool] = True
     auto_web_search_enabled: Optional[bool] = False
+    supermemory_auto_recall: Optional[bool] = None
+    supermemory_auto_capture: Optional[bool] = None
+    supermemory_capture_mode: Optional[str] = None
+    supermemory_max_recall_results: Optional[int] = None
+    supermemory_profile_frequency: Optional[int] = None
 
 
 class UserCreate(BaseModel):
@@ -72,7 +76,6 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     profile_picture_url: Optional[str] = None
     workspace_background_id: Optional[str] = None
-    maps_enabled: Optional[bool] = None
     improve_model_for_everyone: Optional[bool] = None
     has_seen_general_chat: Optional[bool] = None
     personalization_nickname: Optional[str] = None
@@ -91,6 +94,11 @@ class UserUpdate(BaseModel):
     notification_preferences: Optional[Dict[str, bool]] = None
     conversation_memory_enabled: Optional[bool] = None
     auto_web_search_enabled: Optional[bool] = None
+    supermemory_auto_recall: Optional[bool] = None
+    supermemory_auto_capture: Optional[bool] = None
+    supermemory_capture_mode: Optional[str] = None
+    supermemory_max_recall_results: Optional[int] = None
+    supermemory_profile_frequency: Optional[int] = None
     model_config = ConfigDict(extra="ignore")
 
 

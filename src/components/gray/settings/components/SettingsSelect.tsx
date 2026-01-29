@@ -12,9 +12,17 @@ export type SettingsSelectProps = {
   options: SelectOption[];
   onChange: (value: string) => void;
   icon?: ElementType;
+  disabled?: boolean;
 };
 
-export function SettingsSelect({ id, value, options, onChange, icon: Icon }: SettingsSelectProps) {
+export function SettingsSelect({
+  id,
+  value,
+  options,
+  onChange,
+  icon: Icon,
+  disabled = false,
+}: SettingsSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const activeLabel = useMemo(() => {
@@ -23,7 +31,7 @@ export function SettingsSelect({ id, value, options, onChange, icon: Icon }: Set
   }, [options, value]);
 
   useEffect(() => {
-    if (!isOpen) {
+    if (!isOpen || disabled) {
       return;
     }
     const handlePointerDown = (event: PointerEvent) => {
@@ -43,7 +51,13 @@ export function SettingsSelect({ id, value, options, onChange, icon: Icon }: Set
       document.removeEventListener("pointerdown", handlePointerDown, true);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isOpen]);
+  }, [disabled, isOpen]);
+
+  useEffect(() => {
+    if (disabled && isOpen) {
+      setIsOpen(false);
+    }
+  }, [disabled, isOpen]);
 
   return (
     <div className={styles.settingsSelectButton} style={{ position: "relative" }} ref={containerRef}>
@@ -51,9 +65,14 @@ export function SettingsSelect({ id, value, options, onChange, icon: Icon }: Set
         type="button"
         id={id}
         className={styles.settingsSelectTrigger}
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={() => {
+          if (disabled) return;
+          setIsOpen((prev) => !prev);
+        }}
         aria-haspopup="listbox"
         aria-expanded={isOpen ? "true" : "false"}
+        aria-disabled={disabled ? "true" : "false"}
+        disabled={disabled}
       >
         {Icon ? <Icon size={14} /> : null}
         <span className={styles.settingsSelectValue}>{activeLabel}</span>

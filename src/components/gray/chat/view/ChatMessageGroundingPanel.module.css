@@ -151,38 +151,3 @@
   border-radius: 0;
 }
 
-.chatGroundingSources {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.chatGroundingSource {
-  font-size: 0.75rem;
-}
-
-.chatGroundingLink {
-  color: rgba(255, 255, 255, 0.8);
-  text-decoration: underline;
-}
-
-.chatGroundingPlain {
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.chatGroundingWidget {
-  margin-top: 0.4rem;
-  font-size: 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.chatGroundingWidget code {
-  font-family: "IBM Plex Mono", menlo, monospace;
-  font-size: 0.7rem;
-  padding: 0.2rem 0.35rem;
-  border-radius: 0.35rem;
-  background: rgba(255, 255, 255, 0.05);
-}
-

@@ -26,11 +26,13 @@ PATHFINDER_MODEL_IDS = {
     "deepseek/deepseek-v3.2",
     "deepseek/deepseek-v3.2-speciale",
     "x-ai/grok-4.1-fast",
+    "moonshotai/kimi-k2.5",
     "moonshotai/kimi-k2-0905",
     "moonshotai/kimi-k2-fast",
     "xiaomi/mimo-v2-flash:free",
     "z-ai/glm-4.7",
     "minimax/minimax-m2.1",
+    "minimax/minimax-m2-her",
 }
 
 # Voyager: All mid-tier models including Sonnet, Gemini Pro, GPT 5.2

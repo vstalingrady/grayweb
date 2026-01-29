@@ -16,10 +16,6 @@ BEGIN
         ALTER TABLE public.users ADD COLUMN workspace_background_id TEXT;
     END IF;
 
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'maps_enabled') THEN
-        ALTER TABLE public.users ADD COLUMN maps_enabled BOOLEAN DEFAULT FALSE;
-    END IF;
-
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'personalization_nickname') THEN
         ALTER TABLE public.users ADD COLUMN personalization_nickname TEXT;
     END IF;
@@ -74,6 +70,26 @@ BEGIN
 
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'subscription_expires_at') THEN
         ALTER TABLE public.users ADD COLUMN subscription_expires_at TIMESTAMP;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'supermemory_auto_recall') THEN
+        ALTER TABLE public.users ADD COLUMN supermemory_auto_recall BOOLEAN;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'supermemory_auto_capture') THEN
+        ALTER TABLE public.users ADD COLUMN supermemory_auto_capture BOOLEAN;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'supermemory_capture_mode') THEN
+        ALTER TABLE public.users ADD COLUMN supermemory_capture_mode TEXT;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'supermemory_max_recall_results') THEN
+        ALTER TABLE public.users ADD COLUMN supermemory_max_recall_results INTEGER;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'supermemory_profile_frequency') THEN
+        ALTER TABLE public.users ADD COLUMN supermemory_profile_frequency INTEGER;
     END IF;
 END $$;
 

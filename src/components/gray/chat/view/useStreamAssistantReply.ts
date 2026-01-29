@@ -1,5 +1,11 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import { chatService, type ConversationUsage, type User } from "@/lib/api";
+import {
+  buildMemorySettingsStorageKey,
+  extractMemorySettingsFromUser,
+  loadMemorySettings,
+  mergeMemorySettings,
+} from "@/lib/memorySettings";
 import { buildLocalTimeContextWithOverrides } from "@/lib/timeContext";
 import type { ChatMessage, ChatSession } from "../types";
 import { resolveAssistantReminders } from "../reminderUtils";
@@ -22,7 +28,6 @@ type UseStreamAssistantReplyOptions = {
   personalizedSystemPrompt: string;
   autoWebSearchEnabled: boolean;
   webSearchEnabled: boolean;
-  mapPayload: Record<string, number | boolean | undefined>;
   modelTier: "lite" | "pro" | "pioneer";
   selectedModelId: string | null;
   reasoningMode: boolean;
@@ -54,7 +59,6 @@ export const useStreamAssistantReply = ({
   personalizedSystemPrompt,
   autoWebSearchEnabled,
   webSearchEnabled,
-  mapPayload,
   modelTier,
   selectedModelId,
   reasoningMode,
@@ -200,6 +204,9 @@ export const useStreamAssistantReply = ({
       const timeContext = buildLocalTimeContextWithOverrides(undefined, {
         timeZone: effectiveTimeZone,
       });
+      const localMemorySettings = loadMemorySettings(buildMemorySettingsStorageKey(resolvedUser.id));
+      const accountMemorySettings = extractMemorySettingsFromUser(resolvedUser);
+      const memorySettings = mergeMemorySettings(localMemorySettings, accountMemorySettings);
       const conversationMemoryEnabled = resolveConversationMemoryEnabled(resolvedUser);
 
       try {
@@ -228,6 +235,11 @@ export const useStreamAssistantReply = ({
             time_context: timeContext,
             timezone: effectiveTimeZone,
             conversation_memory_enabled: conversationMemoryEnabled,
+            supermemory_auto_recall: memorySettings.autoRecall,
+            supermemory_auto_capture: memorySettings.autoCapture,
+            supermemory_capture_mode: memorySettings.captureMode,
+            supermemory_max_recall_results: memorySettings.maxRecallResults,
+            supermemory_profile_frequency: memorySettings.profileFrequency,
             context_cache_id: contextCacheId ?? undefined,
             attachments: buildAttachmentPayloads(),
             should_generate_title: requestTitleHint,
@@ -235,7 +247,6 @@ export const useStreamAssistantReply = ({
             model: selectedModelId ?? modelTier,
             reasoning_mode: reasoningMode,
             reminders_enabled: remindersEnabled,
-            ...(modelTier === "lite" ? { maps_enabled: false, maps_widget: false } : mapPayload),
           },
           { signal: abortController.signal }
         )) {
@@ -386,6 +397,11 @@ export const useStreamAssistantReply = ({
             time_context: timeContext,
             timezone: effectiveTimeZone,
             conversation_memory_enabled: conversationMemoryEnabled,
+            supermemory_auto_recall: memorySettings.autoRecall,
+            supermemory_auto_capture: memorySettings.autoCapture,
+            supermemory_capture_mode: memorySettings.captureMode,
+            supermemory_max_recall_results: memorySettings.maxRecallResults,
+            supermemory_profile_frequency: memorySettings.profileFrequency,
             context_cache_id: contextCacheId ?? undefined,
             attachments: buildAttachmentPayloads(),
             web_search_enabled: shouldUseWebSearch,
@@ -393,7 +409,6 @@ export const useStreamAssistantReply = ({
             model: selectedModelId ?? modelTier,
             reasoning_mode: reasoningMode,
             reminders_enabled: remindersEnabled,
-            ...(modelTier === "lite" ? { maps_enabled: false, maps_widget: false } : mapPayload),
           });
           streamedConversationId =
             normalizeConversationIdValue(fallbackResponse.conversation_id) ?? streamedConversationId;
@@ -484,7 +499,6 @@ export const useStreamAssistantReply = ({
       applyAutoTitle,
       buildAttachmentPayloads,
       clearAttachments,
-      mapPayload,
       modelTier,
       reasoningMode,
       remindersEnabled,

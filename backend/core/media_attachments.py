@@ -4,6 +4,8 @@ Handles resolving and processing media attachments for chat messages.
 """
 from __future__ import annotations
 
+import hashlib
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
@@ -15,7 +17,6 @@ if TYPE_CHECKING:
 # Lazy imports
 _database_module = None
 _logger = None
-_gemini_service = None
 
 
 def _get_media_uploads():
@@ -42,19 +43,15 @@ def _resolve_storage_path_from_record(path_str: str) -> Path:
     return resolve_storage_path_from_record(path_str)
 
 
-def _candidate_text(candidate):
-    """Extract text from candidate."""
-    from backend.core.ai_utils import candidate_text
-    return candidate_text(candidate)
-
-
-# Type alias for GeminiAttachment - will be passed in
-class GeminiAttachment:
+# Simple attachment wrapper used by OpenRouter.
+class MediaAttachment:
     """Simple attachment wrapper."""
-    def __init__(self, data: bytes, mime_type: str, filename: str = None):
+    def __init__(self, data: bytes, mime_type: str, filename: str = None, attachment_id: Optional[int] = None):
         self.data = data
         self.mime_type = mime_type  
         self.filename = filename
+        self.id = attachment_id
+        self.content_hash = hashlib.sha256(data).hexdigest()
 
 
 class ChatAttachment:
@@ -129,7 +126,7 @@ async def resolve_media_attachments(
     attachment_specs: Optional[List[ChatAttachment]],
     user_id: int,
     *,
-    gemini_attachment_class=None,
+    attachment_class=None,
 ) -> List:
     """Resolve attachment specs to actual file data.
     
@@ -137,7 +134,7 @@ async def resolve_media_attachments(
         db: Database connection
         attachment_specs: List of attachment specifications with IDs
         user_id: User ID for ownership verification
-        gemini_attachment_class: Optional class to use for attachments
+        attachment_class: Optional class to use for attachments
         
     Returns:
         List of resolved attachments with file data
@@ -166,7 +163,7 @@ async def resolve_media_attachments(
         )
 
     # Use provided class or default
-    AttachmentClass = gemini_attachment_class or GeminiAttachment
+    AttachmentClass = attachment_class or MediaAttachment
     
     attachments = []
     for attachment_id in attachment_ids:
@@ -191,6 +188,7 @@ async def resolve_media_attachments(
                 data=data,
                 mime_type=record["mime_type"],
                 filename=record["filename"],
+                attachment_id=record["id"],
             )
         )
 
@@ -200,30 +198,21 @@ async def resolve_media_attachments(
 async def generate_image_descriptions(
     attachments: List,
     *,
-    gemini_service=None,
-    gemini_light_model: str = "models/gemini-flash-lite-latest",
+    openrouter_service=None,
+    vision_model: Optional[str] = None,
 ) -> str:
-    """Generate text descriptions of images using Gemini Flash Lite.
-    
-    This is used when sending messages to non-vision models (like DeepSeek)
-    so they can understand what images the user sent.
-    
-    Args:
-        attachments: List of attachment objects with data and mime_type
-        gemini_service: Optional pre-configured Gemini service
-        gemini_light_model: Model to use for descriptions
-        
-    Returns:
-        A formatted string with image descriptions, or empty string if no images
+    """Generate text descriptions of images using OpenRouter vision models.
+
+    This is used when sending messages to non-vision models so they can
+    understand what images the user sent.
     """
     logger = _get_logger()
-    
-    # Get Gemini service
-    if gemini_service is None:
-        from backend.gemini_client import GeminiService
-        gemini_service = GeminiService()
-    
-    if not attachments or not gemini_service.available:
+
+    if openrouter_service is None:
+        from backend.openrouter_client import OpenRouterService
+        openrouter_service = OpenRouterService()
+
+    if not attachments or not openrouter_service.available:
         return ""
     
     # Filter to only image attachments
@@ -234,32 +223,40 @@ async def generate_image_descriptions(
     if not image_attachments:
         return ""
     
+    selected_model = vision_model or os.getenv(
+        "OPENROUTER_IMAGE_DESCRIPTION_MODEL",
+        "google/gemini-3-flash-preview",
+    )
+
     descriptions = []
     for i, attachment in enumerate(image_attachments, 1):
         try:
-            response = await gemini_service.generate(
-                message="1. Describe this image in 1-2 sentences. 2. If there is ANY text in the image, transcribe it verbatim. Format: [Description]: <text> [Transcription]: <text>",
+            prompt = (
+                "1) Describe this image in 1-2 sentences. "
+                "2) If there is ANY text, transcribe it verbatim. "
+                "Format:\n[Description]: <text>\n[Transcription]: <text>"
+            )
+            response = await openrouter_service.generate(
+                message=prompt,
                 conversation_history=None,
                 workspace_context=None,
                 system_prompt="You are an image analysis assistant. Always separate your response into Description and Transcription sections. If no text is visible, write 'None' for Transcription.",
                 time_context=None,
-                model=gemini_light_model,
+                model=selected_model,
                 attachments=[attachment],
             )
-            
-            if response.candidates:
-                text = _candidate_text(response.candidates[0])
-                if text:
-                    filename = getattr(attachment, 'filename', None) or f"Image {i}"
-                    descriptions.append(f"[{filename} Analysis]:\n{text.strip()}")
-                    logger.info(
-                        f"Generated image description for {filename}",
-                        extra={"event_type": "image_description_generated", "image_filename": filename}
-                    )
+
+            if isinstance(response, str) and response.strip():
+                filename = getattr(attachment, "filename", None) or f"Image {i}"
+                descriptions.append(f"[{filename} Analysis]:\n{response.strip()}")
+                logger.info(
+                    f"Generated image description for {filename}",
+                    extra={"event_type": "image_description_generated", "image_filename": filename},
+                )
         except Exception as e:
             logger.warning(
                 f"Failed to generate image description: {e}",
-                extra={"event_type": "image_description_error", "error": str(e)}
+                extra={"event_type": "image_description_error", "error": str(e)},
             )
             continue
     

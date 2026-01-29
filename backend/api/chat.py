@@ -1,5 +1,6 @@
 import asyncio
 import time
+from datetime import datetime, timezone
 from uuid import uuid4
 from typing import Any, Dict, List, Optional, AsyncGenerator
 
@@ -18,7 +19,6 @@ from backend.api.chat_models import (
 )
 from backend.core.ai_config import (
     AI_PROVIDER,
-    GEMINI_DEFAULT_MODEL,
     GLOBAL_SYSTEM_PROMPTS_PATH,
     get_default_chat_tools,
 )
@@ -50,12 +50,24 @@ from backend.onboarding_tools import ONBOARDING_TOOLS
 from backend.core.chat_starter_helpers import sse_event as _sse_event
 from backend.core.title_generator import generate_chat_title_inline as _generate_chat_title_inline
 from backend.core.media_attachments import resolve_attachment_metadata
+from backend.supermemory import SUPERMEMORY_SERVICE, detect_memory_category, parse_supermemory_overrides
 
 api_logger = create_logger("api.chat")
 
 router = APIRouter(tags=["chat"])
 
 CUSTOM_INSTRUCTIONS_HEADER = "CUSTOM INSTRUCTIONS FROM USER (SOURCE OF TRUTH)"
+
+def _resolve_conversation_memory_enabled(
+    user_record: Optional[Dict[str, Any]],
+    request_value: Optional[bool],
+) -> bool:
+    record_value = _row_get(user_record, "conversation_memory_enabled") if user_record else None
+    if record_value is False:
+        return False
+    if isinstance(request_value, bool):
+        return request_value
+    return True
 
 def _append_custom_instructions(
     system_prompt: Optional[str],
@@ -75,6 +87,151 @@ def _append_custom_instructions(
     if system_prompt and system_prompt.strip():
         return f"{system_prompt}\n\n{block}"
     return block
+
+
+_SUPERMEMORY_COMMANDS = {"remember", "recall", "forget", "profile", "wipe"}
+
+
+def _parse_supermemory_command(message: Optional[str]) -> Optional[Dict[str, str]]:
+    if not message:
+        return None
+    trimmed = message.strip()
+    if not trimmed.startswith("/"):
+        return None
+    parts = trimmed.split(maxsplit=1)
+    command = parts[0].lstrip("/").lower()
+    if command not in _SUPERMEMORY_COMMANDS:
+        return None
+    args = parts[1] if len(parts) > 1 else ""
+    return {"command": command, "args": args}
+
+
+def _parse_supermemory_overrides(
+    chat_request: ChatRequest,
+    user_record: Optional[Dict[str, Any]] = None,
+):
+    def _resolve(field: str, user_key: str):
+        value = getattr(chat_request, field)
+        if value is None and user_record is not None:
+            return _row_get(user_record, user_key)
+        return value
+
+    return parse_supermemory_overrides(
+        auto_recall=_resolve("supermemory_auto_recall", "supermemory_auto_recall"),
+        auto_capture=_resolve("supermemory_auto_capture", "supermemory_auto_capture"),
+        capture_mode=_resolve("supermemory_capture_mode", "supermemory_capture_mode"),
+        max_recall_results=_resolve("supermemory_max_recall_results", "supermemory_max_recall_results"),
+        profile_frequency=_resolve("supermemory_profile_frequency", "supermemory_profile_frequency"),
+    )
+
+
+def _format_profile_sections(profile: Dict[str, Any]) -> str:
+    static_facts = profile.get("static") or []
+    dynamic_facts = profile.get("dynamic") or []
+    sections: List[str] = []
+    if static_facts:
+        sections.append("## User Profile (Persistent)\n" + "\n".join(f"- {f}" for f in static_facts))
+    if dynamic_facts:
+        sections.append("## Recent Context\n" + "\n".join(f"- {f}" for f in dynamic_facts))
+    return "\n\n".join(sections)
+
+
+async def _handle_supermemory_command(
+    *,
+    command: str,
+    args: str,
+    user_id: int,
+    plan_tier: Optional[str],
+    conversation_memory_enabled: bool,
+) -> str:
+    if not conversation_memory_enabled:
+        return "Conversation memory is disabled. Enable it in settings to use memory commands."
+    if not SUPERMEMORY_SERVICE.available:
+        return "Long-term memory is not configured."
+    policy = SUPERMEMORY_SERVICE.policy_for_tier(plan_tier)
+    if not policy.enabled:
+        return "Long-term memory is available on Pathfinder and above."
+
+    if command == "remember":
+        text = (args or "").strip()
+        if not text:
+            return "Usage: /remember <text to remember>"
+        category = detect_memory_category(text)
+        metadata = {
+            "type": category,
+            "source": "gray_command",
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        }
+        result = await SUPERMEMORY_SERVICE.store_memory(
+            user_id=user_id,
+            content=text,
+            metadata=metadata,
+            plan_tier=plan_tier,
+        )
+        if not result:
+            return "Failed to save memory. Please try again."
+        preview = text[:60] + ("..." if len(text) > 60 else "")
+        return f'Remembered: "{preview}"'
+
+    if command == "recall":
+        query = (args or "").strip()
+        if not query:
+            return "Usage: /recall <search query>"
+        results = await SUPERMEMORY_SERVICE.search_memories(
+            user_id=user_id,
+            query=query,
+            limit=5,
+            plan_tier=plan_tier,
+        )
+        if not results:
+            return f'No memories found for: "{query}"'
+        lines = []
+        for idx, result in enumerate(results, start=1):
+            score = ""
+            similarity = result.get("similarity")
+            if isinstance(similarity, (int, float)):
+                score = f" ({round(similarity * 100)}%)"
+            memory_text = result.get("memory") or ""
+            lines.append(f"{idx}. {memory_text}{score}")
+        return f"Found {len(results)} memories:\n\n" + "\n".join(lines)
+
+    if command == "forget":
+        query = (args or "").strip()
+        if not query:
+            return "Usage: /forget <memory to forget>"
+        result = await SUPERMEMORY_SERVICE.forget_by_query(
+            user_id=user_id,
+            query=query,
+            plan_tier=plan_tier,
+        )
+        return result.get("message") or "Memory forgotten."
+
+    if command == "profile":
+        query = (args or "").strip() or None
+        profile = await SUPERMEMORY_SERVICE.get_profile(
+            user_id=user_id,
+            query=query,
+            plan_tier=plan_tier,
+        )
+        if not profile:
+            return "No profile information available yet."
+        formatted = _format_profile_sections(profile)
+        return formatted or "No profile information available yet."
+
+    if command == "wipe":
+        confirm = (args or "").strip().lower()
+        if confirm not in {"confirm", "yes", "y"}:
+            return "This will delete all memories. Run /wipe confirm to continue."
+        result = await SUPERMEMORY_SERVICE.wipe_all(
+            user_id=user_id,
+            plan_tier=plan_tier,
+        )
+        deleted = result.get("deletedCount", 0)
+        if deleted:
+            return f"Wiped {deleted} memories."
+        return "No memories to wipe."
+
+    return "Unsupported memory command."
 
 
 async def _get_db() -> databases.Database:
@@ -149,6 +306,11 @@ async def chat_route(
 
     # Initialize tools (currently unused in non-streaming endpoint, but required by generate_ai_response)
     tool_list = None
+    conversation_memory_enabled = _resolve_conversation_memory_enabled(
+        current_user,
+        chat_request.conversation_memory_enabled,
+    )
+    supermemory_overrides = _parse_supermemory_overrides(chat_request, current_user)
 
     try:
         # Generate a title for the chat session (only if requested)
@@ -254,6 +416,38 @@ async def chat_route(
 
         effective_system_prompt = _append_custom_instructions(chat_request.system_prompt, current_user)
 
+        supermemory_command = _parse_supermemory_command(chat_request.message)
+        if supermemory_command:
+            command_response = await _handle_supermemory_command(
+                command=supermemory_command["command"],
+                args=supermemory_command["args"],
+                user_id=authenticated_user_id,
+                plan_tier=normalized_tier,
+                conversation_memory_enabled=conversation_memory_enabled,
+            )
+            assistant_message_payload = {"role": "model", "text": command_response}
+            assistant_message_id = None
+            if is_general_conversation:
+                assistant_message_id = await _insert_general_conversation_message(
+                    user_id=authenticated_user_id,
+                    role="model",
+                    text=command_response,
+                )
+            else:
+                assistant_message_id = await save_conversation_message(
+                    conversation_id,
+                    assistant_message_payload,
+                    user_id=authenticated_user_id,
+                )
+            clear_request_context()
+            return ChatResponse(
+                response=command_response,
+                conversation_id=conversation_id,
+                grounding_metadata=None,
+                title=session_title,
+                message_id=assistant_message_id,
+            )
+
         # Generate AI response
         ai_response, grounding_metadata = await _generate_ai_response(
             chat_request.message,
@@ -265,20 +459,24 @@ async def chat_route(
             chat_request.attachments,
             chat_request.user_id,
             db,
+            conversation_id=conversation_id,
             response_schema=chat_request.response_json_schema,
             response_mime_type=chat_request.response_mime_type,
             context_cache_id=chat_request.context_cache_id,
-            maps_enabled=chat_request.maps_enabled,
-            maps_latitude=chat_request.maps_latitude,
-            maps_longitude=chat_request.maps_longitude,
-            maps_widget=chat_request.maps_widget,
             search_enabled=chat_request.web_search_enabled,
+            web_search_engine=chat_request.web_search_engine,
+            web_search_max_results=chat_request.web_search_max_results,
+            web_search_prompt=chat_request.web_search_prompt,
+            web_search_context_size=chat_request.web_search_context_size,
             should_generate_title=chat_request.should_generate_title,
             reasoning_mode=effective_reasoning_mode,
             reminders_enabled=chat_request.reminders_enabled,
             tools=tool_list,
             user_timezone=chat_request.timezone,
             plan_tier=normalized_tier,
+            conversation_memory_enabled=conversation_memory_enabled,
+            provider_routing=chat_request.provider_routing,
+            supermemory_overrides=supermemory_overrides,
         )
 
         # Save AI response (including grounding metadata for downstream UI)
@@ -301,6 +499,20 @@ async def chat_route(
              # Regular thread persistence
              assistant_message_id = await save_conversation_message(conversation_id, assistant_message_payload, user_id=authenticated_user_id)
 
+        if conversation_memory_enabled and SUPERMEMORY_SERVICE.available:
+            create_logged_task(
+                SUPERMEMORY_SERVICE.capture_turn(
+                    user_id=authenticated_user_id,
+                    user_message=chat_request.message,
+                    assistant_message=ai_response,
+                    conversation_id=conversation_id,
+                    plan_tier=normalized_tier,
+                    overrides=supermemory_overrides,
+                ),
+                logger=api_logger,
+                name="chat.supermemory_capture",
+            )
+
         # Generate title inline so it's returned with the response.
         # This adds ~100-300ms latency but only on first message of new conversations.
         final_title = session_title
@@ -310,6 +522,7 @@ async def chat_route(
                     chat_request.message,
                     ai_response,
                     prompt_locale=prompt_locale,
+                    user_id=authenticated_user_id,
                 )
                 if generated_title:
                     final_title = generated_title
@@ -409,6 +622,11 @@ async def chat_stream_route(
         # 5. Resolve System Prompt & Tier (Concurrent with User Fetch)
         user_record = await user_task
         user_plan_tier = _row_get(user_record, "plan_tier") or "scout"
+        conversation_memory_enabled = _resolve_conversation_memory_enabled(
+            user_record,
+            chat_request.conversation_memory_enabled,
+        )
+        supermemory_overrides = _parse_supermemory_overrides(chat_request, user_record)
         
         # Check if onboarding is truly complete based on personalization fields
         # This is more robust than just checking the boolean flag which might be stale
@@ -545,6 +763,48 @@ async def chat_stream_route(
         if effective_reasoning_mode and normalized_tier not in ("pathfinder", "voyager", "pioneer"):
             effective_reasoning_mode = False
 
+        supermemory_command = _parse_supermemory_command(effective_message)
+        if supermemory_command:
+            command_response = await _handle_supermemory_command(
+                command=supermemory_command["command"],
+                args=supermemory_command["args"],
+                user_id=chat_request.user_id,
+                plan_tier=normalized_tier,
+                conversation_memory_enabled=conversation_memory_enabled,
+            )
+
+            async def event_stream() -> AsyncGenerator[str, None]:
+                yield ":streaming-start\n\n"
+                try:
+                    if conversation_id:
+                        general_user_id = _general_conversation_user_id(conversation_id)
+                        if general_user_id is not None:
+                            await _insert_general_conversation_message(
+                                user_id=general_user_id,
+                                role="model",
+                                text=command_response,
+                            )
+                        else:
+                            await save_conversation_message(
+                                conversation_id,
+                                {"role": "model", "text": command_response},
+                                user_id=chat_request.user_id,
+                            )
+                    yield _sse_event("token", {"delta": command_response})
+                    end_payload: Dict[str, Any] = {
+                        "conversation_id": conversation_id,
+                        "response": command_response,
+                        "title": session_title,
+                    }
+                    yield _sse_event("end", end_payload)
+                except Exception as stream_error:
+                    api_logger.error(f"Supermemory command stream error: {stream_error}", exc_info=True)
+                    yield _sse_event("error", {"message": str(stream_error)})
+
+            headers = {"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
+            clear_request_context()
+            return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)
+
         async def event_stream() -> AsyncGenerator[str, None]:
             nonlocal session_title
             start_time_stream = time.perf_counter()
@@ -567,17 +827,23 @@ async def chat_stream_route(
                     time_context=chat_request.time_context,
                     model=effective_model,
                     attachments=chat_request.attachments,
+                    conversation_id=conversation_id,
                     context_cache_id=chat_request.context_cache_id,
-                    maps_enabled=chat_request.maps_enabled,
-                    maps_latitude=chat_request.maps_latitude,
-                    maps_longitude=chat_request.maps_longitude,
-                    maps_widget=chat_request.maps_widget,
                     search_enabled=chat_request.web_search_enabled,
+                    web_search_engine=chat_request.web_search_engine,
+                    web_search_max_results=chat_request.web_search_max_results,
+                    web_search_prompt=chat_request.web_search_prompt,
+                    web_search_context_size=chat_request.web_search_context_size,
                     should_generate_title=chat_request.should_generate_title,
                     reasoning_mode=effective_reasoning_mode,
                     reminders_enabled=chat_request.reminders_enabled,
                     tools=tool_list,
                     plan_tier=normalized_tier,
+                    conversation_memory_enabled=conversation_memory_enabled,
+                    response_schema=chat_request.response_json_schema,
+                    response_mime_type=chat_request.response_mime_type,
+                    provider_routing=chat_request.provider_routing,
+                    supermemory_overrides=supermemory_overrides,
                 ):
                     if kind == "delta":
                         if not payload:
@@ -630,10 +896,29 @@ async def chat_stream_route(
                         },
                     )
 
+                if conversation_memory_enabled and SUPERMEMORY_SERVICE.available:
+                    create_logged_task(
+                        SUPERMEMORY_SERVICE.capture_turn(
+                            user_id=chat_request.user_id,
+                            user_message=effective_message,
+                            assistant_message=final_response,
+                            conversation_id=conversation_id,
+                            plan_tier=normalized_tier,
+                            overrides=supermemory_overrides,
+                        ),
+                        logger=api_logger,
+                        name="chat_stream.supermemory_capture",
+                    )
+
                 final_title = session_title
                 if chat_request.should_generate_title:
                     try:
-                        generated_title = await _generate_chat_title_inline(effective_message, final_response, prompt_locale=prompt_locale)
+                        generated_title = await _generate_chat_title_inline(
+                            effective_message,
+                            final_response,
+                            prompt_locale=prompt_locale,
+                            user_id=chat_request.user_id,
+                        )
                         if generated_title:
                             final_title = generated_title
                             background_tasks.add_task(update_conversation_title, conversation_id, generated_title)

@@ -36,19 +36,22 @@ class ChatRequest(BaseModel):
     response_json_schema: Optional[Dict[str, Any]] = None
     response_mime_type: Optional[str] = None
     context_cache_id: Optional[int] = None
-    maps_enabled: bool = False
-    maps_latitude: Optional[float] = None
-    maps_longitude: Optional[float] = None
-    maps_widget: bool = False
     web_search_enabled: bool = False  # Disabled by default - adds ~7s latency to OpenRouter
+    web_search_engine: Optional[str] = None
+    web_search_max_results: Optional[int] = None
+    web_search_prompt: Optional[str] = None
+    web_search_context_size: Optional[str] = None
     should_generate_title: bool = False
     reasoning_mode: bool = False
     reminders_enabled: bool = True
     timezone: Optional[str] = None
     conversation_memory_enabled: bool = True
-    # Bring-your-own-key: map of provider id -> API key
-    # e.g. {"openrouter": "sk-or-...", "anthropic": "sk-ant-..."}
-    user_api_keys: Optional[Dict[str, str]] = None
+    provider_routing: Optional[Dict[str, Any]] = None
+    supermemory_auto_recall: Optional[bool] = None
+    supermemory_auto_capture: Optional[bool] = None
+    supermemory_capture_mode: Optional[str] = None
+    supermemory_max_recall_results: Optional[int] = Field(None, ge=1, le=20)
+    supermemory_profile_frequency: Optional[int] = Field(None, ge=1, le=500)
 
 
 class ChatResponse(BaseModel):
@@ -95,4 +98,3 @@ class ConversationHistoryPayload(BaseModel):
     # Set to True when the truncation is intentional (e.g., user deleted a message)
     # This bypasses the "suspicious truncation" safety guard
     allow_truncate: bool = False
-
