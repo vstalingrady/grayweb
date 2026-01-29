@@ -764,9 +764,7 @@ class OpenRouterService:
         if user:
             payload["user"] = user
 
-        # Request usage stats (OpenRouter uses stream_options for this)
-        if include_usage:
-            payload["stream_options"] = {"include_usage": True}
+        # Usage is included automatically in OpenRouter responses.
         if response_format:
             payload["response_format"] = response_format
         if web_search_options:
@@ -947,9 +945,7 @@ class OpenRouterService:
         if user:
             payload["user"] = user
 
-        # Request usage stats (OpenRouter uses stream_options for this)
-        if include_usage:
-            payload["stream_options"] = {"include_usage": True}
+        # Usage is included automatically in OpenRouter streaming responses.
         if response_format:
             payload["response_format"] = response_format
         if web_search_options:
