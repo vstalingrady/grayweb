@@ -31,6 +31,7 @@ PATHFINDER_MODEL_IDS = {
     "moonshotai/kimi-k2-fast",
     "xiaomi/mimo-v2-flash:free",
     "z-ai/glm-4.7",
+    "z-ai/glm-4.7-flash",
     "minimax/minimax-m2.1",
     "minimax/minimax-m2-her",
 }
