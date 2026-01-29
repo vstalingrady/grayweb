@@ -67,8 +67,7 @@ export const PIONEER_GROUPS: ModelGroup[] = [
     iconPath: "/logos/whitekimi.svg",
     models: [
       { id: "moonshotai/kimi-k2.5", label: "Kimi K2.5", cost: "$$$", tierRequired: "pathfinder" },
-      { id: "moonshotai/kimi-k2-0905", label: "Kimi K2", cost: "$$", tierRequired: "pathfinder" },
-      { id: "moonshotai/kimi-k2-fast", label: "Kimi K2 (Fast)", cost: "$$$", tierRequired: "pathfinder" },
+      { id: "moonshotai/kimi-k2-0905", label: "Kimi K2 (Fast)", cost: "$$$", tierRequired: "voyager" },
     ],
   },
   {

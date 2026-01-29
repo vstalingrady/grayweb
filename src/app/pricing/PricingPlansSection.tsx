@@ -70,7 +70,7 @@ export const PATHFINDER_FEATURES: FeatureItem[] = [
         id: "choose_model",
         label: "Choose your model",
         icon: Shuffle,
-        subtext: "Claude Haiku 4.5, Gemini 3 Flash, DeepSeek V3.2, Kimi K2, MiniMax M2.1, GLM 4.7, Grok 4.1 Fast",
+        subtext: "Claude Haiku 4.5, Gemini 3 Flash, DeepSeek V3.2, Kimi K2.5, MiniMax M2.1, GLM 4.7, Grok 4.1 Fast",
     },
     {
         id: "more_messages",

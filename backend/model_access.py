@@ -27,8 +27,6 @@ PATHFINDER_MODEL_IDS = {
     "deepseek/deepseek-v3.2-speciale",
     "x-ai/grok-4.1-fast",
     "moonshotai/kimi-k2.5",
-    "moonshotai/kimi-k2-0905",
-    "moonshotai/kimi-k2-fast",
     "xiaomi/mimo-v2-flash:free",
     "z-ai/glm-4.7",
     "z-ai/glm-4.7-flash",
@@ -41,6 +39,8 @@ VOYAGER_MODEL_IDS = PATHFINDER_MODEL_IDS | {
     "anthropic/claude-sonnet-4.5",
     "google/gemini-3-pro-preview",
     "openai/gpt-5.2-chat",
+    "moonshotai/kimi-k2-0905",
+    "moonshotai/kimi-k2-fast",
 }
 
 # Pioneer-only: Top-tier models
