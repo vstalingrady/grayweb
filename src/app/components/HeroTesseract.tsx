@@ -31,7 +31,7 @@ const HeroTesseract = () => {
       powerPreference: 'high-performance' // Optimize for performance
     });
     const renderer = rendererInstance;
-    renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+    renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
     renderer.setClearColor(0x000000, 1);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
