@@ -47,6 +47,8 @@ class UserBase(BaseModel):
     monthly_cost_usage: Optional[float] = 0.0
     weekly_cost_usage: Optional[float] = 0.0
     six_hour_cost_usage: Optional[float] = 0.0
+    streak_count: Optional[int] = 0
+    streak_last_date: Optional[str] = None
     preferred_model: Optional[str] = None
     visible_model_ids: Optional[List[str]] = None
     theme_mode: Optional[str] = None

@@ -201,39 +201,6 @@ function parseIdrDisplay(value: string): number {
     return Number.isFinite(amount) ? amount : 0;
 }
 
-function parseUsdDisplay(value: string): number {
-    const normalized = value.replace(/[^0-9.]/g, "");
-    const amount = Number.parseFloat(normalized || "0");
-    return Number.isFinite(amount) ? amount : 0;
-}
-
-function formatIdrDisplay(value: number): string {
-    const rounded = Math.max(0, Math.round(value));
-    const formatted = new Intl.NumberFormat("id-ID").format(rounded);
-    return `Rp ${formatted},-`;
-}
-
-function formatUsdDisplay(value: number): string {
-    const rounded = Math.max(0, Math.round(value * 100) / 100);
-    const formatter = new Intl.NumberFormat("en-US", {
-        minimumFractionDigits: rounded % 1 === 0 ? 0 : 2,
-        maximumFractionDigits: 2,
-    });
-    return `$${formatter.format(rounded)}`;
-}
-
-function applyAffiliateDiscount(value: string, currency: CurrencyKey, rate: number): string {
-    if (rate <= 0) {
-        return value;
-    }
-    const base = currency === "idr" ? parseIdrDisplay(value) : parseUsdDisplay(value);
-    if (base <= 0) {
-        return value;
-    }
-    const discounted = base * (1 - rate);
-    return currency === "idr" ? formatIdrDisplay(discounted) : formatUsdDisplay(discounted);
-}
-
 function computeAnnualSavingsPercent(monthlyDisplay: string, annualDisplay: string): number | undefined {
     const monthly = parseIdrDisplay(monthlyDisplay);
     const annual = parseIdrDisplay(annualDisplay);
@@ -257,7 +224,6 @@ export function PricingPlansSection() {
     const { t } = useI18n();
     const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
     const [isIndonesia, setIsIndonesia] = useState<boolean | null>(null);
-    const [affiliateDiscountRate, setAffiliateDiscountRate] = useState(0);
 
     // Fetch geo data on mount
     useEffect(() => {
@@ -290,24 +256,9 @@ export function PricingPlansSection() {
     const { price: pathfinderPrice, cadence: pathfinderCadence } = PATHFINDER_PRICING[billingCycle][currency];
     const { price: voyagerPrice, cadence: voyagerCadence } = VOYAGER_PRICING[billingCycle][currency];
     const { price: pioneerPrice, cadence: pioneerCadence } = PIONEER_PRICING[billingCycle][currency];
-    const isAffiliateDiscountActive = affiliateDiscountRate > 0 && billingCycle === "monthly";
-    const affiliateDiscountPercent = Math.round(affiliateDiscountRate * 100);
-    const showAffiliateNotice = affiliateDiscountPercent > 0;
-    const affiliateNoticeDetail = isAffiliateDiscountActive
-        ? t("{percent}% off your first month", { percent: affiliateDiscountPercent })
-        : t("{percent}% off monthly plans", { percent: affiliateDiscountPercent });
-    const pathfinderDiscountedPrice = isAffiliateDiscountActive
-        ? applyAffiliateDiscount(pathfinderPrice, currency, affiliateDiscountRate)
-        : pathfinderPrice;
-    const voyagerDiscountedPrice = isAffiliateDiscountActive
-        ? applyAffiliateDiscount(voyagerPrice, currency, affiliateDiscountRate)
-        : voyagerPrice;
-    const pioneerDiscountedPrice = isAffiliateDiscountActive
-        ? applyAffiliateDiscount(pioneerPrice, currency, affiliateDiscountRate)
-        : pioneerPrice;
-    const showPathfinderDiscount = isAffiliateDiscountActive && pathfinderDiscountedPrice !== pathfinderPrice;
-    const showVoyagerDiscount = isAffiliateDiscountActive && voyagerDiscountedPrice !== voyagerPrice;
-    const showPioneerDiscount = isAffiliateDiscountActive && pioneerDiscountedPrice !== pioneerPrice;
+    const pathfinderDiscountedPrice = pathfinderPrice;
+    const voyagerDiscountedPrice = voyagerPrice;
+    const pioneerDiscountedPrice = pioneerPrice;
     const annualSavingsPercent = Math.max(
         computeAnnualSavingsPercent(PATHFINDER_PRICING.monthly.idr.price, PATHFINDER_PRICING.annual.idr.price) ?? 0,
         computeAnnualSavingsPercent(VOYAGER_PRICING.monthly.idr.price, VOYAGER_PRICING.annual.idr.price) ?? 0,
@@ -336,44 +287,6 @@ export function PricingPlansSection() {
             }
         }
     };
-
-    useEffect(() => {
-        let isActive = true;
-        const controller = new AbortController();
-
-        const fetchAffiliateOffer = async () => {
-            try {
-                const params = new URLSearchParams();
-                params.set("billing_cycle", billingCycle);
-                const response = await fetch(`/api/p/affiliate/offer?${params.toString()}`, {
-                    signal: controller.signal,
-                    cache: "no-store",
-                });
-                if (!response.ok) {
-                    if (isActive) {
-                        setAffiliateDiscountRate(0);
-                    }
-                    return;
-                }
-                const payload = await response.json();
-                const rate = typeof payload?.discount_rate === "number" ? payload.discount_rate : 0;
-                if (isActive) {
-                    setAffiliateDiscountRate(rate > 0 ? rate : 0);
-                }
-            } catch {
-                if (isActive) {
-                    setAffiliateDiscountRate(0);
-                }
-            }
-        };
-
-        void fetchAffiliateOffer();
-        return () => {
-            isActive = false;
-            controller.abort();
-        };
-    }, [billingCycle, user?.id]);
-
 
     return (
         <>
@@ -410,13 +323,6 @@ export function PricingPlansSection() {
                     ))}
                 </div>
             </div>
-            {showAffiliateNotice ? (
-                <div className={styles.affiliateNotice} data-active={isAffiliateDiscountActive ? "true" : "false"}>
-                    <span className={styles.affiliateNoticeBadge}>{t("Affiliate")}</span>
-                    <span className={styles.affiliateNoticeValue}>{affiliateNoticeDetail}</span>
-                </div>
-            ) : null}
-
             <section className={styles.planGrid}>
                 <article className={styles.planCard} data-variant="muted">
                     <div className={styles.cardBody}>
@@ -458,11 +364,6 @@ export function PricingPlansSection() {
                             </header>
                             <div className={styles.priceHeader}>
                                 <div className={`${styles.priceBlock} ${styles.priceBlockStacked}`}>
-                                    {showPathfinderDiscount ? (
-                                        <span className={`${styles.priceValue} ${styles.priceValueMuted}`}>
-                                            {pathfinderPrice}
-                                        </span>
-                                    ) : null}
                                     <span className={styles.priceValue}>{pathfinderDiscountedPrice}</span>
                                     <span className={styles.priceMeta}>/ {t(pathfinderCadence)}</span>
                                 </div>
@@ -505,11 +406,6 @@ export function PricingPlansSection() {
                             </header>
                             <div className={styles.priceHeader}>
                                 <div className={`${styles.priceBlock} ${styles.priceBlockStacked}`}>
-                                    {showVoyagerDiscount ? (
-                                        <span className={`${styles.priceValue} ${styles.priceValueMuted}`}>
-                                            {voyagerPrice}
-                                        </span>
-                                    ) : null}
                                     <span className={styles.priceValue}>{voyagerDiscountedPrice}</span>
                                     <span className={styles.priceMeta}>/ {t(voyagerCadence)}</span>
                                 </div>
@@ -556,11 +452,6 @@ export function PricingPlansSection() {
                             </header>
                             <div className={styles.priceHeader}>
                                 <div className={`${styles.priceBlock} ${styles.priceBlockStacked}`}>
-                                    {showPioneerDiscount ? (
-                                        <span className={`${styles.priceValue} ${styles.priceValueMuted}`}>
-                                            {pioneerPrice}
-                                        </span>
-                                    ) : null}
                                     <span className={styles.priceValue}>{pioneerDiscountedPrice}</span>
                                     <span className={styles.priceMeta}>/ {t(pioneerCadence)}</span>
                                 </div>

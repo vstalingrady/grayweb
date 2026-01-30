@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { ApiError, workspaceService, type ProactivitySettings } from "@/lib/api";
 import { type ProactivityItem } from "@/components/gray/types";
 import { normalizeProactivityTimes, primaryProactivityTime, normalizeProactivityChannels } from "@/app/gray/utils";
+import { normalizeProactivityMessageLength, DEFAULT_PROACTIVITY_MESSAGE_LENGTH } from "@/components/gray/proactivityUtils";
 
 const PROACTIVITY_SEED: ProactivityItem = {
   id: "proactivity-1",
@@ -11,6 +12,7 @@ const PROACTIVITY_SEED: ProactivityItem = {
   time: "09:00",
   times: ["09:00"],
   channels: ["assistant"],
+  messageLength: DEFAULT_PROACTIVITY_MESSAGE_LENGTH,
 };
 
 const FREQUENT_PROACTIVITY_TIMES = ["09:00", "12:00", "18:00"];
@@ -45,6 +47,7 @@ const mapSettingsToProactivity = (settings?: ProactivitySettings | null): Proact
     time: primaryProactivityTime(mappedTimes, settings.time),
     channels: normalizedChannels,
     timezone: settings.timezone ?? null,
+    messageLength: normalizeProactivityMessageLength(settings.message_length),
   };
   if ((mapped.cadence ?? "").toLowerCase() === "manual") {
     return null;
@@ -63,6 +66,7 @@ const buildProactivitySettingsPayload = (
       description: PROACTIVITY_SEED.description,
       cadence: "Manual",
       timezone,
+      message_length: DEFAULT_PROACTIVITY_MESSAGE_LENGTH,
     };
   }
   const times = normalizeProactivityTimes(candidate.times ?? null, candidate.time).sort();
@@ -76,6 +80,7 @@ const buildProactivitySettingsPayload = (
     times,
     channels,
     timezone: candidate.timezone ?? timezone,
+    message_length: candidate.messageLength ?? DEFAULT_PROACTIVITY_MESSAGE_LENGTH,
   };
 };
 
@@ -96,7 +101,8 @@ const areProactivityItemsEqual = (a: ProactivityItem | null, b: ProactivityItem 
     normalizeProactivityTimes(b.times ?? null, b.time).join("|") &&
     normalizeProactivityChannels(a.channels ?? null).join("|") ===
     normalizeProactivityChannels(b.channels ?? null).join("|") &&
-    (a.timezone ?? null) === (b.timezone ?? null)
+    (a.timezone ?? null) === (b.timezone ?? null) &&
+    (a.messageLength ?? DEFAULT_PROACTIVITY_MESSAGE_LENGTH) === (b.messageLength ?? DEFAULT_PROACTIVITY_MESSAGE_LENGTH)
   );
 };
 

@@ -318,6 +318,7 @@ DEFAULT_DASHBOARD_PROACTIVITY = {
     "description": "Daily sync nudges for squad channels.",
     "cadence": "Daily",
     "time": "09:00 AM",
+    "message_length": "medium",
 }
 
 
@@ -331,6 +332,9 @@ def normalize_proactivity(raw: Any) -> Dict[str, Any]:
     description = raw.get("description")
     cadence = str(raw.get("cadence") or DEFAULT_DASHBOARD_PROACTIVITY["cadence"]).strip()
     time_label = str(raw.get("time") or DEFAULT_DASHBOARD_PROACTIVITY["time"]).strip()
+    message_length = str(raw.get("message_length") or DEFAULT_DASHBOARD_PROACTIVITY["message_length"]).strip().lower()
+    if message_length not in {"short", "medium", "long"}:
+        message_length = DEFAULT_DASHBOARD_PROACTIVITY["message_length"]
 
     return {
         "id": identifier or DEFAULT_DASHBOARD_PROACTIVITY["id"],
@@ -338,4 +342,5 @@ def normalize_proactivity(raw: Any) -> Dict[str, Any]:
         "description": (description or DEFAULT_DASHBOARD_PROACTIVITY.get("description")) or "",
         "cadence": cadence or DEFAULT_DASHBOARD_PROACTIVITY["cadence"],
         "time": time_label or DEFAULT_DASHBOARD_PROACTIVITY["time"],
+        "message_length": message_length,
     }

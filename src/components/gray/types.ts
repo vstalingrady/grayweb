@@ -7,8 +7,7 @@ export type SidebarNavKey =
   | "history"
   | "search"
   | "calendar"
-  | "analytics"
-  | "affiliates";
+  | "analytics";
 
 export type SidebarNavItem = {
   id: SidebarNavKey;
@@ -92,6 +91,7 @@ export type ProactivityItem = {
   times?: string[];
   channels?: string[];
   timezone?: string | null;
+  messageLength?: "short" | "medium" | "long";
 };
 
 export type CalendarDisplayEvent = {

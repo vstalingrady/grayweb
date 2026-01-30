@@ -37,6 +37,7 @@ import { hasCodeBlockDescendant } from "./chat/view/markdown/utils";
 import { useChatConversationUsage } from "./chat/view/useChatConversationUsage";
 import { useChatViewScroll } from "./chat/view/useChatViewScroll";
 import { useStreamAssistantReply } from "./chat/view/useStreamAssistantReply";
+import { buildGroundingSourceFaviconUrl, type DerivedGroundingSource } from "./chat/view/groundingSources";
 
 type GrayChatViewProps = {
   sessionId: string | null;
@@ -44,6 +45,72 @@ type GrayChatViewProps = {
   onContextUsageChange?: (summary: ContextUsageSummary | null) => void;
   hideThinkingIndicator?: boolean;
   isInputDisabled?: boolean;
+};
+
+const extractLinkText = (children: ReactNode): string => {
+  return Children.toArray(children)
+    .map((child) => (typeof child === "string" ? child : ""))
+    .join("")
+    .trim();
+};
+
+const normalizeCitationText = (value: string): string => {
+  return value
+    .trim()
+    .replace(/^[\s\[(]+|[\s\])]+$/g, "")
+    .replace(/[.,;:]+$/g, "")
+    .replace(/^https?:\/\//i, "")
+    .replace(/\/$/, "")
+    .toLowerCase();
+};
+
+const parseHostname = (value?: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+  const trimmed = normalizeCitationText(value);
+  if (!trimmed) {
+    return null;
+  }
+  try {
+    const parsed = new URL(/^[a-z]+:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`);
+    return parsed.hostname.replace(/^www\./i, "").toLowerCase();
+  } catch {
+    return null;
+  }
+};
+
+const shouldRenderSourceIcon = (linkText: string, href?: string | null): boolean => {
+  if (!linkText) {
+    return false;
+  }
+  const normalizedText = normalizeCitationText(linkText);
+  const host = parseHostname(href) ?? parseHostname(normalizedText);
+  if (!host) {
+    return false;
+  }
+  if (normalizedText === host || normalizedText.startsWith(host) || normalizedText.endsWith(host)) {
+    return true;
+  }
+  if (href) {
+    const normalizedHref = normalizeCitationText(href);
+    if (normalizedHref === host || normalizedHref.startsWith(host) || normalizedHref.endsWith(host)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const buildInlineSource = (href?: string | null, label?: string | null): DerivedGroundingSource => {
+  const host = parseHostname(href) ?? parseHostname(label ?? undefined) ?? undefined;
+  return {
+    id: href ?? label ?? "inline-source",
+    title: label ?? host ?? "Source",
+    href: href ?? undefined,
+    isReferenced: false,
+    siteLabel: host ?? label ?? undefined,
+    faviconHost: host ?? undefined,
+  };
 };
 
 export function GrayChatView({
@@ -623,11 +690,50 @@ export function GrayChatView({
           </div>
         );
       },
-      a: ({ children, href, ...rest }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
-        <a href={href} {...rest} target="_self">
-          {children}
-        </a>
-      ),
+      a: ({ children, href, ...rest }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
+        const linkText = extractLinkText(children);
+        if (shouldRenderSourceIcon(linkText, href)) {
+          const inlineSource = buildInlineSource(href, linkText);
+          const faviconUrl = buildGroundingSourceFaviconUrl(inlineSource);
+          const label = linkText || inlineSource.title;
+
+          return (
+            <a
+              href={href}
+              {...rest}
+              target="_self"
+              className={styles.chatInlineSourceIcon}
+              aria-label={label}
+              title={label}
+            >
+              <span className={styles.chatInlineSourceIconBadge}>
+                {faviconUrl ? (
+                  /* eslint-disable-next-line @next/next/no-img-element -- Favicon URLs are arbitrary; prefer a plain img with graceful fallback. */
+                  <img
+                    src={faviconUrl}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    className={styles.chatInlineSourceIconImg}
+                    onLoad={(event) => {
+                      event.currentTarget.style.opacity = "1";
+                    }}
+                    onError={(event) => {
+                      event.currentTarget.style.display = "none";
+                    }}
+                  />
+                ) : null}
+              </span>
+              <span className="sr-only">{label}</span>
+            </a>
+          );
+        }
+
+        return (
+          <a href={href} {...rest} target="_self">
+            {children}
+          </a>
+        );
+      },
     }),
     []
   );

@@ -23,6 +23,7 @@ class ProactivitySettings(BaseModel):
     times: Optional[List[str]] = None
     channels: Optional[List[str]] = None
     timezone: Optional[str] = None
+    message_length: Optional[str] = None
 
 
 class ProactivitySettingsUpdate(BaseModel):
@@ -35,6 +36,7 @@ class ProactivitySettingsUpdate(BaseModel):
     times: Optional[List[str]] = None
     channels: Optional[List[str]] = None
     timezone: Optional[str] = None
+    message_length: Optional[str] = None
 
 
 class ProactivityLogBase(BaseModel):

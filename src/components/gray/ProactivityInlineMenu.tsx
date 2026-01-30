@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Plus, Pencil, X } from "lucide-react";
 import calendarStyles from "@/components/calendar/GrayDashboardCalendar.module.css";
@@ -13,6 +13,9 @@ import {
   DEFAULT_CUSTOM_SETTINGS,
   DEFAULT_PROACTIVITY_TIME,
   PROACTIVITY_PRESETS,
+  DEFAULT_PROACTIVITY_MESSAGE_LENGTH,
+  PROACTIVITY_MESSAGE_LENGTH_OPTIONS,
+  type ProactivityMessageLength,
   buildCustomProactivityItem,
   dedupeTimes,
   findNextCustomTime,
@@ -92,10 +95,19 @@ function ProactivityInlineMenuContent({
   const [customTimes, setCustomTimes] = useState<string[]>(() =>
     activeProactivityTimes.length > 0 ? activeProactivityTimes : [...DEFAULT_CUSTOM_SETTINGS.times]
   );
+  const [messageLength, setMessageLength] = useState<ProactivityMessageLength>(
+    () => activeProactivity?.messageLength ?? DEFAULT_PROACTIVITY_MESSAGE_LENGTH
+  );
   const [editingCustomTimeIndex, setEditingCustomTimeIndex] = useState<number | null>(null);
   const [editingCustomTimeDraft, setEditingCustomTimeDraft] = useState<string>("");
 
   const isCustomPresetSelected = selectedPresetId === CUSTOM_PROACTIVITY_ID;
+
+  useEffect(() => {
+    if (activeProactivity?.messageLength) {
+      setMessageLength(activeProactivity.messageLength);
+    }
+  }, [activeProactivity?.messageLength]);
 
   useLayoutEffect(() => {
     const anchorEl = anchorRef.current;
@@ -185,9 +197,9 @@ function ProactivityInlineMenuContent({
 
   const applyCustomProactivity = useCallback(
     (nextTimes: string[]) => {
-      onSelectProactivity(buildCustomProactivityItem(nextTimes));
+      onSelectProactivity(buildCustomProactivityItem(nextTimes, messageLength));
     },
-    [onSelectProactivity]
+    [messageLength, onSelectProactivity]
   );
 
   const presetOptions = useMemo(() => {
@@ -237,11 +249,25 @@ function ProactivityInlineMenuContent({
         cadence: preset.cadence,
         time: primaryTime,
         times: presetTimes,
+        messageLength,
       });
       setIsPresetMenuOpen(false);
       onClose();
     },
-    [applyCustomProactivity, customTimes, onClose, onRemoveProactivity, onSelectProactivity]
+    [applyCustomProactivity, customTimes, messageLength, onClose, onRemoveProactivity, onSelectProactivity]
+  );
+
+  const handleMessageLengthSelect = useCallback(
+    (next: ProactivityMessageLength) => {
+      setMessageLength(next);
+      if (activeProactivity) {
+        onSelectProactivity({
+          ...activeProactivity,
+          messageLength: next,
+        });
+      }
+    },
+    [activeProactivity, onSelectProactivity]
   );
 
   const handleCustomTimeEdit = useCallback(
@@ -458,13 +484,34 @@ function ProactivityInlineMenuContent({
               </div>
             </div>
           </div>
-          <footer className={styles.proactivityModalFooter} style={{ marginTop: 16 }}>
-            <button type="button" className={styles.proactivityModalDismiss} onClick={onClose}>
-              {t("Done")}
-            </button>
-          </footer>
         </section>
       ) : null}
+      <section className={styles.proactivityCustomSection} style={{ padding: 0, border: "none" }}>
+        <header className={styles.proactivityCustomHeader} style={{ marginTop: 14 }}>
+          <div>
+            <span className={styles.proactivityCustomEyebrow}>{t("Message length")}</span>
+            <h3 className={styles.proactivityCustomTitle}>{t("How long should check-ins be?")}</h3>
+          </div>
+        </header>
+        <div className={styles.proactivityLengthOptions}>
+          {PROACTIVITY_MESSAGE_LENGTH_OPTIONS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              className={styles.proactivityLengthOption}
+              data-active={messageLength === option.id ? "true" : "false"}
+              onClick={() => handleMessageLengthSelect(option.id)}
+            >
+              {t(option.label)}
+            </button>
+          ))}
+        </div>
+      </section>
+      <footer className={styles.proactivityModalFooter} style={{ marginTop: 16 }}>
+        <button type="button" className={styles.proactivityModalDismiss} onClick={onClose}>
+          {t("Done")}
+        </button>
+      </footer>
     </div>
   );
 

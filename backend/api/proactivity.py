@@ -420,6 +420,7 @@ async def get_proactivity_settings(
         times=payload.get("times"),
         channels=payload.get("channels"),
         timezone=payload.get("timezone"),
+        message_length=payload.get("message_length"),
     )
 
 @router.get("/users/{user_id}/proactivity/notifications", response_model=List[ProactivityNotification])
@@ -522,6 +523,8 @@ async def update_proactivity_settings(
         updated_payload["channels"] = settings_update.channels
     if settings_update.timezone is not None:
         updated_payload["timezone"] = settings_update.timezone
+    if settings_update.message_length is not None:
+        updated_payload["message_length"] = settings_update.message_length
 
     if updated_payload.get("cadence", "").lower() == "daily" and updated_payload.get("time") and not updated_payload.get("times"):
         updated_payload["times"] = [updated_payload["time"]]
@@ -562,6 +565,7 @@ async def update_proactivity_settings(
         times=updated_payload.get("times"),
         channels=updated_payload.get("channels"),
         timezone=updated_payload.get("timezone"),
+        message_length=updated_payload.get("message_length"),
     )
 
 

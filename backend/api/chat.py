@@ -50,6 +50,14 @@ from backend.onboarding_tools import ONBOARDING_TOOLS
 from backend.core.chat_starter_helpers import sse_event as _sse_event
 from backend.core.title_generator import generate_chat_title_inline as _generate_chat_title_inline
 from backend.core.media_attachments import resolve_attachment_metadata
+from backend.core.streaks import (
+    append_streak_context,
+    build_engagement_context,
+    count_ignored_proactivity,
+    compute_inactivity_days,
+    load_last_user_message_at,
+    update_user_streak,
+)
 from backend.supermemory import (
     SUPERMEMORY_SERVICE,
     detect_memory_category,
@@ -383,6 +391,8 @@ async def chat_route(
             except Exception as e:
                 api_logger.debug(f"Could not load general context: {e}", extra={"user_id": chat_request.user_id})
 
+        prior_last_message_at = await load_last_user_message_at(db, chat_request.user_id)
+
         # Save user message to local conversation store (after capturing prior history),
         # but avoid writing an identical message twice in a row (e.g., when a fallback
         # request replays the same prompt after a streaming failure).
@@ -436,6 +446,26 @@ async def chat_route(
                     "duration_ms": int((time.perf_counter() - t0_persist) * 1000),
                 },
             )
+
+        streak_info = await update_user_streak(
+            db,
+            chat_request.user_id,
+            timezone_label=chat_request.timezone,
+        )
+        inactivity_days, last_message_date = compute_inactivity_days(
+            prior_last_message_at,
+            now_utc=utcnow(),
+            timezone_label=chat_request.timezone,
+        )
+        ignored_pings = await count_ignored_proactivity(db, chat_request.user_id)
+        engagement_context = build_engagement_context(
+            streak_info.get("streak_count") if streak_info else None,
+            streak_info.get("streak_last_date") if streak_info else None,
+            inactivity_days,
+            last_message_date,
+            ignored_pings,
+        )
+        effective_time_context = append_streak_context(chat_request.time_context, engagement_context)
 
         # Enforce tier restrictions
         # Pathfinder, Voyager, and Pioneer users can use reasoning mode.
@@ -506,7 +536,7 @@ async def chat_route(
             conversation_history,
             chat_request.context,
             effective_system_prompt,
-            chat_request.time_context,
+            effective_time_context,
             effective_model,
             chat_request.attachments,
             chat_request.user_id,
@@ -780,6 +810,8 @@ async def chat_stream_route(
                 },
             )
 
+        prior_last_message_at = await load_last_user_message_at(db, chat_request.user_id)
+
         # Avoid sending an empty payload to the AI provider
         if not (effective_message or "").strip() and not conversation_history and not (chat_request.attachments or []):
             effective_message = "Let's get started."
@@ -845,6 +877,25 @@ async def chat_stream_route(
             except Exception as e:
                 api_logger.error(f"Failed to persist user message: {e}", extra={"user_id": chat_request.user_id})
 
+        streak_info = await update_user_streak(
+            db,
+            chat_request.user_id,
+            timezone_label=chat_request.timezone,
+        )
+        inactivity_days, last_message_date = compute_inactivity_days(
+            prior_last_message_at,
+            now_utc=utcnow(),
+            timezone_label=chat_request.timezone,
+        )
+        ignored_pings = await count_ignored_proactivity(db, chat_request.user_id)
+        engagement_context = build_engagement_context(
+            streak_info.get("streak_count") if streak_info else None,
+            streak_info.get("streak_last_date") if streak_info else None,
+            inactivity_days,
+            last_message_date,
+            ignored_pings,
+        )
+        effective_time_context = append_streak_context(chat_request.time_context, engagement_context)
 
         # Enforce tier restrictions for streaming
         normalized_tier = normalize_plan_tier(
@@ -921,7 +972,7 @@ async def chat_stream_route(
                     user_id=chat_request.user_id,
                     db=db,
                     user_timezone=chat_request.timezone,
-                    time_context=chat_request.time_context,
+                    time_context=effective_time_context,
                     model=effective_model,
                     attachments=chat_request.attachments,
                     conversation_id=conversation_id,

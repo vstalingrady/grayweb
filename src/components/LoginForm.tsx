@@ -104,7 +104,6 @@ export default function LoginForm({
   const [pendingEmailConfirmation, setPendingEmailConfirmation] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [shouldUseCaptcha, setShouldUseCaptcha] = useState(false);
-  const [affiliateDiscountRate, setAffiliateDiscountRate] = useState(0);
   const turnstileRef = useRef<TurnstileInstance>();
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() ?? "";
   const supabaseHost = hostFromUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
@@ -137,40 +136,6 @@ export default function LoginForm({
     }
   }, [turnstileSiteKey, supabaseHost]);
 
-  useEffect(() => {
-    let isActive = true;
-    const controller = new AbortController();
-
-    const loadAffiliateOffer = async () => {
-      try {
-        const response = await fetch("/api/p/affiliate/offer?billing_cycle=monthly", {
-          signal: controller.signal,
-          cache: "no-store",
-        });
-        if (!response.ok) {
-          if (isActive) {
-            setAffiliateDiscountRate(0);
-          }
-          return;
-        }
-        const payload = await response.json();
-        const rate = typeof payload?.discount_rate === "number" ? payload.discount_rate : 0;
-        if (isActive) {
-          setAffiliateDiscountRate(rate > 0 ? rate : 0);
-        }
-      } catch {
-        if (isActive) {
-          setAffiliateDiscountRate(0);
-        }
-      }
-    };
-
-    void loadAffiliateOffer();
-    return () => {
-      isActive = false;
-      controller.abort();
-    };
-  }, []);
 
   useEffect(() => {
     setMessage({ type: "idle" });
@@ -696,9 +661,6 @@ export default function LoginForm({
     ? t("Don't have an account?")
     : t("Already have an account?");
   const footerAction = isSignIn ? t("Sign Up") : t("Sign In");
-  const affiliateDiscountPercent = Math.round(affiliateDiscountRate * 100);
-  const showAffiliateNotice = authMode === "signup" && affiliateDiscountPercent > 0;
-  const affiliateNoticeText = t("{percent}% off your first month", { percent: affiliateDiscountPercent });
 
   const handleModeToggle = () => {
     setAuthMode(isSignIn ? "signup" : "signin");
@@ -922,12 +884,6 @@ export default function LoginForm({
                 {footerAction}
               </button>
             </div>
-            {showAffiliateNotice ? (
-              <div className={styles.affiliateNotice}>
-                <span className={styles.affiliateNoticeBadge}>{t("Affiliate")}</span>
-                <span className={styles.affiliateNoticeText}>{affiliateNoticeText}</span>
-              </div>
-            ) : null}
           </div>
         </div>
       </div>

@@ -8,6 +8,7 @@ type GrayWorkspaceHeaderProps = {
   children?: ReactNode;
   showUpgradeButton?: boolean;
   hideDesktopMeta?: boolean;
+  streakCount?: number | null;
 };
 
 function GrayWorkspaceHeader({
@@ -16,6 +17,7 @@ function GrayWorkspaceHeader({
   children,
   showUpgradeButton = true,
   hideDesktopMeta = false,
+  streakCount = null,
 }: GrayWorkspaceHeaderProps) {
   const { t } = useI18n();
   const normalizedPlanLower = (planLabel || "").trim().toLowerCase();
@@ -23,6 +25,9 @@ function GrayWorkspaceHeader({
   // Only show Upgrade button if user is "scout" (free tier)
   const isScout = normalizedPlanLower === "scout" || normalizedPlanLower === "";
   const shouldShowUpgrade = showUpgradeButton && isScout;
+  const showStreak = typeof streakCount === "number" && streakCount > 0;
+  const shouldShowMeta = !hideDesktopMeta && (shouldShowUpgrade || showStreak);
+  const streakLabel = showStreak ? t("{count} day streak", { count: streakCount }) : "";
 
   const handleUpgradeClick = () => {
     onUpgradeClick?.();
@@ -31,16 +36,23 @@ function GrayWorkspaceHeader({
   return (
     <header className={styles.header}>
       {children ? <div className={styles.headerLeft}>{children}</div> : null}
-      {!hideDesktopMeta && shouldShowUpgrade ? (
+      {shouldShowMeta ? (
         <div className={`${styles.headerRight} hidden md:flex`}>
-          <button
-            type="button"
-            className={styles.planBadge}
-            onClick={handleUpgradeClick}
-            aria-label={t("Upgrade plan")}
-          >
-            <span className={styles.planBadgeLabel}>{t("Upgrade")}</span>
-          </button>
+          {showStreak ? (
+            <div className={styles.streakBadge} aria-label={streakLabel} title={streakLabel}>
+              <span className={styles.streakBadgeText}>{streakLabel}</span>
+            </div>
+          ) : null}
+          {shouldShowUpgrade ? (
+            <button
+              type="button"
+              className={styles.planBadge}
+              onClick={handleUpgradeClick}
+              aria-label={t("Upgrade plan")}
+            >
+              <span className={styles.planBadgeLabel}>{t("Upgrade")}</span>
+            </button>
+          ) : null}
         </div>
       ) : null}
     </header>

@@ -39,6 +39,8 @@ export interface User {
   personalization_time_zone?: string | null;
   created_at: string;
   updated_at: string;
+  streak_count?: number | null;
+  streak_last_date?: string | null;
   usage_status?: UsageStatus | null;
   preferred_model?: string | null;
   visible_model_ids?: string[] | null;
@@ -135,6 +137,7 @@ export interface DashboardPulseProactivity {
   description?: string | null;
   cadence: string;
   time: string;
+  message_length?: string | null;
 }
 
 export interface DashboardPulse {
@@ -206,6 +209,7 @@ export interface ProactivitySettings {
   times?: string[] | null;
   channels?: string[] | null;
   timezone?: string | null;
+  message_length?: string | null;
 }
 
 export interface ProactivityNotification {
@@ -636,60 +640,4 @@ export interface AnalyticsSummary {
   database_url?: string;
   sqlite_path?: string | null;
   sqlite_size_bytes?: number | null;
-}
-
-export interface AffiliateAnalyticsSummary {
-  generated_at: string;
-  affiliate: {
-    code: string;
-    display_name?: string | null;
-    commission_rate: number;
-    discount_rate: number;
-    share_url: string;
-  };
-  summary: {
-    signups: number;
-    conversions: number;
-    active_conversions: number;
-    clicks: number;
-    signup_rate: number;
-    conversion_rate: number;
-    gross_revenue: number;
-    commission_owed: number;
-    currency_breakdown: Record<string, { gross_revenue: number; commission_owed: number }>;
-  };
-  recent_signups: Array<{
-    email: string;
-    attributed_at: string | null;
-  }>;
-  recent_conversions: Array<{
-    email: string;
-    order_id: string | null;
-    amount: number | null;
-    currency: string | null;
-    paid_at: string | null;
-  }>;
-  timeline: Array<{
-    month: string;
-    signups: number;
-    conversions: number;
-    clicks: number;
-    gross_revenue: number;
-    commission: number;
-  }>;
-}
-
-export interface AffiliateDirectoryEntry {
-  code: string;
-  display_name?: string | null;
-  owner_email?: string | null;
-  commission_rate: number;
-  discount_rate: number;
-  is_active: boolean;
-  share_url: string;
-}
-
-export interface AffiliateDirectoryResponse {
-  generated_at: string;
-  affiliates: AffiliateDirectoryEntry[];
 }

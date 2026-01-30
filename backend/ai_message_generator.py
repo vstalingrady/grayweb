@@ -19,6 +19,13 @@ import databases
 
 from backend.env_utils import ROOT_DIR
 from backend.core.stream_handlers.context import determine_provider_and_model
+from backend.core.streaks import (
+    build_engagement_context,
+    count_ignored_proactivity,
+    compute_inactivity_days,
+    load_last_user_message_at,
+    load_user_streak,
+)
 from backend.openrouter_client import OpenRouterService
 from backend.usage_tracker import UsageLimitExceeded, UsageTracker
 
@@ -110,6 +117,7 @@ class AIMessageGenerator:
         timezone_str: str = "UTC+00:00",
         reason: Optional[str] = None,
         tone: Optional[str] = None,
+        message_length: Optional[str] = None,
         decision_context: Optional[Dict[str, Any]] = None,
         profile_context: Optional[str] = None,
         custom_instructions: Optional[str] = None,
@@ -151,6 +159,16 @@ class AIMessageGenerator:
             context_chunks.append(f"Trigger reason: {reason}")
         if tone:
             context_chunks.append(f"Requested tone: {tone}")
+        if message_length:
+            normalized_length = message_length.strip().lower()
+            length_guides = {
+                "short": "Short (1-2 sentences, <= 50 words).",
+                "medium": "Medium (2-4 sentences, about 60-120 words).",
+                "long": "Long (4-7 sentences, about 120-220 words).",
+            }
+            guide = length_guides.get(normalized_length)
+            if guide:
+                context_chunks.append(f"Message length preference: {guide}")
         if decision_context:
             context_chunks.append(
                 f"Decision context (use only if relevant to recent chat): {decision_context}"
@@ -188,6 +206,26 @@ class AIMessageGenerator:
             except UsageLimitExceeded as e:
                 logger.warning("Usage limit exceeded for user %d: %s", user_id, e)
                 raise RuntimeError(f"Usage limit exceeded: {e}")
+
+            try:
+                streak_snapshot = await load_user_streak(db, user_id)
+                last_message_at = await load_last_user_message_at(db, user_id)
+                inactivity_days, last_message_date = compute_inactivity_days(
+                    last_message_at,
+                    timezone_label=timezone_str,
+                )
+                ignored_pings = await count_ignored_proactivity(db, user_id)
+                engagement_context = build_engagement_context(
+                    streak_snapshot.get("streak_count") if streak_snapshot else None,
+                    streak_snapshot.get("streak_last_date") if streak_snapshot else None,
+                    inactivity_days,
+                    last_message_date,
+                    ignored_pings,
+                )
+                if engagement_context:
+                    user_context = "\n\n".join(filter(None, [user_context, engagement_context]))
+            except Exception as exc:
+                logger.debug("Failed to load engagement context: %s", exc)
 
         try:
             preferred_model = None

@@ -1,6 +1,7 @@
 "use client";
 
 import { Menu, MessageCircle, MessageSquarePlus, Zap, CalendarDays } from "lucide-react";
+import { useI18n } from "@/contexts/I18nContext";
 
 import styles from "./GrayMobileHeader.module.css";
 
@@ -9,6 +10,7 @@ type GrayMobileHeaderProps = {
   isPulseActive: boolean;
   activeDashboardTab: "pulse" | "calendar";
   showCalendarToggle: boolean;
+  streakCount?: number | null;
   onToggleSidebar: () => void;
   onSelectChat: () => void;
   onSelectPulse: () => void;
@@ -21,14 +23,18 @@ export function GrayMobileHeader({
   isPulseActive,
   activeDashboardTab,
   showCalendarToggle,
+  streakCount = null,
   onToggleSidebar,
   onSelectChat,
   onSelectPulse,
   onSelectCalendar,
   onCreateNewChat,
 }: GrayMobileHeaderProps) {
+  const { t } = useI18n();
   const isCalendarActive = isPulseActive && activeDashboardTab === "calendar";
   const isPulseTabActive = isPulseActive && activeDashboardTab === "pulse";
+  const showStreak = typeof streakCount === "number" && streakCount > 0;
+  const streakLabel = showStreak ? t("{count} day streak", { count: streakCount }) : "";
 
   return (
     <div
@@ -90,6 +96,11 @@ export function GrayMobileHeader({
       </div>
 
       <div className={styles.mobileHeaderRight}>
+        {showStreak ? (
+          <div className={styles.mobileStreakBadge} aria-label={streakLabel} title={streakLabel}>
+            <span className={styles.mobileStreakCount}>{streakCount}d</span>
+          </div>
+        ) : null}
         <button
           type="button"
           className={styles.mobileNewChatButton}

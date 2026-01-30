@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ChangeEvent, type Dispatch, type SetStateAction } from "react";
+import { ChevronDown } from "lucide-react";
 import styles from "../SettingsStyles.module.css";
 import { utilityService, supermemoryService, type UserUpdate } from "@/lib/api";
 import { SettingsLogo } from "@/components/gray/settings/components/SettingsLogo";
@@ -54,6 +55,7 @@ export function MemorySection({
   const [supermemoryStatus, setSupermemoryStatus] = useState<string | null>(null);
   const [supermemoryOutput, setSupermemoryOutput] = useState<string | null>(null);
   const [isSupermemoryBusy, setIsSupermemoryBusy] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const canImportChatGpt = tierLevel >= PLAN_TIER_LEVELS.voyager;
   const canUseSupermemory = tierLevel >= PLAN_TIER_LEVELS.pathfinder;
   const memoryControlsDisabled = !canUseSupermemory || !conversationMemoryEnabled;
@@ -63,6 +65,7 @@ export function MemorySection({
   const [memorySettings, setMemorySettings] = useState<MemorySettings>(() =>
     loadMemorySettings(memorySettingsKey)
   );
+  const autoMemoryEnabled = memorySettings.autoRecall && memorySettings.autoCapture;
 
   useEffect(() => {
     const localSettings = loadMemorySettings(memorySettingsKey);
@@ -308,14 +311,11 @@ export function MemorySection({
       </div>
 
       <div className={styles.settingsSection}>
-        <div className={`${styles.settingsRow} ${!canUseSupermemory ? styles.settingsRowMuted : ""}`}>
+        <div className={`${styles.settingsRow} ${memoryControlsDisabled ? styles.settingsRowMuted : ""}`}>
           <div className={styles.settingsLabelGroup}>
-            <span className={styles.settingsLabel}>{t("Memory behavior")}</span>
+            <span className={styles.settingsLabel}>{t("Automatic memory")}</span>
             <span className={styles.settingsItemDescription}>
-              {t("Tune how long-term memory is recalled and captured.")}
-            </span>
-            <span className={styles.settingsItemDescription}>
-              {t("Tier caps: Pathfinder 4 recalls / 200 turns, Voyager 8 / 75, Pioneer full limits.")}
+              {t("Let Gray automatically recall and save helpful details.")}
             </span>
             {!canUseSupermemory ? (
               <span className={styles.settingsItemDescription}>
@@ -328,97 +328,14 @@ export function MemorySection({
               </span>
             ) : null}
           </div>
-        </div>
-
-        <div className={`${styles.settingsRow} ${memoryControlsDisabled ? styles.settingsRowMuted : ""}`}>
-          <div className={styles.settingsLabelGroup}>
-            <span className={styles.settingsLabel}>{t("Auto-recall")}</span>
-            <span className={styles.settingsItemDescription}>
-              {t("Inject relevant memories before each reply.")}
-            </span>
-          </div>
           <SettingsToggle
-            checked={memorySettings.autoRecall}
-            onChange={() => updateMemorySettings({ autoRecall: !memorySettings.autoRecall })}
-            label={t("Toggle Auto-recall")}
+            checked={autoMemoryEnabled}
+            onChange={() => {
+              const next = !autoMemoryEnabled;
+              updateMemorySettings({ autoRecall: next, autoCapture: next });
+            }}
+            label={t("Toggle Automatic memory")}
             disabled={memoryControlsDisabled}
-          />
-        </div>
-
-        <div className={`${styles.settingsRow} ${memoryControlsDisabled ? styles.settingsRowMuted : ""}`}>
-          <div className={styles.settingsLabelGroup}>
-            <span className={styles.settingsLabel}>{t("Auto-capture")}</span>
-            <span className={styles.settingsItemDescription}>
-              {t("Save new memories after each reply.")}
-            </span>
-          </div>
-          <SettingsToggle
-            checked={memorySettings.autoCapture}
-            onChange={() => updateMemorySettings({ autoCapture: !memorySettings.autoCapture })}
-            label={t("Toggle Auto-capture")}
-            disabled={memoryControlsDisabled}
-          />
-        </div>
-
-        <div className={`${styles.settingsRow} ${memoryControlsDisabled ? styles.settingsRowMuted : ""}`}>
-          <div className={styles.settingsLabelGroup}>
-            <span className={styles.settingsLabel}>{t("Capture mode")}</span>
-            <span className={styles.settingsItemDescription}>
-              {t("Control how much of each turn is stored.")}
-            </span>
-          </div>
-          <SettingsSelect
-            value={memorySettings.captureMode}
-            disabled={memoryControlsDisabled}
-            onChange={(value) =>
-              updateMemorySettings({ captureMode: value as MemorySettings["captureMode"] })
-            }
-            options={[
-              { value: "all", label: t("All (filter short context)") },
-              { value: "everything", label: t("Everything (capture all messages)") },
-            ]}
-          />
-        </div>
-
-        <div className={`${styles.settingsRow} ${memoryControlsDisabled ? styles.settingsRowMuted : ""}`}>
-          <div className={styles.settingsLabelGroup}>
-            <span className={styles.settingsLabel}>{t("Max recall results")}</span>
-            <span className={styles.settingsItemDescription}>
-              {t("Limit how many memories get injected per response.")}
-            </span>
-          </div>
-          <input
-            className={styles.settingsInput}
-            type="number"
-            min={1}
-            max={20}
-            step={1}
-            inputMode="numeric"
-            value={memorySettings.maxRecallResults}
-            onChange={(event) => handleNumberChange(event.target.value, "maxRecallResults", 1, 20)}
-            disabled={memoryControlsDisabled}
-            style={{ maxWidth: 110 }}
-          />
-        </div>
-
-        <div className={`${styles.settingsRow} ${memoryControlsDisabled ? styles.settingsRowMuted : ""}`}>
-          <div className={styles.settingsLabelGroup}>
-            <span className={styles.settingsLabel}>{t("Profile injection frequency")}</span>
-            <span className={styles.settingsItemDescription}>
-              {t("Inject the full profile every N user turns.")}
-            </span>
-          </div>
-          <input
-            className={styles.settingsInput}
-            type="number"
-            min={1}
-            max={500}
-            step={1}
-            inputMode="numeric"
-            value={memorySettings.profileFrequency}
-            onChange={(event) => handleNumberChange(event.target.value, "profileFrequency", 1, 500)}
-            disabled={memoryControlsDisabled}
-            style={{ maxWidth: 110 }}
           />
         </div>
       </div>
@@ -428,9 +345,9 @@ export function MemorySection({
           className={`${styles.settingsRow} ${styles.settingsRowFlexStart} ${!canUseSupermemory ? styles.settingsRowMuted : ""}`}
         >
           <div className={styles.settingsLabelGroup}>
-            <span className={styles.settingsLabel}>{t("Long-term memory controls")}</span>
+            <span className={styles.settingsLabel}>{t("Memory tools")}</span>
             <span className={styles.settingsItemDescription}>
-              {t("Store, search, and manage your long-term memory.")}
+              {t("Store or recall something specific.")}
             </span>
             {!canUseSupermemory ? (
               <span className={styles.settingsItemDescription}>
@@ -479,30 +396,34 @@ export function MemorySection({
                 >
                   {t("Recall")}
                 </button>
-                <button
-                  type="button"
-                  className={styles.settingsAction}
-                  disabled={supermemoryActionsDisabled}
-                  onClick={handleSupermemoryProfile}
-                >
-                  {t("Profile")}
-                </button>
-                <button
-                  type="button"
-                  className={styles.settingsAction}
-                  disabled={supermemoryActionsDisabled}
-                  onClick={handleSupermemoryForget}
-                >
-                  {t("Forget")}
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.settingsAction} ${styles.settingsActionDanger}`}
-                  disabled={supermemoryActionsDisabled}
-                  onClick={handleSupermemoryWipe}
-                >
-                  {t("Wipe")}
-                </button>
+                {showAdvanced ? (
+                  <>
+                    <button
+                      type="button"
+                      className={styles.settingsAction}
+                      disabled={supermemoryActionsDisabled}
+                      onClick={handleSupermemoryProfile}
+                    >
+                      {t("Profile")}
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.settingsAction}
+                      disabled={supermemoryActionsDisabled}
+                      onClick={handleSupermemoryForget}
+                    >
+                      {t("Forget")}
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.settingsAction} ${styles.settingsActionDanger}`}
+                      disabled={supermemoryActionsDisabled}
+                      onClick={handleSupermemoryWipe}
+                    >
+                      {t("Wipe")}
+                    </button>
+                  </>
+                ) : null}
               </>
             ) : (
               <button type="button" className={styles.settingsAction} onClick={onUpgradeClick}>
@@ -511,90 +432,222 @@ export function MemorySection({
             )}
           </div>
         </div>
-
-        <div
-          className={`${styles.settingsRow} ${styles.settingsRowFlexStart} ${!canImportChatGpt ? styles.settingsRowMuted : ""}`}
-        >
-          <div className={styles.settingsLabelGroup}>
-            <div className={styles.settingsLabelRow}>
-              <SettingsLogo src="/logos/chatgpt.svg" alt="ChatGPT" />
-              <span className={styles.settingsLabel}>{t("Import ChatGPT memory")}</span>
-            </div>
-            <span className={styles.settingsItemDescription}>
-              {t("Upload your ChatGPT export (.zip) to add memories to Gray.")}
-            </span>
-            {!canImportChatGpt ? (
-              <span className={styles.settingsItemDescription}>
-                {t("Upgrade to Voyager or Pioneer to access.")}
-              </span>
-            ) : null}
-            {importStatus ? (
-              <span className={styles.settingsItemDescription}>{importStatus}</span>
-            ) : null}
-          </div>
-          <div className={styles.settingsFlexRow}>
-            {contextCacheId ? (
-              <>
-                <button
-                  type="button"
-                  className={styles.settingsAction}
-                  onClick={() => {
-                    setContextCacheId(null);
-                    setImportStatus(t("ChatGPT memory disabled."));
-                  }}
-                >
-                  {t("Disable")}
-                </button>
-                <button
-                  type="button"
-                  className={styles.settingsAction}
-                  disabled={isDeletingImport}
-                  onClick={async () => {
-                    if (!confirm(t("Delete ChatGPT memory? This cannot be undone."))) {
-                      return;
-                    }
-                    setIsDeletingImport(true);
-                    try {
-                      await utilityService.deleteContextCache(contextCacheId);
-                      setContextCacheId(null);
-                      setImportStatus(t("ChatGPT memory deleted."));
-                    } catch (error) {
-                      console.error("Failed to delete ChatGPT memory:", error);
-                      setImportStatus(t("Failed to delete ChatGPT memory. Please try again."));
-                    } finally {
-                      setIsDeletingImport(false);
-                    }
-                  }}
-                >
-                  {isDeletingImport ? t("Deleting…") : t("Delete")}
-                </button>
-              </>
-            ) : null}
-            {canImportChatGpt ? (
-              <button
-                type="button"
-                className={styles.settingsAction}
-                onClick={handleImportClick}
-                disabled={isImporting}
-              >
-                {isImporting ? t("Importing...") : t("Import")}
-              </button>
-            ) : (
-              <button type="button" className={styles.settingsAction} onClick={onUpgradeClick}>
-                {t("Upgrade")}
-              </button>
-            )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".zip,application/zip"
-              onChange={handleImportChange}
-              disabled={!canImportChatGpt}
-              style={{ display: "none" }}
-            />
-          </div>
+        <div className={styles.settingsAdvancedToggle}>
+          <button
+            type="button"
+            className={styles.settingsRowLink}
+            onClick={() => setShowAdvanced((prev) => !prev)}
+          >
+            {showAdvanced ? t("Hide advanced settings") : t("Show advanced settings")}
+            <ChevronDown className={showAdvanced ? styles.settingsActionChevron : undefined} size={14} />
+          </button>
         </div>
       </div>
+
+      {showAdvanced ? (
+        <>
+          <div className={styles.settingsSection}>
+            <div className={`${styles.settingsRow} ${!canUseSupermemory ? styles.settingsRowMuted : ""}`}>
+              <div className={styles.settingsLabelGroup}>
+                <span className={styles.settingsLabel}>{t("Advanced memory behavior")}</span>
+                <span className={styles.settingsItemDescription}>
+                  {t("Tune how long-term memory is recalled and captured.")}
+                </span>
+                <span className={styles.settingsItemDescription}>
+                  {t("Tier caps: Pathfinder 4 recalls / 200 turns, Voyager 8 / 75, Pioneer full limits.")}
+                </span>
+                {!canUseSupermemory ? (
+                  <span className={styles.settingsItemDescription}>
+                    {t("Upgrade to Pathfinder to access.")}
+                  </span>
+                ) : null}
+                {canUseSupermemory && !conversationMemoryEnabled ? (
+                  <span className={styles.settingsItemDescription}>
+                    {t("Enable Conversation memory to use long-term memory.")}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+
+            <div className={`${styles.settingsRow} ${memoryControlsDisabled ? styles.settingsRowMuted : ""}`}>
+              <div className={styles.settingsLabelGroup}>
+                <span className={styles.settingsLabel}>{t("Auto-recall")}</span>
+                <span className={styles.settingsItemDescription}>
+                  {t("Inject relevant memories before each reply.")}
+                </span>
+              </div>
+              <SettingsToggle
+                checked={memorySettings.autoRecall}
+                onChange={() => updateMemorySettings({ autoRecall: !memorySettings.autoRecall })}
+                label={t("Toggle Auto-recall")}
+                disabled={memoryControlsDisabled}
+              />
+            </div>
+
+            <div className={`${styles.settingsRow} ${memoryControlsDisabled ? styles.settingsRowMuted : ""}`}>
+              <div className={styles.settingsLabelGroup}>
+                <span className={styles.settingsLabel}>{t("Auto-capture")}</span>
+                <span className={styles.settingsItemDescription}>
+                  {t("Save new memories after each reply.")}
+                </span>
+              </div>
+              <SettingsToggle
+                checked={memorySettings.autoCapture}
+                onChange={() => updateMemorySettings({ autoCapture: !memorySettings.autoCapture })}
+                label={t("Toggle Auto-capture")}
+                disabled={memoryControlsDisabled}
+              />
+            </div>
+
+            <div className={`${styles.settingsRow} ${memoryControlsDisabled ? styles.settingsRowMuted : ""}`}>
+              <div className={styles.settingsLabelGroup}>
+                <span className={styles.settingsLabel}>{t("Capture mode")}</span>
+                <span className={styles.settingsItemDescription}>
+                  {t("Control how much of each turn is stored.")}
+                </span>
+              </div>
+              <SettingsSelect
+                value={memorySettings.captureMode}
+                disabled={memoryControlsDisabled}
+                onChange={(value) =>
+                  updateMemorySettings({ captureMode: value as MemorySettings["captureMode"] })
+                }
+                options={[
+                  { value: "all", label: t("All (filter short context)") },
+                  { value: "everything", label: t("Everything (capture all messages)") },
+                ]}
+              />
+            </div>
+
+            <div className={`${styles.settingsRow} ${memoryControlsDisabled ? styles.settingsRowMuted : ""}`}>
+              <div className={styles.settingsLabelGroup}>
+                <span className={styles.settingsLabel}>{t("Max recall results")}</span>
+                <span className={styles.settingsItemDescription}>
+                  {t("Limit how many memories get injected per response.")}
+                </span>
+              </div>
+              <input
+                className={styles.settingsInput}
+                type="number"
+                min={1}
+                max={20}
+                step={1}
+                inputMode="numeric"
+                value={memorySettings.maxRecallResults}
+                onChange={(event) => handleNumberChange(event.target.value, "maxRecallResults", 1, 20)}
+                disabled={memoryControlsDisabled}
+                style={{ maxWidth: 110 }}
+              />
+            </div>
+
+            <div className={`${styles.settingsRow} ${memoryControlsDisabled ? styles.settingsRowMuted : ""}`}>
+              <div className={styles.settingsLabelGroup}>
+                <span className={styles.settingsLabel}>{t("Profile injection frequency")}</span>
+                <span className={styles.settingsItemDescription}>
+                  {t("Inject the full profile every N user turns.")}
+                </span>
+              </div>
+              <input
+                className={styles.settingsInput}
+                type="number"
+                min={1}
+                max={500}
+                step={1}
+                inputMode="numeric"
+                value={memorySettings.profileFrequency}
+                onChange={(event) => handleNumberChange(event.target.value, "profileFrequency", 1, 500)}
+                disabled={memoryControlsDisabled}
+                style={{ maxWidth: 110 }}
+              />
+            </div>
+          </div>
+
+          <div className={styles.settingsSection}>
+            <div
+              className={`${styles.settingsRow} ${styles.settingsRowFlexStart} ${!canImportChatGpt ? styles.settingsRowMuted : ""}`}
+            >
+              <div className={styles.settingsLabelGroup}>
+                <div className={styles.settingsLabelRow}>
+                  <SettingsLogo src="/logos/chatgpt.svg" alt="ChatGPT" />
+                  <span className={styles.settingsLabel}>{t("Import ChatGPT memory")}</span>
+                </div>
+                <span className={styles.settingsItemDescription}>
+                  {t("Upload your ChatGPT export (.zip) to add memories to Gray.")}
+                </span>
+                {!canImportChatGpt ? (
+                  <span className={styles.settingsItemDescription}>
+                    {t("Upgrade to Voyager or Pioneer to access.")}
+                  </span>
+                ) : null}
+                {importStatus ? (
+                  <span className={styles.settingsItemDescription}>{importStatus}</span>
+                ) : null}
+              </div>
+              <div className={styles.settingsFlexRow}>
+                {contextCacheId ? (
+                  <>
+                    <button
+                      type="button"
+                      className={styles.settingsAction}
+                      onClick={() => {
+                        setContextCacheId(null);
+                        setImportStatus(t("ChatGPT memory disabled."));
+                      }}
+                    >
+                      {t("Disable")}
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.settingsAction}
+                      disabled={isDeletingImport}
+                      onClick={async () => {
+                        if (!confirm(t("Delete ChatGPT memory? This cannot be undone."))) {
+                          return;
+                        }
+                        setIsDeletingImport(true);
+                        try {
+                          await utilityService.deleteContextCache(contextCacheId);
+                          setContextCacheId(null);
+                          setImportStatus(t("ChatGPT memory deleted."));
+                        } catch (error) {
+                          console.error("Failed to delete ChatGPT memory:", error);
+                          setImportStatus(t("Failed to delete ChatGPT memory. Please try again."));
+                        } finally {
+                          setIsDeletingImport(false);
+                        }
+                      }}
+                    >
+                      {isDeletingImport ? t("Deleting…") : t("Delete")}
+                    </button>
+                  </>
+                ) : null}
+                {canImportChatGpt ? (
+                  <button
+                    type="button"
+                    className={styles.settingsAction}
+                    onClick={handleImportClick}
+                    disabled={isImporting}
+                  >
+                    {isImporting ? t("Importing...") : t("Import")}
+                  </button>
+                ) : (
+                  <button type="button" className={styles.settingsAction} onClick={onUpgradeClick}>
+                    {t("Upgrade")}
+                  </button>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".zip,application/zip"
+                  onChange={handleImportChange}
+                  disabled={!canImportChatGpt}
+                  style={{ display: "none" }}
+                />
+              </div>
+            </div>
+          </div>
+        </>
+      ) : null}
     </>
   );
 }

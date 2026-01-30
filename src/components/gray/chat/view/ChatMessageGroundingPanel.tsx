@@ -2,7 +2,7 @@
 
 import styles from "./ChatMessageGroundingPanel.module.css";
 import type { GroundingMetadata } from "@/lib/api";
-import { buildGroundingSourceCards, buildGroundingSourceFaviconUrl, buildGroundingSourceInitials } from "./groundingSources";
+import { buildGroundingSourceCards, buildGroundingSourceFaviconUrl } from "./groundingSources";
 import { getSanitizedSearchEntryHtml } from "./searchEntrySanitizer";
 
 const getRenderedSearchEntry = (candidate: unknown): string | null => {
@@ -86,52 +86,26 @@ export function ChatMessageGroundingPanel({
         <div className={styles.chatGroundingSourceDeck}>
           <div className={styles.chatGroundingSourceCards}>
             {sourceCards.map((source) => {
-              const initials = buildGroundingSourceInitials(source.siteLabel ?? source.title);
               const faviconUrl = buildGroundingSourceFaviconUrl(source);
 
               const cardContent = (
                 <>
                   <div className={styles.chatGroundingSourceCardAvatar}>
                     {faviconUrl ? (
-                      <div style={{ position: "relative", width: "16px", height: "16px" }}>
-                        <span
-                          style={{
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            width: "16px",
-                            height: "16px",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: "10px",
-                          }}
-                        >
-                          {initials}
-                        </span>
-                        {/* eslint-disable-next-line @next/next/no-img-element -- Favicon URLs are arbitrary; prefer a plain img with graceful fallback. */}
-                        <img
-                          src={faviconUrl}
-                          alt=""
-                          referrerPolicy="no-referrer"
-                          style={{
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            width: "16px",
-                            height: "16px",
-                            objectFit: "contain",
-                            backgroundColor: "white",
-                            borderRadius: "2px",
-                          }}
-                          onError={(event) => {
-                            event.currentTarget.style.display = "none";
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      initials
-                    )}
+                      /* eslint-disable-next-line @next/next/no-img-element -- Favicon URLs are arbitrary; prefer a plain img with graceful fallback. */
+                      <img
+                        src={faviconUrl}
+                        alt=""
+                        referrerPolicy="no-referrer"
+                        className={styles.chatGroundingSourceCardFavicon}
+                        onLoad={(event) => {
+                          event.currentTarget.style.opacity = "1";
+                        }}
+                        onError={(event) => {
+                          event.currentTarget.style.display = "none";
+                        }}
+                      />
+                    ) : null}
                   </div>
                   <div className={styles.chatGroundingSourceCardContent}>
                     <div className={styles.chatGroundingSourceCardTitle}>{source.title ?? t("Referenced source")}</div>

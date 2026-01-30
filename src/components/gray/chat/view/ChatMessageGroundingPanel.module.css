@@ -46,9 +46,12 @@
 }
 
 .chatGroundingSourceCards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  display: flex;
   gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.35rem;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
 }
 
 .chatGroundingSourceCard {
@@ -63,6 +66,9 @@
   gap: 0.6rem;
   transition: border 0.2s ease, background 0.2s ease;
   min-width: 0;
+  flex: 0 0 auto;
+  width: 200px;
+  scroll-snap-align: start;
 }
 
 .chatGroundingSourceCard:hover {
@@ -75,17 +81,25 @@
 }
 
 .chatGroundingSourceCardAvatar {
-  width: 24px;
-  height: 24px;
-  border-radius: 0.4rem;
-  background: rgba(255, 255, 255, 0.06);
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.65rem;
-  font-weight: 600;
   flex-shrink: 0;
   color: rgba(255, 255, 255, 0.8);
+}
+
+.chatGroundingSourceCardFavicon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 999px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
 }
 
 .chatGroundingSourceCardContent {
@@ -150,4 +164,3 @@
   background: transparent;
   border-radius: 0;
 }
-

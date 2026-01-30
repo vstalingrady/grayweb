@@ -1,6 +1,7 @@
 import type { ProactivityItem } from "./types";
 
 export const DEFAULT_PROACTIVITY_TIME = "09:00";
+export const DEFAULT_PROACTIVITY_MESSAGE_LENGTH = "medium";
 
 export type ProactivityPreset = {
     id: string;
@@ -56,6 +57,25 @@ export type CustomSettingsState = {
 
 export const DEFAULT_CUSTOM_SETTINGS: CustomSettingsState = {
     times: [DEFAULT_PROACTIVITY_TIME],
+};
+
+export type ProactivityMessageLength = "short" | "medium" | "long";
+
+export const PROACTIVITY_MESSAGE_LENGTH_OPTIONS: Array<{
+    id: ProactivityMessageLength;
+    label: string;
+}> = [
+    { id: "short", label: "Short" },
+    { id: "medium", label: "Medium" },
+    { id: "long", label: "Long" },
+];
+
+export const normalizeProactivityMessageLength = (value?: string | null): ProactivityMessageLength => {
+    const normalized = (value || "").trim().toLowerCase();
+    if (normalized === "short" || normalized === "long") {
+        return normalized;
+    }
+    return "medium";
 };
 
 export const formatCustomTimeLabel = (time: string) => {
@@ -139,7 +159,10 @@ export const getProactivityTimes = (item: ProactivityItem | null | undefined) =>
     return [];
 };
 
-export const buildCustomProactivityItem = (times: string[]): ProactivityItem => {
+export const buildCustomProactivityItem = (
+    times: string[],
+    messageLength?: ProactivityMessageLength
+): ProactivityItem => {
     const sortedTimes = dedupeTimes(times);
     const resolvedTimes = sortedTimes.length > 0 ? sortedTimes : [...DEFAULT_CUSTOM_SETTINGS.times];
     const firstTime = resolvedTimes[0] ?? DEFAULT_PROACTIVITY_TIME;
@@ -153,5 +176,6 @@ export const buildCustomProactivityItem = (times: string[]): ProactivityItem => 
         cadence: "Custom",
         time: firstTime,
         times: resolvedTimes,
+        messageLength: messageLength ?? DEFAULT_PROACTIVITY_MESSAGE_LENGTH,
     };
 };

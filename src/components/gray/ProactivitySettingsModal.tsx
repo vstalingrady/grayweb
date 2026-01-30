@@ -10,6 +10,9 @@ import {
     DEFAULT_CUSTOM_SETTINGS,
     DEFAULT_PROACTIVITY_TIME,
     PROACTIVITY_PRESETS,
+    DEFAULT_PROACTIVITY_MESSAGE_LENGTH,
+    PROACTIVITY_MESSAGE_LENGTH_OPTIONS,
+    type ProactivityMessageLength,
     type CustomSettingsState,
     buildCustomProactivityItem,
     dedupeTimes,
@@ -65,6 +68,9 @@ function ProactivitySettingsModalContent({
     const [customSettings, setCustomSettings] = useState<CustomSettingsState>(() => ({
         times: activeProactivityTimes.length > 0 ? activeProactivityTimes : [...DEFAULT_CUSTOM_SETTINGS.times],
     }));
+    const [messageLength, setMessageLength] = useState<ProactivityMessageLength>(
+        () => activeProactivity?.messageLength ?? DEFAULT_PROACTIVITY_MESSAGE_LENGTH
+    );
 
     const [editingCustomTimeIndex, setEditingCustomTimeIndex] = useState<number | null>(null);
     const [editingCustomTimeDraft, setEditingCustomTimeDraft] = useState<string>("");
@@ -83,11 +89,17 @@ function ProactivitySettingsModalContent({
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [onClose]);
 
+    useEffect(() => {
+        if (activeProactivity?.messageLength) {
+            setMessageLength(activeProactivity.messageLength);
+        }
+    }, [activeProactivity?.messageLength]);
+
     const applyCustomProactivity = useCallback(
         (nextTimes: string[]) => {
-            onSelectProactivity(buildCustomProactivityItem(nextTimes));
+            onSelectProactivity(buildCustomProactivityItem(nextTimes, messageLength));
         },
-        [onSelectProactivity]
+        [messageLength, onSelectProactivity]
     );
 
     const handleCustomReset = useCallback(() => {
@@ -177,11 +189,25 @@ function ProactivitySettingsModalContent({
                     cadence: preset.cadence,
                     time: primaryTime,
                     times: presetTimes,
+                    messageLength,
                 });
                 onClose();
             }
         },
-        [onClose, onSelectProactivity]
+        [messageLength, onClose, onSelectProactivity]
+    );
+
+    const handleMessageLengthSelect = useCallback(
+        (next: ProactivityMessageLength) => {
+            setMessageLength(next);
+            if (activeProactivity) {
+                onSelectProactivity({
+                    ...activeProactivity,
+                    messageLength: next,
+                });
+            }
+        },
+        [activeProactivity, onSelectProactivity]
     );
 
     const modalRemoveLabel = activeProactivity ? t("Remove proactivity") : t("Skip for now");
@@ -315,6 +341,27 @@ function ProactivitySettingsModalContent({
                         </div>
                     </section>
                 ) : null}
+                <section className={styles.proactivityCustomSection} style={{ padding: 0 }}>
+                    <header className={styles.proactivityCustomHeader} style={{ marginTop: 14 }}>
+                        <div>
+                            <span className={styles.proactivityCustomEyebrow}>{t("Message length")}</span>
+                            <h3 className={styles.proactivityCustomTitle}>{t("How long should check-ins be?")}</h3>
+                        </div>
+                    </header>
+                    <div className={styles.proactivityLengthOptions}>
+                        {PROACTIVITY_MESSAGE_LENGTH_OPTIONS.map((option) => (
+                            <button
+                                key={option.id}
+                                type="button"
+                                className={styles.proactivityLengthOption}
+                                data-active={messageLength === option.id ? "true" : "false"}
+                                onClick={() => handleMessageLengthSelect(option.id)}
+                            >
+                                {t(option.label)}
+                            </button>
+                        ))}
+                    </div>
+                </section>
                 <footer className={styles.proactivityModalFooter}>
                     {showRemoveButton ? (
                         <button

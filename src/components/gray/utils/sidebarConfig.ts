@@ -3,8 +3,7 @@ import {
     MessageSquarePlus,
     History,
     Calendar,
-    BarChart3,
-    BadgePercent
+    BarChart3
 } from "lucide-react";
 import type { SidebarNavItem, SidebarNavKey } from "@/components/gray/types";
 
@@ -13,7 +12,6 @@ export const SIDEBAR_ITEMS: SidebarNavItem[] = [
     { id: "threads", label: "Chat", icon: MessageSquarePlus },
     { id: "calendar", label: "Calendar", icon: Calendar },
     { id: "analytics", label: "Analytics", icon: BarChart3 },
-    { id: "affiliates", label: "Affiliates", icon: BadgePercent },
     { id: "history", label: "History", icon: History },
 ];
 
@@ -27,5 +25,4 @@ export const NAVIGATION_ROUTES: Partial<Record<SidebarNavKey, string>> = {
     history: "/history",
     calendar: "/cal",
     analytics: "/analytics",
-    affiliates: "/affiliates",
 };

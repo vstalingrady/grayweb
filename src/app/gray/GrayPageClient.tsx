@@ -4,10 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "@/contexts/UserContext";
-import {
-  analyticsService,
-  workspaceService,
-} from "@/lib/api";
+import { workspaceService } from "@/lib/api";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
 import { formatDisplayName } from "@/lib/names";
 import { clearAuthCookies } from "@/lib/auth/cookies";
@@ -118,11 +115,6 @@ const AnalyticsView = dynamic(
   { loading: () => null }
 );
 
-const AffiliateAnalyticsView = dynamic(
-  () => import("@/components/gray/analytics/AffiliateAnalyticsView").then((mod) => mod.AffiliateAnalyticsView),
-  { loading: () => null }
-);
-
 // Helper functions and constants imported from extracted modules
 
 type GrayPageClientProps = {
@@ -135,7 +127,7 @@ type GrayPageClientProps = {
   defaultSidebarExpandedDesktop?: boolean;
 };
 
-type ViewMode = "chat" | "dashboard" | "general" | "history" | "analytics" | "affiliates";
+type ViewMode = "chat" | "dashboard" | "general" | "history" | "analytics";
 
 const ANALYTICS_ADMIN_EMAILS = new Set(["vstalingrady@gmail.com", "test@test.com", "aurelryojonathan@gmail.com"]);
 
@@ -153,6 +145,7 @@ function GrayPageClientInner({
   const { notificationPreferences, setNotificationPreference } = useNotificationPreferences();
   const usageStatus = user?.usage_status;
   const isUsageLimitReached = usageStatus?.is_monthly_limit_reached || usageStatus?.is_six_hour_limit_reached;
+  const streakCount = typeof user?.streak_count === "number" ? user.streak_count : null;
   const router = useRouter();
   const pathname = usePathname();
   const [now, setNow] = useState(() => new Date(initialTimestamp));
@@ -163,7 +156,6 @@ function GrayPageClientInner({
   const hasCalendarAccess = normalizedTier === "voyager" || normalizedTier === "pioneer";
   const normalizedEmail = (user?.email ?? "").trim().toLowerCase();
   const isAnalyticsAdmin = ANALYTICS_ADMIN_EMAILS.has(normalizedEmail);
-  const [hasAffiliateAccess, setHasAffiliateAccess] = useState(false);
   const resolvedTimezone = useMemo(() => {
     try {
       return Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
@@ -221,33 +213,6 @@ function GrayPageClientInner({
     };
   }, []);
 
-  useEffect(() => {
-    if (!user?.id) {
-      setHasAffiliateAccess(false);
-      return;
-    }
-    if (isAnalyticsAdmin) {
-      setHasAffiliateAccess(true);
-      return;
-    }
-    let cancelled = false;
-    const checkAffiliateAccess = async () => {
-      try {
-        await analyticsService.getAffiliateSummary();
-        if (!cancelled) {
-          setHasAffiliateAccess(true);
-        }
-      } catch {
-        if (!cancelled) {
-          setHasAffiliateAccess(false);
-        }
-      }
-    };
-    void checkAffiliateAccess();
-    return () => {
-      cancelled = true;
-    };
-  }, [isAnalyticsAdmin, user?.id]);
   const nowDateKey = useMemo(() => toDateKey(now), [now]);
   const todayAnchor = useMemo(() => {
     const [yearString, monthString, dayString] = nowDateKey.split("-");
@@ -589,9 +554,7 @@ function GrayPageClientInner({
           ? "history"
           : activeNav === "analytics"
             ? "analytics"
-            : activeNav === "affiliates"
-              ? "affiliates"
-              : baseViewMode);
+            : baseViewMode);
 
   const handleMobileHeaderSelectChat = useCallback(() => {
     setMobilePulseActive(false);
@@ -705,9 +668,6 @@ function GrayPageClientInner({
     if (viewMode === "analytics") {
       return <AnalyticsView />;
     }
-    if (viewMode === "affiliates") {
-      return <AffiliateAnalyticsView />;
-    }
     if (isChatView) {
       return (
         <GrayChatView
@@ -765,6 +725,7 @@ function GrayPageClientInner({
               onUpgradeClick={handleUpgradePlan}
               showUpgradeButton={shouldShowUpgradeButton}
               hideDesktopMeta={shouldHideDesktopWorkspaceChrome}
+              streakCount={streakCount}
             >
               {renderWorkspaceGreeting()}
             </GrayWorkspaceHeader>
@@ -788,6 +749,7 @@ function GrayPageClientInner({
               onUpgradeClick={handleUpgradePlan}
               showUpgradeButton={shouldShowUpgradeButton}
               hideDesktopMeta={shouldHideDesktopWorkspaceChrome}
+              streakCount={streakCount}
             >
               {renderWorkspaceGreeting()}
             </GrayWorkspaceHeader>
@@ -797,17 +759,6 @@ function GrayPageClientInner({
       );
     }
     if (viewMode === "analytics") {
-      return (
-        <div
-          className={pageStyles.mainContent}
-          data-view={viewMode}
-          data-compact={isCompactLayout ? "true" : "false"}
-        >
-          {renderPrimaryView()}
-        </div>
-      );
-    }
-    if (viewMode === "affiliates") {
       return (
         <div
           className={pageStyles.mainContent}
@@ -838,17 +789,6 @@ function GrayPageClientInner({
         <div
           className={pageStyles.mainContent}
           data-view="analytics"
-          data-compact={isCompactLayout ? "true" : "false"}
-        >
-          {renderPrimaryView()}
-        </div>
-      );
-    }
-    if (viewMode === "affiliates") {
-      return (
-        <div
-          className={pageStyles.mainContent}
-          data-view="affiliates"
           data-compact={isCompactLayout ? "true" : "false"}
         >
           {renderPrimaryView()}
@@ -953,7 +893,6 @@ function GrayPageClientInner({
     return deriveInitials(user?.full_name ?? viewerName) || "OP";
   }, [user, userLoading, viewerName]);
 
-  const canViewAffiliates = isAnalyticsAdmin || hasAffiliateAccess;
   const filteredSidebarItems = useMemo(() => {
     return SIDEBAR_ITEMS.filter((item) => {
       if (!hasCalendarAccess && item.id === "calendar") {
@@ -962,12 +901,9 @@ function GrayPageClientInner({
       if (!isAnalyticsAdmin && item.id === "analytics") {
         return false;
       }
-      if (!canViewAffiliates && item.id === "affiliates") {
-        return false;
-      }
       return true;
     });
-  }, [canViewAffiliates, hasCalendarAccess, isAnalyticsAdmin]);
+  }, [hasCalendarAccess, isAnalyticsAdmin]);
 
   const filteredRailItems = useMemo(() => {
     return SIDEBAR_RAIL_ITEMS.filter((item) => {
@@ -977,12 +913,9 @@ function GrayPageClientInner({
       if (!isAnalyticsAdmin && item.id === "analytics") {
         return false;
       }
-      if (!canViewAffiliates && item.id === "affiliates") {
-        return false;
-      }
       return true;
     });
-  }, [canViewAffiliates, hasCalendarAccess, isAnalyticsAdmin]);
+  }, [hasCalendarAccess, isAnalyticsAdmin]);
 
   const historySections = useMemo(() => buildHistorySections(sessions), [sessions]);
   const isDashboardView = viewMode === "dashboard";
@@ -1081,9 +1014,6 @@ function GrayPageClientInner({
     }
     if (viewMode === "analytics" || activeNav === "analytics") {
       return "Analytics";
-    }
-    if (viewMode === "affiliates" || activeNav === "affiliates") {
-      return "Affiliates";
     }
     if (activeNav === "threads") {
       return "New Chat";
@@ -1604,6 +1534,7 @@ function GrayPageClientInner({
             isPulseActive={isMobileViewport ? mobilePulseActive : isPulseRoute}
             activeDashboardTab={dashboardTab}
             showCalendarToggle={hasCalendarAccess}
+            streakCount={streakCount}
             onToggleSidebar={toggleSidebarExpandedForLayout}
             onSelectChat={handleMobileHeaderSelectChat}
             onSelectPulse={handleMobileHeaderSelectPulse}

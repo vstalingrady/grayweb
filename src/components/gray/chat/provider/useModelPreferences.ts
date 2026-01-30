@@ -105,6 +105,13 @@ export const useModelPreferences = ({
       return;
     }
 
+    if (selectedModelId === "moonshotai/kimi-k2.5") {
+      if (!reasoningMode) {
+        setReasoningMode(true);
+      }
+      return;
+    }
+
     if (selectedModelId === "moonshotai/kimi-k2-fast" && reasoningMode) {
       setReasoningMode(false);
     }

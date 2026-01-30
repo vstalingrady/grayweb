@@ -18,14 +18,19 @@ type ModelOption = {
   tierRequired: "scout" | "pathfinder" | "voyager" | "pioneer";
 };
 
+const AUTO_MODEL_ID = "openrouter/auto";
+
 // Base model option - Lite is available to all tiers
 const OPTIONS: ModelOption[] = [
-  { id: "lite", label: "Gray Lite", description: "Quick responses", icon: Zap, tierRequired: "scout" },
+  { id: "lite", label: "Lite", description: "Quick responses", icon: Zap, tierRequired: "scout" },
+  { id: "auto", label: "Auto", description: "Auto-select best model", icon: Grid, tierRequired: "voyager" },
 ];
 
 type ModelSelectorProps = {
   className?: string;
 };
+
+const stripBrandPrefix = (label: string) => label.replace(/^Gray\s+/, "");
 
 export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
   const { t } = useI18n();
@@ -47,14 +52,19 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
   const currentTier = normalizePlanTier(user);
   const currentLevel = PLAN_TIER_LEVELS[currentTier] ?? 0;
   const isReasoningLocked = currentTier === "scout";
-  const isReasoningLockedByModel = selectedModelId === "moonshotai/kimi-k2-fast";
+  const isReasoningLockedByModel =
+    selectedModelId === "moonshotai/kimi-k2-fast" ||
+    selectedModelId === "moonshotai/kimi-k2.5" ||
+    selectedModelId === "moonshotai/kimi-k2-thinking";
+  const shouldShowReasoningLevel =
+    selectedModelId === "google/gemini-3-pro-preview" || modelTier === "pro";
   const isReasoningToggleDisabled = isReasoningLocked || isReasoningLockedByModel;
 
   const filteredPioneerGroups = useMemo(() => {
     const isVisible = (modelId: string) =>
       visibleModelIds === null || visibleModelIds.includes(modelId) || modelId === selectedModelId;
 
-    return PIONEER_GROUPS.map((group) => ({
+    return PIONEER_GROUPS.filter((group) => group.id !== "openrouter").map((group) => ({
       ...group,
       models: group.models.filter((model) => isVisible(model.id)),
     })).filter((group) => group.models.length > 0);
@@ -63,6 +73,10 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
   const hasPioneerSelection = selectedModelId ? ALL_PIONEER_MODEL_IDS.includes(selectedModelId) : false;
 
   const activeOption = useMemo(() => {
+    if (selectedModelId === AUTO_MODEL_ID) {
+      return OPTIONS.find((option) => option.id === "auto") ?? OPTIONS[0];
+    }
+
     if (modelTier === "pioneer" && selectedModelId && hasPioneerSelection) {
       // Find the group so we can use its icon
       const group = PIONEER_GROUPS.find(g => g.models.some(m => m.id === selectedModelId));
@@ -97,6 +111,14 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
       const requiredLevel = PLAN_TIER_LEVELS[option.tierRequired];
 
       if (currentLevel < requiredLevel) {
+        return;
+      }
+
+      if (option.id === "auto") {
+        setModelTier("pioneer");
+        setSelectedModelId(AUTO_MODEL_ID);
+        setIsOpen(false);
+        setShowAllModels(false);
         return;
       }
 
@@ -162,7 +184,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
         type="button"
       >
         <span className={styles.triggerLabel}>
-          {activeOption.label.replace("Gray ", "")}
+          {stripBrandPrefix(activeOption.label)}
         </span>
         <ChevronUp
           className={`${styles.chevron} ${isOpen ? styles.chevronOpen : ""}`}
@@ -281,7 +303,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                       </div>
                       <div className={styles.itemInfo}>
                         <div className={styles.itemLabel}>{t("Reasoning")}</div>
-                        {modelTier === "pro" && (
+                        {shouldShowReasoningLevel && (
                           <div className={styles.itemDescription}>
                             {reasoningMode ? t("High") : t("Low")}
                           </div>
@@ -356,7 +378,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                     </div>
                     <div className={styles.itemInfo}>
                       <div className={styles.itemLabel}>
-                        {t(option.label)}
+                        {stripBrandPrefix(t(option.label))}
                       </div>
                       <div className={styles.itemDescription}>{t(option.description)}</div>
                     </div>
@@ -364,25 +386,6 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                   </button>
                 );
               })}
-
-              {/* Display Active Model if selected */}
-              {shouldShowSelectedModel && (
-                <button className={`${styles.menuItem} ${styles.menuItemActive}`} disabled>
-                  {/* We use activeOption.icon here which I will update in useMemo to be the group icon */}
-                  <div className={styles.itemIconWrapper}>
-                    {/* Dynamically render icon component or image if strictly needed, 
-                                but activeOption.icon is typically a component (Grid). 
-                                We need to pass the real icon down. */}
-                    <activeOption.icon size={18} />
-                  </div>
-                  <div className={styles.itemInfo}>
-                    <div className={styles.itemLabel}>{activeOption.label}</div>
-                    <div className={styles.itemDescription}>{t("Selected Model")}</div>
-                  </div>
-                  <Check size={14} className={styles.checkIcon} />
-                </button>
-              )}
-
 
               <div className={styles.divider} />
 
@@ -410,6 +413,27 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                   <ChevronRight size={14} className={styles.actionArrow} />
                 )}
               </button>
+
+              {/* Display Active Model if selected */}
+              {shouldShowSelectedModel && (
+                <>
+                  <div className={styles.divider} />
+                  <button className={`${styles.menuItem} ${styles.menuItemActive}`} disabled>
+                    {/* We use activeOption.icon here which I will update in useMemo to be the group icon */}
+                    <div className={styles.itemIconWrapper}>
+                      {/* Dynamically render icon component or image if strictly needed, 
+                                but activeOption.icon is typically a component (Grid). 
+                                We need to pass the real icon down. */}
+                      <activeOption.icon size={18} />
+                    </div>
+                    <div className={styles.itemInfo}>
+                      <div className={styles.itemLabel}>{activeOption.label}</div>
+                      <div className={styles.itemDescription}>{t("Selected Model")}</div>
+                    </div>
+                    <Check size={14} className={styles.checkIcon} />
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}

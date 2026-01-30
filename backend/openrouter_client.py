@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import logging
 import httpx
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
@@ -244,6 +245,16 @@ class OpenRouterService:
         "openai/gpt-5.2",  # The reasoning variant of gpt-5.2
         "openai/gpt-5.2-pro",
         "moonshotai/kimi-k2-thinking",  # Kimi thinking model always reasons
+        "moonshotai/kimi-k2.5",  # Kimi K2.5 streams reasoning by default
+        "google/gemini-3-pro-preview",  # Gemini 3 Pro always emits reasoning details
+    }
+
+    # Non-reasoning fallbacks to avoid hidden reasoning tokens when reasoning_mode is disabled.
+    ALWAYS_REASONING_FALLBACKS = {
+        "deepseek/deepseek-v3.2-speciale": "deepseek/deepseek-v3.2",
+        "openai/gpt-5.2": "openai/gpt-5.2-chat",
+        "openai/gpt-5.2-pro": "openai/gpt-5.2-chat",
+        "moonshotai/kimi-k2-thinking": "moonshotai/kimi-k2-0905",
     }
 
     # Model-specific context limits (in tokens)
@@ -382,6 +393,15 @@ class OpenRouterService:
             else:
                 # Otherwise return as-is (assume it's already a full model ID)
                 base_model = model
+
+        if not effective_reasoning_mode and base_model in self.ALWAYS_REASONING_FALLBACKS:
+            fallback = self.ALWAYS_REASONING_FALLBACKS[base_model]
+            _logger = logging.getLogger("openrouter_client")
+            _logger.info(
+                "[OpenRouter] Downgraded always-reasoning model to non-reasoning fallback",
+                extra={"requested_model": base_model, "resolved_model": fallback},
+            )
+            return fallback
         
         # If reasoning mode is enabled, check if this model has a reasoning variant
         if effective_reasoning_mode and base_model in self.REASONING_MODEL_VARIANTS:
@@ -401,6 +421,8 @@ class OpenRouterService:
         if model_lower in {"moonshotai/kimi-k2-fast", "kimi-k2-fast"}:
             return False
         if model_lower in self.ALWAYS_REASONING_MODELS:
+            if not reasoning_mode and model_lower in self.ALWAYS_REASONING_FALLBACKS:
+                return False
             return True
         return reasoning_mode
 
@@ -1000,11 +1022,16 @@ class OpenRouterService:
         if effective_reasoning_mode:
             # Skip for grok-4 models which error on reasoning param
             is_grok4 = "grok-4" in resolved_model.lower() or "grok4" in resolved_model.lower()
-            if not is_grok4:
-                payload["reasoning"] = {"effort": "high"}
+            is_kimi_k25 = resolved_model.lower() == "moonshotai/kimi-k2.5"
+            is_gemini_3_pro = resolved_model.lower() == "google/gemini-3-pro-preview"
+            if not is_grok4 and not is_kimi_k25:
+                effort = "high"
+                if is_gemini_3_pro and not reasoning_mode:
+                    effort = "low"
+                payload["reasoning"] = {"effort": effort}
                 _logger.info(f"[OpenRouter] Added reasoning param to payload for model {resolved_model}")
             else:
-                _logger.info(f"[OpenRouter] Skipped reasoning param for grok-4 model: {resolved_model}")
+                _logger.info(f"[OpenRouter] Skipped reasoning param for model: {resolved_model}")
 
         # Add system prompt if provided - this is the STABLE content we want to cache.
         # It includes the base instructions and workspace context, but NOT time_context (which is volatile).
@@ -1081,7 +1108,7 @@ class OpenRouterService:
                                 
                                 # Handle reasoning content - both plaintext and encrypted.
                                 # Only surface reasoning when explicitly enabled to avoid leaking tags.
-                                allow_reasoning = reasoning_mode
+                                allow_reasoning = effective_reasoning_mode
                                 reasoning = delta.get("reasoning") or delta.get("reasoning_content")
                                 yielded_reasoning = False
                                 if allow_reasoning and reasoning:
