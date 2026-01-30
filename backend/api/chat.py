@@ -340,12 +340,24 @@ async def chat_route(
             )
 
         # Get conversation history for context
+        t0_history = time.perf_counter()
         conversation_history: List[Dict[str, Any]] = await _load_conversation_history(conversation_id, chat_request.user_id)
+        api_logger.debug(
+            "Loaded conversation history",
+            extra={
+                "event_type": "chat_history_loaded",
+                "user_id": chat_request.user_id,
+                "conversation_id": conversation_id,
+                "count": len(conversation_history),
+                "duration_ms": int((time.perf_counter() - t0_history) * 1000),
+            },
+        )
 
         # For thread conversations, inject General chat context as background memory.
         is_general_conversation = _general_conversation_user_id(conversation_id) is not None
         if not is_general_conversation:
             try:
+                t0_general = time.perf_counter()
                 general_history = await _load_general_conversation_history(chat_request.user_id)
                 if general_history:
                     recent_general = general_history[-10:]
@@ -359,6 +371,15 @@ async def chat_route(
                             "text": "[I understand and will remember this context while responding in this thread.]"
                         }
                         conversation_history = [general_context_marker] + recent_general + [general_context_end] + conversation_history
+                api_logger.debug(
+                    "Loaded general chat history",
+                    extra={
+                        "event_type": "general_history_loaded",
+                        "user_id": chat_request.user_id,
+                        "count": len(general_history),
+                        "duration_ms": int((time.perf_counter() - t0_general) * 1000),
+                    },
+                )
             except Exception as e:
                 api_logger.debug(f"Could not load general context: {e}", extra={"user_id": chat_request.user_id})
 
@@ -388,14 +409,33 @@ async def chat_route(
              # General chat messages are not handled by save_conversation_message
              # We must manually insert them using the general chat persistence logic
              if should_persist_user:
+                 t0_persist = time.perf_counter()
                  await _insert_general_conversation_message(
                      user_id=authenticated_user_id,
                      role="user",
                      text=chat_request.message,
                      attachments=attachment_metadata or None,
                  )
+                 api_logger.debug(
+                     "Persisted general user message",
+                     extra={
+                         "event_type": "general_message_persisted",
+                         "user_id": authenticated_user_id,
+                         "duration_ms": int((time.perf_counter() - t0_persist) * 1000),
+                     },
+                 )
         elif should_persist_user:
+            t0_persist = time.perf_counter()
             await save_conversation_message(conversation_id, user_message_payload, user_id=chat_request.user_id)
+            api_logger.debug(
+                "Persisted thread user message",
+                extra={
+                    "event_type": "thread_message_persisted",
+                    "user_id": chat_request.user_id,
+                    "conversation_id": conversation_id,
+                    "duration_ms": int((time.perf_counter() - t0_persist) * 1000),
+                },
+            )
 
         # Enforce tier restrictions
         # Pathfinder, Voyager, and Pioneer users can use reasoning mode.
@@ -711,13 +751,34 @@ async def chat_stream_route(
 
         # Await conversation ID
         if conv_task:
+            t0_conv = time.perf_counter()
             conversation_id = await conv_task
+            api_logger.debug(
+                "Resolved conversation id",
+                extra={
+                    "event_type": "conversation_resolved",
+                    "user_id": chat_request.user_id,
+                    "conversation_id": conversation_id,
+                    "duration_ms": int((time.perf_counter() - t0_conv) * 1000),
+                },
+            )
         t1_conv = time.perf_counter()
         api_logger.info(f"Conversation setup time: {(t1_conv - t0_conv)*1000:.2f}ms", extra={"user_id": chat_request.user_id})
 
         conversation_history: List[Dict[str, Any]] = []
         if conversation_id:
+            t0_history = time.perf_counter()
             conversation_history = await _load_conversation_history(conversation_id, chat_request.user_id)
+            api_logger.debug(
+                "Loaded conversation history (stream)",
+                extra={
+                    "event_type": "chat_history_loaded_stream",
+                    "user_id": chat_request.user_id,
+                    "conversation_id": conversation_id,
+                    "count": len(conversation_history),
+                    "duration_ms": int((time.perf_counter() - t0_history) * 1000),
+                },
+            )
 
         # Avoid sending an empty payload to the AI provider
         if not (effective_message or "").strip() and not conversation_history and not (chat_request.attachments or []):
@@ -750,17 +811,36 @@ async def chat_stream_route(
             try:
                 general_user_id = _general_conversation_user_id(conversation_id)
                 if general_user_id is not None:
+                    t0_persist = time.perf_counter()
                     await _insert_general_conversation_message(
                         user_id=general_user_id,
                         role="user",
                         text=effective_message,
                         attachments=attachment_metadata or None,
                     )
+                    api_logger.debug(
+                        "Persisted general user message (stream)",
+                        extra={
+                            "event_type": "general_message_persisted_stream",
+                            "user_id": general_user_id,
+                            "duration_ms": int((time.perf_counter() - t0_persist) * 1000),
+                        },
+                    )
                 else:
+                    t0_persist = time.perf_counter()
                     await save_conversation_message(
                         conversation_id,
                         user_message_payload,
                         user_id=chat_request.user_id,
+                    )
+                    api_logger.debug(
+                        "Persisted thread user message (stream)",
+                        extra={
+                            "event_type": "thread_message_persisted_stream",
+                            "user_id": chat_request.user_id,
+                            "conversation_id": conversation_id,
+                            "duration_ms": int((time.perf_counter() - t0_persist) * 1000),
+                        },
                     )
             except Exception as e:
                 api_logger.error(f"Failed to persist user message: {e}", extra={"user_id": chat_request.user_id})

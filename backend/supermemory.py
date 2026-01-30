@@ -5,6 +5,7 @@ import base64
 import hashlib
 import hmac
 import math
+import time
 import os
 import re
 from dataclasses import dataclass
@@ -545,6 +546,7 @@ class SupermemoryService:
     async def _post(self, path: str, payload: Dict[str, Any], *, container_tag: Optional[str] = None) -> Optional[Dict[str, Any]]:
         if not self.available:
             return None
+        start = time.perf_counter()
         try:
             client = await self._get_client()
             response = await client.post(
@@ -553,11 +555,29 @@ class SupermemoryService:
                 headers=self._headers(container_tag),
             )
             response.raise_for_status()
-            return response.json()
+            data = response.json()
+            if self._debug:
+                self._logger.info(
+                    "Supermemory request ok",
+                    extra={
+                        "event_type": "supermemory_request_ok",
+                        "path": path,
+                        "duration_ms": int((time.perf_counter() - start) * 1000),
+                    },
+                )
+            return data
         except Exception as exc:
             if self._debug:
                 self._logger.warning(
                     "Supermemory request failed: %s %s", path, exc, exc_info=True
+                )
+                self._logger.info(
+                    "Supermemory request failed timing",
+                    extra={
+                        "event_type": "supermemory_request_failed",
+                        "path": path,
+                        "duration_ms": int((time.perf_counter() - start) * 1000),
+                    },
                 )
             return None
 

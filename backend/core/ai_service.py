@@ -413,6 +413,7 @@ async def stream_ai_response(
         and SUPERMEMORY_SERVICE.available
         and _should_request_supermemory_recall(message, memory_history)
     ):
+        t0_recall = time.perf_counter()
         try:
             memory_context = await SUPERMEMORY_SERVICE.recall_context(
                 user_id=user_id,
@@ -423,6 +424,16 @@ async def stream_ai_response(
             )
         except Exception as error:
             api_logger.debug("Supermemory recall failed: %s", error)
+        finally:
+            api_logger.debug(
+                "Supermemory recall timing",
+                extra={
+                    "event_type": "supermemory_recall",
+                    "user_id": user_id,
+                    "duration_ms": int((time.perf_counter() - t0_recall) * 1000),
+                    "context_len": len(memory_context or ""),
+                },
+            )
 
     # Initialize context
     runtime_context_parts: List[str] = []
@@ -622,6 +633,7 @@ async def generate_ai_response(
         and SUPERMEMORY_SERVICE.available
         and _should_request_supermemory_recall(message, memory_history)
     ):
+        t0_recall = time.perf_counter()
         try:
             memory_context = await SUPERMEMORY_SERVICE.recall_context(
                 user_id=user_id,
@@ -632,6 +644,16 @@ async def generate_ai_response(
             )
         except Exception as error:
             api_logger.debug("Supermemory recall failed: %s", error)
+        finally:
+            api_logger.debug(
+                "Supermemory recall timing",
+                extra={
+                    "event_type": "supermemory_recall",
+                    "user_id": user_id,
+                    "duration_ms": int((time.perf_counter() - t0_recall) * 1000),
+                    "context_len": len(memory_context or ""),
+                },
+            )
 
     if memory_context:
         time_context = "\n\n".join(filter(None, [time_context, memory_context]))
