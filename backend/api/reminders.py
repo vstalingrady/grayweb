@@ -16,6 +16,7 @@ from backend.models import ReminderCreate, ReminderUpdate
 # Import dependencies
 from backend.database import reminders, get_database
 from backend.auth import get_current_user, require_same_user
+from backend.compat_imports import row_get as _row_get
 from backend.time_utils import utcnow
 
 router = APIRouter(tags=["reminders"])

@@ -1154,7 +1154,7 @@
 }
 
 .eventCard[data-dragging="true"] {
-  box-shadow: 0 28px 42px rgba(0, 0, 0, 0.55);
+  box-shadow: none;
   z-index: 10;
 }
 
@@ -1291,11 +1291,13 @@
 .eventCardTitle {
   font-family: var(--font-sans, "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, sans-serif);
   letter-spacing: 0.04em;
+  font-weight: 400;
 }
 
 .eventCard strong {
   font-size: 0.82rem;
   letter-spacing: 0.04em;
+  font-weight: 400;
 }
 
 .composerOverlay {
@@ -2264,9 +2266,11 @@
   position: absolute;
   left: 0;
   right: 0;
-  height: 8px;
+  height: 12px;
   cursor: ns-resize;
   z-index: 10;
+  pointer-events: auto;
+  touch-action: none;
   /* Make it slightly easier to grab without visually blocking */
   transform: translateY(0);
 }
@@ -2281,17 +2285,21 @@
   cursor: s-resize;
 }
 
-/* Optional: Show handle on hover for better affordance */
-.resizeHandle:hover::after {
+/* Subtle handle so the resize area is discoverable */
+.resizeHandle::after {
   content: "";
   position: absolute;
   left: 10%;
   right: 10%;
   top: 50%;
-  height: 4px;
-  margin-top: -2px;
-  background: rgba(255, 255, 255, 0.3);
+  height: 2px;
+  margin-top: -1px;
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 2px;
+}
+
+.resizeHandle:hover::after {
+  background: rgba(255, 255, 255, 0.45);
 }
 
 .composerHeaderSelect option {

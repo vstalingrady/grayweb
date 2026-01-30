@@ -51,12 +51,119 @@ from backend.core.stream_handlers.context import (
 )
 from backend.core.stream_handlers.openrouter import stream_openrouter_response
 from backend.core.tool_execution import execute_function_call as _execute_function_call
-from backend.supermemory import SUPERMEMORY_SERVICE, SupermemoryOverrides
+from backend.supermemory import (
+    SUPERMEMORY_SERVICE,
+    SupermemoryOverrides,
+    supermemory_force_enabled,
+    supermemory_force_overrides,
+    supermemory_force_plan_tier,
+)
 from backend.supermemory_tools import SUPERMEMORY_TOOLS
 
 OPENROUTER_SERVICE = OpenRouterService()
 DEFAULT_CHAT_TOOLS = get_default_chat_tools()
 SEARCH_TOOL = None
+
+DEFAULT_HISTORY_TAIL_TURNS = 8
+DEFAULT_RECALL_EVERY_N = 3
+DEFAULT_RECALL_MIN_PROMPT_CHARS = 40
+
+
+def _get_history_tail_turns() -> int:
+    raw = os.getenv("GRAY_HISTORY_TAIL_TURNS")
+    if raw is None or raw.strip() == "":
+        return DEFAULT_HISTORY_TAIL_TURNS
+    try:
+        return max(0, int(raw))
+    except (TypeError, ValueError):
+        return DEFAULT_HISTORY_TAIL_TURNS
+
+
+def _history_tail_force_enabled() -> bool:
+    raw = os.getenv("GRAY_HISTORY_TAIL_FORCE")
+    if raw is None:
+        return True
+    return raw.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _get_recall_every_n() -> int:
+    raw = os.getenv("GRAY_SUPERMEMORY_RECALL_EVERY_N")
+    if raw is None or raw.strip() == "":
+        return DEFAULT_RECALL_EVERY_N
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_RECALL_EVERY_N
+
+
+def _get_recall_min_prompt_chars() -> int:
+    raw = os.getenv("GRAY_SUPERMEMORY_MIN_PROMPT_CHARS")
+    if raw is None or raw.strip() == "":
+        return DEFAULT_RECALL_MIN_PROMPT_CHARS
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_RECALL_MIN_PROMPT_CHARS
+
+
+def _count_user_turns(history: Optional[List[Dict[str, Any]]]) -> int:
+    if not history:
+        return 0
+    return sum(1 for entry in history if entry.get("role") == "user")
+
+
+def _should_request_supermemory_recall(
+    message: str,
+    history: Optional[List[Dict[str, Any]]],
+) -> bool:
+    min_chars = max(0, _get_recall_min_prompt_chars())
+    trimmed = (message or "").strip()
+    if min_chars <= 0 or len(trimmed) >= min_chars:
+        return True
+    every_n = _get_recall_every_n()
+    if every_n <= 0:
+        return False
+    if every_n == 1:
+        return True
+    turn_index = _count_user_turns(history) + 1
+    return turn_index % every_n == 0
+
+
+def _trim_history_by_turns(
+    history: Optional[List[Dict[str, Any]]],
+    max_turns: int,
+) -> List[Dict[str, Any]]:
+    if not history or max_turns <= 0:
+        return []
+    user_turns = 0
+    start_idx = 0
+    for idx in range(len(history) - 1, -1, -1):
+        if history[idx].get("role") == "user":
+            user_turns += 1
+            if user_turns >= max_turns:
+                start_idx = idx
+                break
+    if user_turns < max_turns:
+        return history
+    return history[start_idx:]
+
+
+def _should_trim_history(
+    *,
+    conversation_memory_enabled: bool,
+    plan_tier: Optional[str],
+    supermemory_overrides: Optional[SupermemoryOverrides],
+) -> bool:
+    if _history_tail_force_enabled():
+        return True
+    if not conversation_memory_enabled or not SUPERMEMORY_SERVICE.available:
+        return False
+    policy = SUPERMEMORY_SERVICE.policy_for_tier(plan_tier)
+    if not policy.enabled:
+        return False
+    if supermemory_overrides is not None:
+        policy = SUPERMEMORY_SERVICE._apply_overrides(policy, supermemory_overrides)
+    return policy.auto_recall
 
 
 def _resolve_moltbot_headers(
@@ -236,6 +343,24 @@ async def stream_ai_response(
     openrouter_user = _resolve_openrouter_user(user_id)
     
     conversation_history = deps["normalize_conversation_history"](conversation_history)
+    memory_history = conversation_history
+    force_supermemory = supermemory_force_enabled()
+    memory_enabled = conversation_memory_enabled or force_supermemory
+    memory_plan_tier = supermemory_force_plan_tier(plan_tier)
+    memory_overrides = (
+        supermemory_force_overrides(supermemory_overrides)
+        if force_supermemory
+        else supermemory_overrides
+    )
+    if _should_trim_history(
+        conversation_memory_enabled=memory_enabled,
+        plan_tier=memory_plan_tier,
+        supermemory_overrides=memory_overrides,
+    ):
+        conversation_history = _trim_history_by_turns(
+            conversation_history,
+            _get_history_tail_turns(),
+        )
     normalized_tier = normalize_plan_tier(plan_tier)
     has_calendar_access = normalized_tier in ("voyager", "pioneer")
 
@@ -283,17 +408,18 @@ async def stream_ai_response(
 
     memory_context: Optional[str] = None
     if (
-        conversation_memory_enabled
+        memory_enabled
         and user_id is not None
         and SUPERMEMORY_SERVICE.available
+        and _should_request_supermemory_recall(message, memory_history)
     ):
         try:
             memory_context = await SUPERMEMORY_SERVICE.recall_context(
                 user_id=user_id,
                 prompt=message,
-                conversation_history=conversation_history,
-                plan_tier=plan_tier,
-                overrides=supermemory_overrides,
+                conversation_history=memory_history,
+                plan_tier=memory_plan_tier,
+                overrides=memory_overrides,
             )
         except Exception as error:
             api_logger.debug("Supermemory recall failed: %s", error)
@@ -358,8 +484,8 @@ async def stream_ai_response(
             tools = [t for t in tools if t != deps["SEARCH_TOOL"]]
     
     tool_list = [*tools]
-    memory_policy = SUPERMEMORY_SERVICE.policy_for_tier(plan_tier)
-    if conversation_memory_enabled and SUPERMEMORY_SERVICE.available and memory_policy.enabled:
+    memory_policy = SUPERMEMORY_SERVICE.policy_for_tier(memory_plan_tier)
+    if memory_enabled and SUPERMEMORY_SERVICE.available and memory_policy.enabled:
         tool_list = [*tool_list, *deps["SUPERMEMORY_TOOLS"]]
     if needs_structured_tools and not is_onboarding_tool:
         tool_list = [*tool_list, *deps["PLAN_TOOLS"]]
@@ -456,6 +582,24 @@ async def generate_ai_response(
     # For brevity, typically we'd use provider_service.generate()
     # But often non-streaming is used for specific tasks like title generation.
     conversation_history = deps["normalize_conversation_history"](conversation_history)
+    memory_history = conversation_history
+    force_supermemory = supermemory_force_enabled()
+    memory_enabled = conversation_memory_enabled or force_supermemory
+    memory_plan_tier = supermemory_force_plan_tier(plan_tier)
+    memory_overrides = (
+        supermemory_force_overrides(supermemory_overrides)
+        if force_supermemory
+        else supermemory_overrides
+    )
+    if _should_trim_history(
+        conversation_memory_enabled=memory_enabled,
+        plan_tier=memory_plan_tier,
+        supermemory_overrides=memory_overrides,
+    ):
+        conversation_history = _trim_history_by_turns(
+            conversation_history,
+            _get_history_tail_turns(),
+        )
 
     intent_window_text = deps["build_intent_window_text"](message, conversation_history)
     request_structured_reminders = deps["_should_request_structured_reminders"](intent_window_text)
@@ -473,17 +617,18 @@ async def generate_ai_response(
 
     memory_context: Optional[str] = None
     if (
-        conversation_memory_enabled
+        memory_enabled
         and user_id is not None
         and SUPERMEMORY_SERVICE.available
+        and _should_request_supermemory_recall(message, memory_history)
     ):
         try:
             memory_context = await SUPERMEMORY_SERVICE.recall_context(
                 user_id=user_id,
                 prompt=message,
-                conversation_history=conversation_history,
-                plan_tier=plan_tier,
-                overrides=supermemory_overrides,
+                conversation_history=memory_history,
+                plan_tier=memory_plan_tier,
+                overrides=memory_overrides,
             )
         except Exception as error:
             api_logger.debug("Supermemory recall failed: %s", error)

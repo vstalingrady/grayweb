@@ -55,7 +55,7 @@ def _require_supermemory_access(user: Dict[str, Any]) -> str:
     if not policy.enabled:
         raise HTTPException(
             status_code=403,
-            detail="Long-term memory is available on Pathfinder and above.",
+            detail="Long-term memory is not available for your plan.",
         )
     return plan_tier
 

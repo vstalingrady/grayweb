@@ -136,6 +136,28 @@ def _float_env(name: str, default: float) -> float:
         return default
 
 
+def supermemory_force_enabled() -> bool:
+    return _bool_env("GRAY_SUPERMEMORY_FORCE", True)
+
+
+def supermemory_force_plan_tier(plan_tier: Optional[str]) -> Optional[str]:
+    return "pioneer" if supermemory_force_enabled() else plan_tier
+
+
+def supermemory_force_overrides(
+    overrides: Optional["SupermemoryOverrides"],
+) -> "SupermemoryOverrides":
+    if overrides is None:
+        return SupermemoryOverrides(auto_recall=True, auto_capture=True)
+    return SupermemoryOverrides(
+        auto_recall=True,
+        auto_capture=True,
+        capture_mode=overrides.capture_mode,
+        max_recall_results=overrides.max_recall_results,
+        profile_frequency=overrides.profile_frequency,
+    )
+
+
 def _trim(value: Optional[str]) -> Optional[str]:
     if not value:
         return None
@@ -426,11 +448,11 @@ class SupermemoryService:
 
         if normalized == "scout":
             return SupermemoryPolicy(
-                enabled=False,
-                auto_recall=False,
-                auto_capture=False,
-                max_recall_results=0,
-                profile_frequency=max(base_freq, 9999),
+                enabled=True,
+                auto_recall=self._auto_recall,
+                auto_capture=self._auto_capture,
+                max_recall_results=min(base_max, 3),
+                profile_frequency=max(base_freq, 200),
                 min_query_chars=min_query,
                 threshold=self._tier_thresholds.get("scout"),
             )

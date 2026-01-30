@@ -1289,8 +1289,9 @@ function GrayPageClientInner({
           currentChatId === generalSessionId;
 
         const isGeneralSurface = activeNav === "general";
+        const isThreadSurface = activeNav === "threads";
         const shouldStartStandaloneThread =
-          !isGeneralSurface && (!currentChatId || isGeneralChatActive);
+          isThreadSurface || (!isGeneralSurface && (!currentChatId || isGeneralChatActive));
 
         if (shouldStartStandaloneThread) {
           const session = await createThreadSession(normalizedDraft);

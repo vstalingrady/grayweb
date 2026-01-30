@@ -49,6 +49,7 @@ export const useDashboardCalendarDragResize = ({
     getDraggableProps: getDayDraggableProps,
     suppressClickRef: daySuppressClickRef,
     activeDrafts: dayDragDrafts,
+    isDragging: isDayDragging,
   } = useEventDrag({
     containerRef: dayColumnRef,
     hourHeight,
@@ -65,16 +66,21 @@ export const useDashboardCalendarDragResize = ({
   });
 
   const dayDrafts = useMemo<Record<string, EventDraft> | null>(() => {
-    if (blockResizeDraft) {
-      return { [blockResizeDraft.id]: blockResizeDraft };
+    if (!dayDragDrafts && !blockResizeDraft) {
+      return null;
     }
-    return dayDragDrafts;
+    const merged: Record<string, EventDraft> = { ...(dayDragDrafts ?? {}) };
+    if (blockResizeDraft) {
+      merged[blockResizeDraft.id] = blockResizeDraft;
+    }
+    return merged;
   }, [blockResizeDraft, dayDragDrafts]);
 
   const {
     getDraggableProps: getWeekDraggableProps,
     suppressClickRef: weekSuppressClickRef,
     activeDrafts: weekDrafts,
+    isDragging: isWeekDragging,
   } = useEventDrag({
     containerRef: weekScrollRef,
     hourHeight,
@@ -99,6 +105,15 @@ export const useDashboardCalendarDragResize = ({
   });
 
   const activeDrafts = dayDrafts || weekDrafts;
+  const dragDrafts = dayDragDrafts || weekDrafts;
+  const isDragging = isDayDragging || isWeekDragging;
+
+  const draggingEventIds = useMemo(() => {
+    if (!dragDrafts || !isDragging) {
+      return null;
+    }
+    return new Set(Object.keys(dragDrafts));
+  }, [dragDrafts, isDragging]);
 
   return {
     dayColumnRef,
@@ -110,5 +125,6 @@ export const useDashboardCalendarDragResize = ({
     getWeekDraggableProps,
     getResizeProps,
     activeDrafts,
+    draggingEventIds,
   };
 };

@@ -438,6 +438,10 @@ class OpenRouterService:
         # Google Gemini and others use basic ephemeral caching (Gemini has 5-min TTL regardless)
         return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
 
+    def _can_cache_history(self, model: Optional[str]) -> bool:
+        model_lower = (model or "").strip().lower()
+        return model_lower.startswith("anthropic/")
+
     def _build_messages(
         self,
         conversation_history: Optional[List[Dict[str, Any]]],
@@ -447,6 +451,7 @@ class OpenRouterService:
         *,
         history_token_budget: Optional[int] = None,
         runtime_context: Optional[str] = None,
+        cache_model: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Build messages array from conversation history, current message, and attachments."""
         history = conversation_history or []
@@ -455,6 +460,8 @@ class OpenRouterService:
         else:
             recent_history = history[-history_limit:] if history_limit > 0 else history
         payload: List[Dict[str, Any]] = []
+        applied_history_cache = False
+        should_cache_history = self._can_cache_history(cache_model)
         
         for entry in recent_history:
             role = entry.get("role")
@@ -486,7 +493,14 @@ class OpenRouterService:
                 continue
             # OpenRouter uses "assistant" for model responses
             openrouter_role = "assistant" if role == "model" else "user"
-            payload.append({"role": openrouter_role, "content": text})
+            if should_cache_history and not applied_history_cache:
+                payload.append({
+                    "role": openrouter_role,
+                    "content": self._wrap_cache_control(text, cache_model),
+                })
+                applied_history_cache = True
+            else:
+                payload.append({"role": openrouter_role, "content": text})
         
         trimmed_message = _trim(message)
         
@@ -623,6 +637,31 @@ class OpenRouterService:
         
         return headers
 
+    def _build_provider_preferences(
+        self,
+        resolved_model: Optional[str] = None,
+        requested_model: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Build provider preferences, favoring cache-friendly routing by default."""
+        provider_preferences: Dict[str, Any] = {
+            "allow_fallbacks": True,
+        }
+        sort_pref = (os.getenv("OPENROUTER_PROVIDER_SORT") or "").strip().lower()
+        if sort_pref in {"price", "throughput", "latency"}:
+            provider_preferences["sort"] = sort_pref
+        order_pref = (os.getenv("OPENROUTER_PROVIDER_ORDER") or "").strip()
+        if order_pref:
+            provider_preferences["order"] = [item.strip() for item in order_pref.split(",") if item.strip()]
+        requested_lower = (requested_model or "").strip().lower()
+        resolved_lower = (resolved_model or "").strip().lower()
+        if requested_lower in {"moonshotai/kimi-k2-fast", "kimi-k2-fast"}:
+            provider_preferences["order"] = ["Groq"]
+        elif requested_lower in {"moonshotai/kimi-k2.5", "kimi-k2.5", "moonshotai/kimi-k2-5", "kimi-k2-5"}:
+            provider_preferences["order"] = ["Chutes"]
+        elif "deepseek" in resolved_lower:
+            provider_preferences["order"] = ["DeepSeek"]
+        return provider_preferences
+
     def _convert_tools_to_openai_format(self, tools: Optional[List[Any]]) -> Optional[List[Dict[str, Any]]]:
         """Convert Google GenAI tool definitions to OpenAI format."""
         if not tools:
@@ -735,6 +774,7 @@ class OpenRouterService:
             attachments=attachments,
             history_token_budget=history_token_budget,
             runtime_context=runtime_context,
+            cache_model=resolved_model,
         )
 
         # Note: Runtime context (time) is NOT cached - it changes every request.
@@ -744,10 +784,10 @@ class OpenRouterService:
             messages = [{"role": "user", "content": message}]
 
         # Build request payload
-        provider_preferences: Dict[str, Any] = {
-            "sort": "price",  # Prioritize cheapest provider
-            "allow_fallbacks": True,
-        }
+        provider_preferences = self._build_provider_preferences(
+            resolved_model=resolved_model,
+            requested_model=model,
+        )
         if provider_routing:
             provider_preferences.update(provider_routing)
 
@@ -900,6 +940,7 @@ class OpenRouterService:
             attachments=attachments,
             history_token_budget=history_token_budget,
             runtime_context=runtime_context,
+            cache_model=resolved_model,
         )
 
         # Note: Runtime context (time) is NOT cached - it changes every request.
@@ -909,23 +950,12 @@ class OpenRouterService:
             messages = [{"role": "user", "content": message}]
 
         # Build provider preferences with routing logic
-        provider_preferences = {
-            "sort": "throughput",
-            "allow_fallbacks": True,
-        }
+        provider_preferences = self._build_provider_preferences(
+            resolved_model=resolved_model,
+            requested_model=model,
+        )
         
         # Apply provider routing overrides
-        requested_lower = (model or "").strip().lower()
-        resolved_lower = resolved_model.lower()
-        if requested_lower in {"moonshotai/kimi-k2-fast", "kimi-k2-fast"}:
-            provider_preferences["order"] = ["Groq"]
-        elif resolved_lower == "moonshotai/kimi-k2-thinking":
-            provider_preferences["order"] = ["NovitaAI"]
-        elif requested_lower in {"moonshotai/kimi-k2-0905", "kimi-k2"}:
-            provider_preferences["order"] = ["Chutes"]
-        elif "deepseek" in resolved_lower:
-            provider_preferences["order"] = ["DeepSeek"]
-
         if provider_routing:
             provider_preferences.update(provider_routing)
 

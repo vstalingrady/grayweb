@@ -5,7 +5,7 @@ import type { CSSProperties, HTMLAttributes, MouseEvent, MutableRefObject } from
 import styles from "./GrayDashboardCalendar.module.css";
 import { EventCard } from "./EventCard";
 import { HOURS, HOURS_LABEL } from "./timeGrid";
-import type { CalendarEvent, EventDraft, PositionedEvent } from "./types";
+import type { CalendarEvent, PositionedEvent } from "./types";
 import { isSameDay } from "./dateUtils";
 import { ViewModeSelect } from "@/components/gray/ViewModeSelect";
 import { useI18n } from "@/contexts/I18nContext";
@@ -24,7 +24,7 @@ type DayViewProps = {
   showHeaderDates: boolean;
   dayIndicatorOffset: number | null;
   dayLayouts: PositionedEvent[];
-  activeDrafts: Record<string, EventDraft> | null;
+  draggingEventIds: Set<string> | null;
   selectedEventIds: Set<string>;
   dayColumnRef: MutableRefObject<HTMLDivElement | null>;
   onNavigateRange: (direction: number) => void;
@@ -55,7 +55,7 @@ export function GrayDashboardCalendarDayView({
   showHeaderDates,
   dayIndicatorOffset,
   dayLayouts,
-  activeDrafts,
+  draggingEventIds,
   selectedEventIds,
   dayColumnRef,
   onNavigateRange,
@@ -166,7 +166,7 @@ export function GrayDashboardCalendarDayView({
                   onClick={(_e, anchorRect, mouseEvent) => onEventClick(event, anchorRect, mouseEvent)}
                   draggableProps={isGoogleCalendarEvent(event) ? undefined : getDayDraggableProps(event)}
                   resizeProps={isGoogleCalendarEvent(event) ? undefined : getResizeProps}
-                  isDragging={!!activeDrafts?.[event.id]}
+                  isDragging={draggingEventIds?.has(event.id) ?? false}
                   isSelected={selectedEventIds.has(event.id)}
                   onDelete={onDeleteEvent}
                 />

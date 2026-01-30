@@ -50,7 +50,14 @@ from backend.onboarding_tools import ONBOARDING_TOOLS
 from backend.core.chat_starter_helpers import sse_event as _sse_event
 from backend.core.title_generator import generate_chat_title_inline as _generate_chat_title_inline
 from backend.core.media_attachments import resolve_attachment_metadata
-from backend.supermemory import SUPERMEMORY_SERVICE, detect_memory_category, parse_supermemory_overrides
+from backend.supermemory import (
+    SUPERMEMORY_SERVICE,
+    detect_memory_category,
+    parse_supermemory_overrides,
+    supermemory_force_enabled,
+    supermemory_force_overrides,
+    supermemory_force_plan_tier,
+)
 
 api_logger = create_logger("api.chat")
 
@@ -150,7 +157,7 @@ async def _handle_supermemory_command(
         return "Long-term memory is not configured."
     policy = SUPERMEMORY_SERVICE.policy_for_tier(plan_tier)
     if not policy.enabled:
-        return "Long-term memory is available on Pathfinder and above."
+        return "Long-term memory is not available for your plan."
 
     if command == "remember":
         text = (args or "").strip()
@@ -311,6 +318,9 @@ async def chat_route(
         chat_request.conversation_memory_enabled,
     )
     supermemory_overrides = _parse_supermemory_overrides(chat_request, current_user)
+    force_supermemory = supermemory_force_enabled()
+    if force_supermemory:
+        supermemory_overrides = supermemory_force_overrides(supermemory_overrides)
 
     try:
         # Generate a title for the chat session (only if requested)
@@ -394,6 +404,8 @@ async def chat_route(
             _row_get(current_user, "role"),
             _row_get(current_user, "subscription_expires_at")
         )
+        memory_enabled = conversation_memory_enabled or force_supermemory
+        memory_plan_tier = supermemory_force_plan_tier(normalized_tier)
 
         # If user requested reasoning but is not eligible, disable it silently (or we could raise 403)
         effective_reasoning_mode = chat_request.reasoning_mode
@@ -422,8 +434,8 @@ async def chat_route(
                 command=supermemory_command["command"],
                 args=supermemory_command["args"],
                 user_id=authenticated_user_id,
-                plan_tier=normalized_tier,
-                conversation_memory_enabled=conversation_memory_enabled,
+                plan_tier=memory_plan_tier,
+                conversation_memory_enabled=memory_enabled,
             )
             assistant_message_payload = {"role": "model", "text": command_response}
             assistant_message_id = None
@@ -474,7 +486,7 @@ async def chat_route(
             tools=tool_list,
             user_timezone=chat_request.timezone,
             plan_tier=normalized_tier,
-            conversation_memory_enabled=conversation_memory_enabled,
+            conversation_memory_enabled=memory_enabled,
             provider_routing=chat_request.provider_routing,
             supermemory_overrides=supermemory_overrides,
         )
@@ -499,14 +511,14 @@ async def chat_route(
              # Regular thread persistence
              assistant_message_id = await save_conversation_message(conversation_id, assistant_message_payload, user_id=authenticated_user_id)
 
-        if conversation_memory_enabled and SUPERMEMORY_SERVICE.available:
+        if memory_enabled and SUPERMEMORY_SERVICE.available:
             create_logged_task(
                 SUPERMEMORY_SERVICE.capture_turn(
                     user_id=authenticated_user_id,
                     user_message=chat_request.message,
                     assistant_message=ai_response,
                     conversation_id=conversation_id,
-                    plan_tier=normalized_tier,
+                    plan_tier=memory_plan_tier,
                     overrides=supermemory_overrides,
                 ),
                 logger=api_logger,
@@ -627,6 +639,9 @@ async def chat_stream_route(
             chat_request.conversation_memory_enabled,
         )
         supermemory_overrides = _parse_supermemory_overrides(chat_request, user_record)
+        force_supermemory = supermemory_force_enabled()
+        if force_supermemory:
+            supermemory_overrides = supermemory_force_overrides(supermemory_overrides)
         
         # Check if onboarding is truly complete based on personalization fields
         # This is more robust than just checking the boolean flag which might be stale
@@ -757,6 +772,8 @@ async def chat_stream_route(
             _row_get(user_record, "role"),
             _row_get(user_record, "subscription_expires_at")
         )
+        memory_enabled = conversation_memory_enabled or force_supermemory
+        memory_plan_tier = supermemory_force_plan_tier(normalized_tier)
 
         effective_model, model_coerced = coerce_model_for_tier(chat_request.model, normalized_tier)
         effective_reasoning_mode = chat_request.reasoning_mode
@@ -769,8 +786,8 @@ async def chat_stream_route(
                 command=supermemory_command["command"],
                 args=supermemory_command["args"],
                 user_id=chat_request.user_id,
-                plan_tier=normalized_tier,
-                conversation_memory_enabled=conversation_memory_enabled,
+                plan_tier=memory_plan_tier,
+                conversation_memory_enabled=memory_enabled,
             )
 
             async def event_stream() -> AsyncGenerator[str, None]:
@@ -839,7 +856,7 @@ async def chat_stream_route(
                     reminders_enabled=chat_request.reminders_enabled,
                     tools=tool_list,
                     plan_tier=normalized_tier,
-                    conversation_memory_enabled=conversation_memory_enabled,
+                    conversation_memory_enabled=memory_enabled,
                     response_schema=chat_request.response_json_schema,
                     response_mime_type=chat_request.response_mime_type,
                     provider_routing=chat_request.provider_routing,
@@ -896,14 +913,14 @@ async def chat_stream_route(
                         },
                     )
 
-                if conversation_memory_enabled and SUPERMEMORY_SERVICE.available:
+                if memory_enabled and SUPERMEMORY_SERVICE.available:
                     create_logged_task(
                         SUPERMEMORY_SERVICE.capture_turn(
                             user_id=chat_request.user_id,
                             user_message=effective_message,
                             assistant_message=final_response,
                             conversation_id=conversation_id,
-                            plan_tier=normalized_tier,
+                            plan_tier=memory_plan_tier,
                             overrides=supermemory_overrides,
                         ),
                         logger=api_logger,

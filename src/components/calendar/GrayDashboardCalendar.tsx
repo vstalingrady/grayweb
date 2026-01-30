@@ -217,6 +217,7 @@ export function GrayDashboardCalendar({
     getWeekDraggableProps,
     getResizeProps,
     activeDrafts,
+    draggingEventIds,
   } = useDashboardCalendarDragResize({
     hourHeight,
     snapMinutes: SNAP_MINUTES,
@@ -476,7 +477,7 @@ export function GrayDashboardCalendar({
             showHeaderDates={showHeaderDates}
             weekNowIndicator={weekNowIndicator}
             weekLayouts={weekLayouts}
-            activeDrafts={activeDrafts}
+            draggingEventIds={draggingEventIds}
             selectedEventIds={selectedEventIds}
             weekScrollRef={weekScrollRef}
             weekColumnsRef={weekColumnsRef}
@@ -503,7 +504,7 @@ export function GrayDashboardCalendar({
             showHeaderDates={showHeaderDates}
             dayIndicatorOffset={dayIndicatorOffset}
             dayLayouts={dayLayouts}
-            activeDrafts={activeDrafts}
+            draggingEventIds={draggingEventIds}
             selectedEventIds={selectedEventIds}
             dayColumnRef={dayColumnRef}
             onNavigateRange={handleNavigateRange}
