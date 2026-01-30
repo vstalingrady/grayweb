@@ -1080,6 +1080,21 @@
   letter-spacing: 0.04em;
 }
 
+/* Fade in assistant messages when they appear (non-streaming). */
+.chatMessage[data-role="assistant"] .chatAssistantBlock {
+  animation: messageFadeIn 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.chatMessage[data-role="assistant"][data-streaming="true"] .chatAssistantBlock {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chatMessage[data-role="assistant"] .chatAssistantBlock {
+    animation: none;
+  }
+}
+
 .chatMarkdown :global(h1) {
   font-size: 1.32em;
 }
