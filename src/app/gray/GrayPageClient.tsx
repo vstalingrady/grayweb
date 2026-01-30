@@ -605,6 +605,18 @@ function GrayPageClientInner({
 
   const handleMobileHeaderSelectPulse = useCallback(() => {
     setMobilePulseActive(true);
+    setDashboardTab("pulse");
+    if (pathname !== "/") {
+      router.push("/");
+    }
+    if (isMobileViewport) {
+      collapseAllSidebars();
+    }
+  }, [collapseAllSidebars, isMobileViewport, pathname, router]);
+
+  const handleMobileHeaderSelectCalendar = useCallback(() => {
+    setMobilePulseActive(true);
+    setDashboardTab("calendar");
     if (pathname !== "/") {
       router.push("/");
     }
@@ -1563,9 +1575,12 @@ function GrayPageClientInner({
           <GrayMobileHeader
             isSidebarExpanded={sidebarExpandedForLayout}
             isPulseActive={isMobileViewport ? mobilePulseActive : isPulseRoute}
+            activeDashboardTab={dashboardTab}
+            showCalendarToggle={hasCalendarAccess}
             onToggleSidebar={toggleSidebarExpandedForLayout}
             onSelectChat={handleMobileHeaderSelectChat}
             onSelectPulse={handleMobileHeaderSelectPulse}
+            onSelectCalendar={handleMobileHeaderSelectCalendar}
           />
         ) : null}
 
