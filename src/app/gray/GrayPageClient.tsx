@@ -625,6 +625,8 @@ function GrayPageClientInner({
       pulseEntries={pulseEntries}
       currentPulse={activePulse}
       isCurrentPulseEditable={isActivePulseEditable}
+      livePlans={derivedPlans}
+      liveHabits={derivedHabits}
       onSelectPulse={setActivePulseId}
       proactivityFallback={proactivity}
       isProactivityLoaded={isProactivityLoaded}
@@ -633,6 +635,8 @@ function GrayPageClientInner({
           onTestProactivity={handleTestProactivity}
           onSavePlan={savePlan}
           onDeletePlan={deletePlan}
+          onTogglePlan={togglePlan}
+          onToggleHabit={toggleHabit}
           activeTab={dashboardTab}
           onSelectTab={setDashboardTab}
       currentDate={now}

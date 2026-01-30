@@ -5,7 +5,7 @@
   grid-template-rows: min-content min-content 1fr;
   grid-template-areas:
     "header header"
-    "proactivity plans"
+    "events plans"
     "proactivity habits";
   gap: 24px;
   padding: 24px 0;
@@ -79,10 +79,74 @@
   min-height: 240px;
 }
 
+.dashboardCardEvents {
+  grid-area: events;
+  min-height: 240px;
+}
+
 .dashboardCardProactivity {
   grid-area: proactivity;
   height: 100%;
   min-height: 480px;
+}
+
+.dashboardCardAction {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 10px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.dashboardCardAction:hover,
+.dashboardCardAction:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  outline: none;
+}
+
+.dashboardEventList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dashboardEventItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dashboardEventMarker {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.dashboardEventInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dashboardEventTitle {
+  color: #e4e4e7;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dashboardEventTime {
+  color: #717171;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .dashboardCardHeader {
@@ -330,6 +394,7 @@
     grid-template-rows: auto;
     grid-template-areas:
       "header"
+      "events"
       "proactivity"
       "plans"
       "habits";
@@ -345,4 +410,3 @@
     min-height: 210px;
   }
 }
-

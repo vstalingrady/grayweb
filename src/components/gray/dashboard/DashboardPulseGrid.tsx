@@ -7,7 +7,7 @@ import {
   Settings,
   Square,
 } from "lucide-react";
-import styles from "@/app/gray/GrayPageClient.module.css";
+import styles from "./DashboardPulseGrid.module.css";
 import { useI18n } from "@/contexts/I18nContext";
 import { useNotificationPreferences } from "@/contexts/NotificationPreferencesContext";
 import {
@@ -15,7 +15,7 @@ import {
   getProactivityTimes,
 } from "@/components/gray/proactivityUtils";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
-import type { ProactivityItem } from "@/components/gray/types";
+import type { HabitItem, PlanItem, ProactivityItem } from "@/components/gray/types";
 import type { CalendarEvent } from "@/components/calendar/types";
 
 type ProactivityScheduleEntry = {
@@ -29,10 +29,14 @@ type DashboardPulseGridProps = {
   viewerName: string | null;
   proactivity: ProactivityItem | null;
   events: CalendarEvent[];
+  plans?: PlanItem[];
+  habits?: HabitItem[];
   proactivityDeliveryKeys?: ReadonlySet<string>;
   canConfigureProactivity: boolean;
   onConfigureProactivity: () => void;
   onAddEvent?: (date: Date) => void;
+  onTogglePlan?: (id: string) => void;
+  onToggleHabit?: (id: string) => void;
 };
 
 const toDateKey = (date: Date) => {
@@ -48,10 +52,14 @@ export function DashboardPulseGrid({
   viewerName: _viewerName,
   proactivity,
   events,
+  plans = [],
+  habits = [],
   proactivityDeliveryKeys,
   canConfigureProactivity,
   onConfigureProactivity,
   onAddEvent,
+  onTogglePlan,
+  onToggleHabit,
 }: DashboardPulseGridProps) {
   const { t } = useI18n();
   const { notificationPreferences, setNotificationPreference } = useNotificationPreferences();
@@ -115,6 +123,9 @@ export function DashboardPulseGrid({
       .filter((event) => toDateKey(event.start) === targetKey)
       .sort((a, b) => a.start.getTime() - b.start.getTime());
   }, [currentDate, events, selectedDate]);
+
+  const visiblePlans = useMemo(() => plans.filter((plan) => plan), [plans]);
+  const visibleHabits = useMemo(() => habits.filter((habit) => habit), [habits]);
 
   return (
     <div className={styles.dashboardGridFinal}>
@@ -205,6 +216,90 @@ export function DashboardPulseGrid({
             <div className={styles.proactivityEmptyState}>
               <span>{t("No check-ins scheduled")}</span>
             </div>
+          )}
+        </div>
+      </div>
+
+      {/* PLANS CARD */}
+      <div className={`${styles.dashboardCard} ${styles.dashboardCardPlans}`}>
+        <div className={styles.dashboardCardHeader}>
+          <div className={`${styles.dashboardCardIcon} ${styles.iconBlue}`}>
+            <Square size={16} />
+          </div>
+          <h2 className={styles.dashboardCardTitle}>{t("Plans")}</h2>
+        </div>
+        <div className={styles.dashboardCardBody}>
+          {visiblePlans.length > 0 ? (
+            <ul className={styles.dashboardList}>
+              {visiblePlans.map((plan) => (
+                <li key={plan.id} className={styles.dashboardListItem}>
+                  <button
+                    type="button"
+                    className={styles.planCheckboxButton}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onTogglePlan?.(plan.id);
+                    }}
+                    aria-label={
+                      plan.completed ? t("Mark plan as incomplete") : t("Mark plan as complete")
+                    }
+                  >
+                    {plan.completed ? <Check size={14} /> : <Square size={14} color="#52525b" />}
+                  </button>
+                  <span
+                    className={styles.dashboardTaskLabel}
+                    data-completed={plan.completed ? "true" : "false"}
+                  >
+                    {plan.label}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className={styles.dashboardListEmpty}>{t("No active plans")}</div>
+          )}
+        </div>
+      </div>
+
+      {/* HABITS CARD */}
+      <div className={`${styles.dashboardCard} ${styles.dashboardCardHabits}`}>
+        <div className={styles.dashboardCardHeader}>
+          <div className={`${styles.dashboardCardIcon} ${styles.iconCyan}`}>
+            <Check size={16} />
+          </div>
+          <h2 className={styles.dashboardCardTitle}>{t("Habits")}</h2>
+        </div>
+        <div className={styles.dashboardCardBody}>
+          {visibleHabits.length > 0 ? (
+            <ul className={styles.dashboardList}>
+              {visibleHabits.map((habit) => (
+                <li key={habit.id} className={styles.dashboardListItem}>
+                  <button
+                    type="button"
+                    className={styles.planCheckboxButton}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onToggleHabit?.(habit.id);
+                    }}
+                    aria-label={
+                      habit.completed ? t("Mark habit as incomplete") : t("Mark habit as complete")
+                    }
+                  >
+                    {habit.completed ? <Check size={14} /> : <Square size={14} color="#52525b" />}
+                  </button>
+                  <span
+                    className={styles.dashboardTaskLabel}
+                    data-completed={habit.completed ? "true" : "false"}
+                  >
+                    {habit.label}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className={styles.dashboardListEmpty}>{t("No active habits")}</div>
           )}
         </div>
       </div>

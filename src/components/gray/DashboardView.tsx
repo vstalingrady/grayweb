@@ -13,7 +13,7 @@ import composerStyles from "@/components/gray/chat/ChatComposerStyles.module.css
 import { GrayDashboardCalendar } from "@/components/calendar/GrayDashboardCalendar";
 import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
 import { EventComposerPayload } from "@/components/calendar/EventComposer";
-import { type ProactivityItem, type PulseEntry, type PlanItem, type PlanUpdates } from "./types";
+import { type ProactivityItem, type PulseEntry, type PlanItem, type PlanUpdates, type HabitItem } from "./types";
 import { DashboardHeader } from "./DashboardHeader";
 import { mapPlansToCalendarEvents, PLAN_EVENT_ID_PREFIX } from "./planCalendarUtils";
 import { useUser } from "@/contexts/UserContext";
@@ -48,6 +48,7 @@ type GrayDashboardViewProps = {
   currentPulse: PulseEntry | null;
   isCurrentPulseEditable: boolean;
   livePlans?: PlanItem[];
+  liveHabits?: HabitItem[];
   onSelectPulse: (id: string) => void;
   proactivityFallback: ProactivityItem | null;
   isProactivityLoaded: boolean;
@@ -56,6 +57,8 @@ type GrayDashboardViewProps = {
   onTestProactivity?: (proactivityId: string) => void;
   onSavePlan?: (planId: string, updates: PlanUpdates) => Promise<void> | void;
   onDeletePlan?: (plan: PlanItem) => void;
+  onTogglePlan?: (id: string) => void;
+  onToggleHabit?: (id: string) => void;
   activeTab: "pulse" | "calendar";
   onSelectTab: (tab: "pulse" | "calendar") => void;
   currentDate: Date;
@@ -86,11 +89,14 @@ export function GrayDashboardView({
   currentPulse,
   isCurrentPulseEditable,
   livePlans,
+  liveHabits,
   proactivityFallback,
   isProactivityLoaded,
   onProactivitySelect,
   onProactivityRemove,
   onDeletePlan,
+  onTogglePlan,
+  onToggleHabit,
   activeTab,
   onSelectTab,
   currentDate,
@@ -130,6 +136,23 @@ export function GrayDashboardView({
       return true;
     });
   }, [currentPulse, hasPulseData, isCurrentPulseEditable, livePlans]);
+
+  const displayHabits = useMemo(() => {
+    const fallbackHabits = currentPulse?.habits ?? [];
+    if (isCurrentPulseEditable) {
+      return liveHabits ?? fallbackHabits;
+    }
+    if (hasPulseData) {
+      return fallbackHabits;
+    }
+    const rawHabits = liveHabits ?? [];
+    const seen = new Set<string>();
+    return rawHabits.filter((habit) => {
+      if (seen.has(habit.id)) return false;
+      seen.add(habit.id);
+      return true;
+    });
+  }, [currentPulse, hasPulseData, isCurrentPulseEditable, liveHabits]);
 
   const planCalendarEvents = useMemo(() => mapPlansToCalendarEvents(displayPlans), [displayPlans]);
 
@@ -412,12 +435,16 @@ export function GrayDashboardView({
     viewerName: user?.full_name ?? null,
     proactivity: displayProactivity ?? null,
     events: mergedEvents,
+    plans: displayPlans,
+    habits: displayHabits,
     proactivityDeliveryKeys,
     canConfigureProactivity: Boolean(onProactivitySelect),
     onConfigureProactivity: handleOpenProactivityModal,
     onSelectDate: (date: Date) => onCalendarSelectedDateChange?.(date),
     isCompactLayout,
     onAddEvent: (date: Date) => openComposerAt(date),
+    onTogglePlan,
+    onToggleHabit,
   };
 
   const pulseContent = (
