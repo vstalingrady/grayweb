@@ -122,6 +122,11 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
         subtext: "Coming soon",
         subtextParens: true,
     },
+    {
+        id: "autorouter",
+        label: "AutoRouter (openrouter/auto)",
+        icon: Shuffle,
+    },
     { id: "everything_in_pathfinder", label: "Everything in Pathfinder", icon: Plus, variant: "inherit" },
 ];
 

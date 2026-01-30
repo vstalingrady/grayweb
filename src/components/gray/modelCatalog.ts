@@ -47,6 +47,12 @@ export const PIONEER_GROUPS: ModelGroup[] = [
     ],
   },
   {
+    id: "openrouter",
+    label: "OpenRouter",
+    iconPath: "/grayai.png",
+    models: [{ id: "openrouter/auto", label: "AutoRouter", cost: "$$", tierRequired: "voyager" }],
+  },
+  {
     id: "deepseek",
     label: "DeepSeek",
     iconPath: "/logos/deepseek-color.svg",
