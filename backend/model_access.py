@@ -27,6 +27,7 @@ PATHFINDER_MODEL_IDS = {
     "deepseek/deepseek-v3.2-speciale",
     "x-ai/grok-4.1-fast",
     "moonshotai/kimi-k2.5",
+    "nvidia/nemotron-3-nano-30b-a3b:free",
     "xiaomi/mimo-v2-flash:free",
     "z-ai/glm-4.7",
     "z-ai/glm-4.7-flash",
@@ -40,7 +41,7 @@ VOYAGER_MODEL_IDS = PATHFINDER_MODEL_IDS | {
     "google/gemini-3-pro-preview",
     "openai/gpt-5.2-chat",
     "moonshotai/kimi-k2-0905",
-    "moonshotai/kimi-k2-fast",
+    "moonshotai/kimi-k2-0905",
 }
 
 # Pioneer-only: Top-tier models
@@ -96,7 +97,7 @@ def coerce_model_for_tier(requested_model: Optional[str], plan_tier: Optional[st
         return "lite", model != model_raw
     if model == "pioneer":
         return "pioneer", model != model_raw
-    if model in {"moonshotai/kimi-k2-thinking", "kimi-k2-thinking"}:
+    if model in {"moonshotai/kimi-k2-fast", "kimi-k2-fast"}:
         return "moonshotai/kimi-k2-0905", True
 
     # Enforce OpenRouter allowlists for explicit model IDs.

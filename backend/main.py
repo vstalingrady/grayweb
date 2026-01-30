@@ -554,11 +554,6 @@ from backend.api.conversations import router as conversations_router
 
 app.include_router(conversations_router)
 
-# Analytics routes
-from backend.api.analytics import router as analytics_router
-
-app.include_router(analytics_router)
-
 # Uploads routes
 from backend.api.uploads import router as uploads_router
 

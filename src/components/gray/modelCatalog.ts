@@ -86,6 +86,14 @@ export const PIONEER_GROUPS: ModelGroup[] = [
     ],
   },
   {
+    id: "nvidia",
+    label: "NVIDIA",
+    iconPath: "/logos/nvidia.svg",
+    models: [
+      { id: "nvidia/nemotron-3-nano-30b-a3b:free", label: "Nemotron 3 Nano 30B A3B", cost: "$", tierRequired: "pathfinder" },
+    ],
+  },
+  {
     id: "xiaomi",
     label: "Xiaomi",
     iconPath: "/logos/xiaomi.svg",

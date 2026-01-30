@@ -250,12 +250,9 @@ function PaymentContent() {
         return PATHFINDER_PRICING;
     };
     const pricingData = getPricingData();
-    const basePriceDisplay = pricingData[billingCycle].price;
-    const baseChargeDisplay = pricingData[billingCycle].fullPrice;
-    const monthlyBaseChargeDisplay = pricingData.monthly.fullPrice;
-    const discountedPriceDisplay = basePriceDisplay;
-    const discountedChargeDisplay = baseChargeDisplay;
-    const monthlyDiscountedChargeDisplay = monthlyBaseChargeDisplay;
+    const priceDisplay = pricingData[billingCycle].price;
+    const chargeDisplay = pricingData[billingCycle].fullPrice;
+    const monthlyChargeDisplay = pricingData.monthly.fullPrice;
 
     // Choose features
     const features = planParam === "pioneer" ? PIONEER_FEATURES : planParam === "voyager" ? VOYAGER_FEATURES : PATHFINDER_FEATURES;
@@ -453,7 +450,7 @@ function PaymentContent() {
                         </p>
                     </header>
                     <div className={`${pricingStyles.priceBlock} ${pricingStyles.priceBlockStacked}`}>
-                        <span className={pricingStyles.priceValue}>{discountedPriceDisplay}</span>
+                        <span className={pricingStyles.priceValue}>{priceDisplay}</span>
                         <span className={pricingStyles.priceMeta}>/ {billingCycle === "annual" ? "month" : "month"}</span>
                     </div>
                 </div>
@@ -599,7 +596,7 @@ function PaymentContent() {
 
                         <div className={`${styles.payButtonContainer} ${styles.successCtaContainer}`} aria-hidden="true">
                             <button type="button" className={styles.payButton} disabled>
-                                Subscribe for {discountedChargeDisplay}
+                                Subscribe for {chargeDisplay}
                             </button>
                             <div
                                 style={{
@@ -670,7 +667,7 @@ function PaymentContent() {
                                             <span>Pay monthly</span>
                                         </div>
                                         <div className={styles.cycleMeta}>
-                                            <span className={styles.cyclePriceCurrent}>{monthlyDiscountedChargeDisplay}</span>
+                                            <span className={styles.cyclePriceCurrent}>{monthlyChargeDisplay}</span>
                                             <span className={styles.cycleCadence}>per month</span>
                                         </div>
                                     </button>
@@ -813,7 +810,7 @@ function PaymentContent() {
                                             <Loader2 size={20} className="animate-spin" /> Processing
                                         </span>
                                     ) : (
-                                        `Subscribe for ${discountedChargeDisplay}`
+                                        `Subscribe for ${chargeDisplay}`
                                     )}
                                 </button>
                                 <div style={{ marginTop: "1rem", display: "flex", justifyContent: "center", gap: "0.5rem", color: "rgba(255,255,255,0.3)", fontSize: "0.8rem" }}>

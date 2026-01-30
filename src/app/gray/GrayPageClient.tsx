@@ -110,11 +110,6 @@ const HistoryOverlay = dynamic(
   { loading: () => null }
 );
 
-const AnalyticsView = dynamic(
-  () => import("@/components/gray/analytics/AnalyticsView").then((mod) => mod.AnalyticsView),
-  { loading: () => null }
-);
-
 // Helper functions and constants imported from extracted modules
 
 type GrayPageClientProps = {
@@ -127,9 +122,7 @@ type GrayPageClientProps = {
   defaultSidebarExpandedDesktop?: boolean;
 };
 
-type ViewMode = "chat" | "dashboard" | "general" | "history" | "analytics";
-
-const ANALYTICS_ADMIN_EMAILS = new Set(["vstalingrady@gmail.com", "test@test.com", "aurelryojonathan@gmail.com"]);
+type ViewMode = "chat" | "dashboard" | "general" | "history";
 
 function GrayPageClientInner({
   initialTimestamp,
@@ -154,8 +147,6 @@ function GrayPageClientInner({
   const userId = typeof user?.id === "number" ? user.id : null;
   const normalizedTier = useMemo(() => normalizePlanTier(user), [user]);
   const hasCalendarAccess = normalizedTier === "voyager" || normalizedTier === "pioneer";
-  const normalizedEmail = (user?.email ?? "").trim().toLowerCase();
-  const isAnalyticsAdmin = ANALYTICS_ADMIN_EMAILS.has(normalizedEmail);
   const resolvedTimezone = useMemo(() => {
     try {
       return Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
@@ -550,11 +541,7 @@ function GrayPageClientInner({
     baseViewMode === "chat"
       ? "chat"
       : manualViewMode ??
-        (activeNav === "history"
-          ? "history"
-          : activeNav === "analytics"
-            ? "analytics"
-            : baseViewMode);
+        (activeNav === "history" ? "history" : baseViewMode);
 
   const handleMobileHeaderSelectChat = useCallback(() => {
     setMobilePulseActive(false);
@@ -569,17 +556,6 @@ function GrayPageClientInner({
   const handleMobileHeaderSelectPulse = useCallback(() => {
     setMobilePulseActive(true);
     setDashboardTab("pulse");
-    if (pathname !== "/") {
-      router.push("/");
-    }
-    if (isMobileViewport) {
-      collapseAllSidebars();
-    }
-  }, [collapseAllSidebars, isMobileViewport, pathname, router]);
-
-  const handleMobileHeaderSelectCalendar = useCallback(() => {
-    setMobilePulseActive(true);
-    setDashboardTab("calendar");
     if (pathname !== "/") {
       router.push("/");
     }
@@ -665,9 +641,6 @@ function GrayPageClientInner({
     if (isDashboardView) {
       return renderDashboardSurface();
     }
-    if (viewMode === "analytics") {
-      return <AnalyticsView />;
-    }
     if (isChatView) {
       return (
         <GrayChatView
@@ -705,6 +678,12 @@ function GrayPageClientInner({
 
   // Close mobile sidebar on navigation
   const handleMobileNavigate = (nav: SidebarNavKey) => {
+    if (nav === "calendar") {
+      setMobilePulseActive(true);
+      setDashboardTab("calendar");
+    } else {
+      setMobilePulseActive(false);
+    }
     handleNavigate(nav);
     if (isMobileViewport) {
       collapseSidebarForLayout();
@@ -758,17 +737,6 @@ function GrayPageClientInner({
         </div>
       );
     }
-    if (viewMode === "analytics") {
-      return (
-        <div
-          className={pageStyles.mainContent}
-          data-view={viewMode}
-          data-compact={isCompactLayout ? "true" : "false"}
-        >
-          {renderPrimaryView()}
-        </div>
-      );
-    }
     return renderPrimaryView();
   };
 
@@ -784,18 +752,6 @@ function GrayPageClientInner({
         </div>
       );
     }
-    if (viewMode === "analytics") {
-      return (
-        <div
-          className={pageStyles.mainContent}
-          data-view="analytics"
-          data-compact={isCompactLayout ? "true" : "false"}
-        >
-          {renderPrimaryView()}
-        </div>
-      );
-    }
-
     return (
       <div
         className={pageStyles.mainContent}
@@ -898,24 +854,18 @@ function GrayPageClientInner({
       if (!hasCalendarAccess && item.id === "calendar") {
         return false;
       }
-      if (!isAnalyticsAdmin && item.id === "analytics") {
-        return false;
-      }
       return true;
     });
-  }, [hasCalendarAccess, isAnalyticsAdmin]);
+  }, [hasCalendarAccess]);
 
   const filteredRailItems = useMemo(() => {
     return SIDEBAR_RAIL_ITEMS.filter((item) => {
       if (!hasCalendarAccess && item.id === "calendar") {
         return false;
       }
-      if (!isAnalyticsAdmin && item.id === "analytics") {
-        return false;
-      }
       return true;
     });
-  }, [hasCalendarAccess, isAnalyticsAdmin]);
+  }, [hasCalendarAccess]);
 
   const historySections = useMemo(() => buildHistorySections(sessions), [sessions]);
   const isDashboardView = viewMode === "dashboard";
@@ -1011,9 +961,6 @@ function GrayPageClientInner({
     }
     if (viewMode === "history" || activeNav === "history") {
       return "History";
-    }
-    if (viewMode === "analytics" || activeNav === "analytics") {
-      return "Analytics";
     }
     if (activeNav === "threads") {
       return "New Chat";
@@ -1505,6 +1452,9 @@ function GrayPageClientInner({
     [greeting, shouldShowWorkspaceGreeting, normalizedTier]
   );
   const dashboardTabAttr = isDashboardView ? dashboardTab : undefined;
+  const isMobileCalendarView =
+    isMobileViewport &&
+    (dashboardTab === "calendar" || activeNav === "calendar" || pathname?.startsWith("/cal"));
 
   const generalAttachmentsActive =
     viewMode === "general" && (attachments.length > 0 || isAttachmentUploading);
@@ -1532,13 +1482,11 @@ function GrayPageClientInner({
           <GrayMobileHeader
             isSidebarExpanded={sidebarExpandedForLayout}
             isPulseActive={isMobileViewport ? mobilePulseActive : isPulseRoute}
-            activeDashboardTab={dashboardTab}
-            showCalendarToggle={hasCalendarAccess}
+            hideControls={isMobileCalendarView}
             streakCount={streakCount}
             onToggleSidebar={toggleSidebarExpandedForLayout}
             onSelectChat={handleMobileHeaderSelectChat}
             onSelectPulse={handleMobileHeaderSelectPulse}
-            onSelectCalendar={handleMobileHeaderSelectCalendar}
             onCreateNewChat={handleMobileHeaderCreateNewChat}
           />
         ) : null}

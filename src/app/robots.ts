@@ -16,7 +16,6 @@ const MARKETING_DISALLOWS = [
   "/confirm-delete",
   "/delete-account",
   "/admin",
-  "/analytics",
   "/threads",
   "/pulse",
   "/grove",

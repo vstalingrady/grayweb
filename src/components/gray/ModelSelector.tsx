@@ -53,12 +53,17 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
   const currentLevel = PLAN_TIER_LEVELS[currentTier] ?? 0;
   const isReasoningLocked = currentTier === "scout";
   const isReasoningLockedByModel =
-    selectedModelId === "moonshotai/kimi-k2-fast" ||
-    selectedModelId === "moonshotai/kimi-k2.5" ||
-    selectedModelId === "moonshotai/kimi-k2-thinking";
+    selectedModelId === "moonshotai/kimi-k2-0905" ||
+    selectedModelId === "moonshotai/kimi-k2.5";
+  const isReasoningForcedOn = selectedModelId === "moonshotai/kimi-k2.5";
   const shouldShowReasoningLevel =
     selectedModelId === "google/gemini-3-pro-preview" || modelTier === "pro";
   const isReasoningToggleDisabled = isReasoningLocked || isReasoningLockedByModel;
+  const reasoningDescription = isReasoningForcedOn
+    ? null
+    : shouldShowReasoningLevel
+      ? (reasoningMode ? t("High") : t("Low"))
+      : null;
 
   const filteredPioneerGroups = useMemo(() => {
     const isVisible = (modelId: string) =>
@@ -303,11 +308,9 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                       </div>
                       <div className={styles.itemInfo}>
                         <div className={styles.itemLabel}>{t("Reasoning")}</div>
-                        {shouldShowReasoningLevel && (
-                          <div className={styles.itemDescription}>
-                            {reasoningMode ? t("High") : t("Low")}
-                          </div>
-                        )}
+                        {reasoningDescription ? (
+                          <div className={styles.itemDescription}>{reasoningDescription}</div>
+                        ) : null}
                       </div>
                       {isReasoningToggleDisabled ? (
                         <Lock size={16} className={styles.actionLock} aria-hidden="true" />

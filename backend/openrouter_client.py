@@ -202,10 +202,8 @@ class OpenRouterService:
         "deepseek-r1": "deepseek/deepseek-r1",
         # Moonshot / Kimi models
         "kimi-k2": "moonshotai/kimi-k2-0905",  # Non-reasoning variant
+        "kimi-k2-0905": "moonshotai/kimi-k2-0905",
         "kimi-k2.5": "moonshotai/kimi-k2.5",
-        "kimi-k2-fast": "moonshotai/kimi-k2-0905",
-        "kimi-k2-thinking": "moonshotai/kimi-k2-thinking",  # Always-reasoning variant
-        "moonshotai/kimi-k2-fast": "moonshotai/kimi-k2-0905",
         "moonshotai/kimi-k2.5": "moonshotai/kimi-k2.5",
         # xAI Grok models
         "grok-4": "x-ai/grok-4.1-fast",
@@ -225,7 +223,6 @@ class OpenRouterService:
     # NOTE: Only for models where reasoning requires a DIFFERENT model ID
     REASONING_MODEL_VARIANTS = {
         "openai/gpt-5.2-chat": "openai/gpt-5.2",  # gpt-5.2 is the reasoning variant
-        "moonshotai/kimi-k2-0905": "moonshotai/kimi-k2-thinking",  # kimi-k2-thinking is the reasoning variant
         # DeepSeek v3.2 uses the reasoning param, NOT a separate model
         # Grok models handle reasoning via the reasoning param
         # Anthropic models handle reasoning via extended thinking, not separate model
@@ -235,7 +232,6 @@ class OpenRouterService:
     # Used to downgrade when reasoning_mode is False but user selected thinking variant
     REVERSE_REASONING_VARIANTS = {
         "openai/gpt-5.2": "openai/gpt-5.2-chat",
-        "moonshotai/kimi-k2-thinking": "moonshotai/kimi-k2-0905",
     }
 
     # Models where reasoning is ALWAYS on (toggle should be grayed out in frontend)
@@ -244,7 +240,6 @@ class OpenRouterService:
         "deepseek/deepseek-v3.2-speciale",  # Speciale variant always reasons
         "openai/gpt-5.2",  # The reasoning variant of gpt-5.2
         "openai/gpt-5.2-pro",
-        "moonshotai/kimi-k2-thinking",  # Kimi thinking model always reasons
         "moonshotai/kimi-k2.5",  # Kimi K2.5 streams reasoning by default
         "google/gemini-3-pro-preview",  # Gemini 3 Pro always emits reasoning details
     }
@@ -254,7 +249,6 @@ class OpenRouterService:
         "deepseek/deepseek-v3.2-speciale": "deepseek/deepseek-v3.2",
         "openai/gpt-5.2": "openai/gpt-5.2-chat",
         "openai/gpt-5.2-pro": "openai/gpt-5.2-chat",
-        "moonshotai/kimi-k2-thinking": "moonshotai/kimi-k2-0905",
     }
 
     # Model-specific context limits (in tokens)
@@ -282,8 +276,6 @@ class OpenRouterService:
         # Kimi models (262k context)
         "moonshotai/kimi-k2.5": 262_144,
         "moonshotai/kimi-k2-0905": 262_144,
-        "moonshotai/kimi-k2-thinking": 262_144,
-        "moonshotai/kimi-k2-fast": 262_144,
         # MiniMax models
         "minimax/minimax-m2.1": 205_000,
         "minimax/minimax-m2-her": 65_536,
@@ -418,7 +410,7 @@ class OpenRouterService:
         if not model:
             return reasoning_mode
         model_lower = model.strip().lower()
-        if model_lower in {"moonshotai/kimi-k2-fast", "kimi-k2-fast"}:
+        if model_lower in {"moonshotai/kimi-k2-0905", "kimi-k2-0905"}:
             return False
         if model_lower in self.ALWAYS_REASONING_MODELS:
             if not reasoning_mode and model_lower in self.ALWAYS_REASONING_FALLBACKS:
@@ -678,7 +670,7 @@ class OpenRouterService:
         requested_lower = (requested_model or "").strip().lower()
         resolved_lower = (resolved_model or "").strip().lower()
         if not order_from_env and "sort" not in provider_preferences:
-            if requested_lower in {"moonshotai/kimi-k2-fast", "kimi-k2-fast"}:
+            if requested_lower in {"moonshotai/kimi-k2-0905", "kimi-k2-0905"}:
                 provider_preferences["order"] = ["Groq"]
             elif requested_lower in {"moonshotai/kimi-k2.5", "kimi-k2.5", "moonshotai/kimi-k2-5", "kimi-k2-5"}:
                 provider_preferences["order"] = ["Chutes"]

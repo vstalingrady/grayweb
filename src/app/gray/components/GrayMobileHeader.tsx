@@ -1,6 +1,6 @@
 "use client";
 
-import { Menu, MessageCircle, MessageSquarePlus, Zap, CalendarDays } from "lucide-react";
+import { Menu, MessageCircle, MessageSquarePlus, Zap } from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
 
 import styles from "./GrayMobileHeader.module.css";
@@ -8,31 +8,26 @@ import styles from "./GrayMobileHeader.module.css";
 type GrayMobileHeaderProps = {
   isSidebarExpanded: boolean;
   isPulseActive: boolean;
-  activeDashboardTab: "pulse" | "calendar";
-  showCalendarToggle: boolean;
+  hideControls?: boolean;
   streakCount?: number | null;
   onToggleSidebar: () => void;
   onSelectChat: () => void;
   onSelectPulse: () => void;
-  onSelectCalendar: () => void;
   onCreateNewChat: () => void;
 };
 
 export function GrayMobileHeader({
   isSidebarExpanded,
   isPulseActive,
-  activeDashboardTab,
-  showCalendarToggle,
+  hideControls = false,
   streakCount = null,
   onToggleSidebar,
   onSelectChat,
   onSelectPulse,
-  onSelectCalendar,
   onCreateNewChat,
 }: GrayMobileHeaderProps) {
   const { t } = useI18n();
-  const isCalendarActive = isPulseActive && activeDashboardTab === "calendar";
-  const isPulseTabActive = isPulseActive && activeDashboardTab === "pulse";
+  const isPulseTabActive = isPulseActive;
   const showStreak = typeof streakCount === "number" && streakCount > 0;
   const streakLabel = showStreak ? t("{count} day streak", { count: streakCount }) : "";
 
@@ -55,62 +50,53 @@ export function GrayMobileHeader({
         ) : null}
       </div>
 
-      <div className={styles.mobileHeaderToggle}>
-        <div className={styles.mobileToggle}>
-          <button
-            type="button"
-            className={styles.mobileToggleOption}
-            data-active={!isPulseActive ? "true" : "false"}
-            onClick={onSelectChat}
-          >
-            <span className={styles.mobileToggleIcon}>
-              <MessageCircle size={16} />
-            </span>
-            <span>Chat</span>
-          </button>
-          <button
-            type="button"
-            className={styles.mobileToggleOption}
-            data-active={isPulseTabActive ? "true" : "false"}
-            onClick={onSelectPulse}
-          >
-            <span className={styles.mobileToggleIcon}>
-              <Zap size={16} />
-            </span>
-            <span>Pulse</span>
-          </button>
-          {showCalendarToggle ? (
+      {!hideControls ? (
+        <div className={styles.mobileHeaderToggle}>
+          <div className={styles.mobileToggle}>
             <button
               type="button"
               className={styles.mobileToggleOption}
-              data-active={isCalendarActive ? "true" : "false"}
-              onClick={onSelectCalendar}
+              data-active={!isPulseActive ? "true" : "false"}
+              onClick={onSelectChat}
             >
               <span className={styles.mobileToggleIcon}>
-                <CalendarDays size={16} />
+                <MessageCircle size={16} />
               </span>
-              <span>Calendar</span>
+              <span>Chat</span>
             </button>
-          ) : null}
-        </div>
-      </div>
-
-      <div className={styles.mobileHeaderRight}>
-        {showStreak ? (
-          <div className={styles.mobileStreakBadge} aria-label={streakLabel} title={streakLabel}>
-            <span className={styles.mobileStreakCount}>{streakCount}d</span>
+            <button
+              type="button"
+              className={styles.mobileToggleOption}
+              data-active={isPulseTabActive ? "true" : "false"}
+              onClick={onSelectPulse}
+            >
+              <span className={styles.mobileToggleIcon}>
+                <Zap size={16} />
+              </span>
+              <span>Pulse</span>
+            </button>
           </div>
-        ) : null}
-        <button
-          type="button"
-          className={styles.mobileNewChatButton}
-          onClick={onCreateNewChat}
-          aria-label="New chat"
-          title="New chat"
-        >
-          <MessageSquarePlus size={18} />
-        </button>
-      </div>
+        </div>
+      ) : null}
+
+      {!hideControls ? (
+        <div className={styles.mobileHeaderRight}>
+          {showStreak ? (
+            <div className={styles.mobileStreakBadge} aria-label={streakLabel} title={streakLabel}>
+              <span className={styles.mobileStreakCount}>{streakCount}d</span>
+            </div>
+          ) : null}
+          <button
+            type="button"
+            className={styles.mobileNewChatButton}
+            onClick={onCreateNewChat}
+            aria-label="New chat"
+            title="New chat"
+          >
+            <MessageSquarePlus size={18} />
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

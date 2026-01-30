@@ -24,8 +24,8 @@ export default function TermsOfServicePage() {
           <section>
             <h2>1. Acceptance of Terms</h2>
             <p>
-              Gray is provided through Alignment and its affiliates. Accessing or using the Service constitutes your
-              acceptance of these Terms. If you do not agree, discontinue use immediately.
+              Gray is provided through Alignment. Accessing or using the Service constitutes your acceptance of these
+              Terms. If you do not agree, discontinue use immediately.
             </p>
           </section>
 
@@ -105,12 +105,11 @@ export default function TermsOfServicePage() {
             <h2>7. Data Collection and Usage</h2>
             <p>We collect the following data to deliver Gray:</p>
             <BulletList
-              items={[
-                "Account information (name, email, profile details).",
-                "Interactions with Gray (check-ins, goals, messages, patterns).",
-                "Usage analytics (features used, frequency, engagement).",
-                "Device and system metadata.",
-              ]}
+            items={[
+              "Account information (name, email, profile details).",
+              "Interactions with Gray (check-ins, goals, messages, patterns).",
+              "Device and system metadata.",
+            ]}
             />
             <p>We use your data for:</p>
             <ul>

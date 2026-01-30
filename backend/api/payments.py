@@ -341,12 +341,6 @@ async def _create_dodo_checkout(request: PaymentRequest, user: Dict[str, Any]) -
             "always_create_new_customer": True,
         },
     }
-    if discount_rate > 0:
-        discount_code = os.getenv("DODO_REFERRAL_DISCOUNT_CODE")
-        if discount_code:
-            checkout_args["discount_code"] = discount_code
-        else:
-            app_logger.warning("Referral discount configured without Dodo discount code.")
     if email:
         checkout_args["customer"] = {"email": email}
     return_url = _get_dodo_return_url(request)
