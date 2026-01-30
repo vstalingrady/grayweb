@@ -634,6 +634,7 @@ function GrayPageClientInner({
       proactivityDeliveryKeys={deliveredProactivityKeys}
       onUpgradeClick={handleUpgradePlan}
       showUpgradeButton={shouldShowUpgradeButton}
+      hideHeader={isMobileCalendarView}
     />
   );
 

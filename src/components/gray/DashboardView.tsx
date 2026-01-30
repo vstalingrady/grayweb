@@ -80,6 +80,7 @@ type GrayDashboardViewProps = {
   onUpgradeClick?: () => void;
   showUpgradeButton?: boolean;
   isOverlay?: boolean;
+  hideHeader?: boolean;
 };
 
 type DashboardTab = GrayDashboardViewProps["activeTab"];
@@ -115,6 +116,7 @@ export function GrayDashboardView({
   onUpgradeClick,
   showUpgradeButton = false,
   isOverlay = false,
+  hideHeader = false,
 }: GrayDashboardViewProps) {
   const { t } = useI18n();
   const { user } = useUser();
@@ -428,7 +430,7 @@ export function GrayDashboardView({
     />
   );
 
-  const shouldShowPulseHeader = hasCalendarAccess || showUpgradeButton;
+  const shouldShowPulseHeader = (hasCalendarAccess || showUpgradeButton) && !hideHeader;
   const pulseGridProps = {
     currentDate,
     selectedDate: calendarSelectedDate ?? currentDate,
