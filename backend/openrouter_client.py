@@ -650,16 +650,18 @@ class OpenRouterService:
         if sort_pref in {"price", "throughput", "latency"}:
             provider_preferences["sort"] = sort_pref
         order_pref = (os.getenv("OPENROUTER_PROVIDER_ORDER") or "").strip()
-        if order_pref:
-            provider_preferences["order"] = [item.strip() for item in order_pref.split(",") if item.strip()]
+        order_from_env = [item.strip() for item in order_pref.split(",") if item.strip()] if order_pref else []
+        if order_from_env:
+            provider_preferences["order"] = order_from_env
         requested_lower = (requested_model or "").strip().lower()
         resolved_lower = (resolved_model or "").strip().lower()
-        if requested_lower in {"moonshotai/kimi-k2-fast", "kimi-k2-fast"}:
-            provider_preferences["order"] = ["Groq"]
-        elif requested_lower in {"moonshotai/kimi-k2.5", "kimi-k2.5", "moonshotai/kimi-k2-5", "kimi-k2-5"}:
-            provider_preferences["order"] = ["Chutes"]
-        elif "deepseek" in resolved_lower:
-            provider_preferences["order"] = ["DeepSeek"]
+        if not order_from_env and "sort" not in provider_preferences:
+            if requested_lower in {"moonshotai/kimi-k2-fast", "kimi-k2-fast"}:
+                provider_preferences["order"] = ["Groq"]
+            elif requested_lower in {"moonshotai/kimi-k2.5", "kimi-k2.5", "moonshotai/kimi-k2-5", "kimi-k2-5"}:
+                provider_preferences["order"] = ["Chutes"]
+            elif "deepseek" in resolved_lower:
+                provider_preferences["order"] = ["DeepSeek"]
         return provider_preferences
 
     def _convert_tools_to_openai_format(self, tools: Optional[List[Any]]) -> Optional[List[Dict[str, Any]]]:
