@@ -1,6 +1,6 @@
 "use client";
 
-import { Menu, MessageCircle, Zap, CalendarDays } from "lucide-react";
+import { Menu, MessageCircle, MessageSquarePlus, Zap, CalendarDays } from "lucide-react";
 
 import styles from "./GrayMobileHeader.module.css";
 
@@ -13,6 +13,7 @@ type GrayMobileHeaderProps = {
   onSelectChat: () => void;
   onSelectPulse: () => void;
   onSelectCalendar: () => void;
+  onCreateNewChat: () => void;
 };
 
 export function GrayMobileHeader({
@@ -24,6 +25,7 @@ export function GrayMobileHeader({
   onSelectChat,
   onSelectPulse,
   onSelectCalendar,
+  onCreateNewChat,
 }: GrayMobileHeaderProps) {
   const isCalendarActive = isPulseActive && activeDashboardTab === "calendar";
   const isPulseTabActive = isPulseActive && activeDashboardTab === "pulse";
@@ -85,6 +87,18 @@ export function GrayMobileHeader({
             </button>
           ) : null}
         </div>
+      </div>
+
+      <div className={styles.mobileHeaderRight}>
+        <button
+          type="button"
+          className={styles.mobileNewChatButton}
+          onClick={onCreateNewChat}
+          aria-label="New chat"
+          title="New chat"
+        >
+          <MessageSquarePlus size={18} />
+        </button>
       </div>
     </div>
   );

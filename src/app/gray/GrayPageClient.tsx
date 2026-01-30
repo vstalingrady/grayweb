@@ -625,6 +625,33 @@ function GrayPageClientInner({
     }
   }, [collapseAllSidebars, isMobileViewport, pathname, router]);
 
+  const handleMobileHeaderCreateNewChat = useCallback(async () => {
+    try {
+      setMobilePulseActive(false);
+      const session = await createThreadSession();
+      setCurrentChatId(session.id);
+      setThreadComposerDraft("");
+
+      if (shouldUseInlineChat) {
+        setManualViewMode("chat");
+      } else {
+        router.push(`/c/${session.id}`);
+      }
+
+      if (isMobileViewport) {
+        collapseAllSidebars();
+      }
+    } catch (error) {
+      console.error("Failed to create new chat:", error);
+    }
+  }, [
+    collapseAllSidebars,
+    createThreadSession,
+    isMobileViewport,
+    router,
+    shouldUseInlineChat,
+  ]);
+
   const shouldHideDesktopWorkspaceChrome =
     !isMobileViewport &&
     (viewMode === "chat" ||
@@ -1581,6 +1608,7 @@ function GrayPageClientInner({
             onSelectChat={handleMobileHeaderSelectChat}
             onSelectPulse={handleMobileHeaderSelectPulse}
             onSelectCalendar={handleMobileHeaderSelectCalendar}
+            onCreateNewChat={handleMobileHeaderCreateNewChat}
           />
         ) : null}
 

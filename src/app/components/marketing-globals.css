@@ -236,6 +236,136 @@ a:hover {
   color: rgba(255, 255, 255, 0.74);
 }
 
+/* Integrations */
+.integrations-section {
+  position: relative;
+  padding-block: clamp(4.5rem, 9vw, 7rem);
+  background:
+    radial-gradient(120% 120% at 15% 10%, rgba(255, 184, 100, 0.12), transparent 55%),
+    radial-gradient(110% 120% at 80% 0%, rgba(255, 122, 36, 0.14), transparent 60%),
+    linear-gradient(180deg, rgba(5, 6, 12, 0.95), rgba(3, 3, 4, 0.9));
+  overflow: hidden;
+}
+
+.integrations-section::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.04) 50%, transparent 100%),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.03) 0,
+      rgba(255, 255, 255, 0.03) 1px,
+      transparent 1px,
+      transparent 120px
+    );
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.integrations-header {
+  position: relative;
+  max-width: 720px;
+  margin-bottom: clamp(2.5rem, 6vw, 3.5rem);
+  display: grid;
+  gap: 1rem;
+}
+
+.integrations-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.integrations-title {
+  margin: 0;
+  font-size: clamp(2rem, 4.5vw, 3.2rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+}
+
+.integrations-subtitle {
+  margin: 0;
+  font-size: clamp(1rem, 2.2vw, 1.2rem);
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.integrations-grid {
+  position: relative;
+  display: grid;
+  gap: clamp(1.6rem, 3.5vw, 2.4rem);
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.integrations-card {
+  position: relative;
+  padding: clamp(1.4rem, 3vw, 2rem);
+  border-radius: 1.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(120% 140% at 10% -10%, rgba(255, 176, 88, 0.14), rgba(0, 0, 0, 0.7)),
+    linear-gradient(160deg, rgba(10, 10, 14, 0.9), rgba(4, 4, 6, 0.95));
+  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.45);
+}
+
+.integrations-card__header {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.integrations-card__title {
+  margin: 0;
+  font-size: 1.2rem;
+  letter-spacing: -0.01em;
+}
+
+.integrations-card__desc {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.integrations-chip-grid {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.integrations-chip {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(7, 7, 10, 0.65);
+}
+
+.integrations-chip__name {
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+.integrations-chip__detail {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+@media (min-width: 960px) {
+  .integrations-grid {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+}
+
 @media (min-width: 1024px) {
   .grove-mandate-grid {
     grid-template-columns: 1fr;

@@ -124,7 +124,7 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
     },
     {
         id: "autorouter",
-        label: "AutoRouter (openrouter/auto)",
+        label: "Auto",
         icon: Shuffle,
     },
     { id: "everything_in_pathfinder", label: "Everything in Pathfinder", icon: Plus, variant: "inherit" },

@@ -2296,10 +2296,11 @@
   margin-top: -1px;
   background: rgba(255, 255, 255, 0.2);
   border-radius: 2px;
+  opacity: 0;
 }
 
 .resizeHandle:hover::after {
-  background: rgba(255, 255, 255, 0.45);
+  opacity: 0;
 }
 
 .composerHeaderSelect option {
