@@ -18,6 +18,7 @@ const SANITIZED_SEARCH_ENTRY_ALLOWED_TAGS = new Set([
 ]);
 const SANITIZED_SEARCH_ENTRY_ALLOWED_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
 const SANITIZED_SEARCH_ENTRY_ALLOWED_IMAGE_PROTOCOLS = new Set(["http:", "https:", "data:"]);
+const SANITIZED_SEARCH_ENTRY_ALLOWED_IMAGE_HOSTS = ["gstatic.com", "googleusercontent.com"];
 const SANITIZED_SEARCH_ENTRY_DROP_TAGS = new Set([
   "embed",
   "iframe",
@@ -104,6 +105,13 @@ function sanitizeSearchEntryHtml(rawHtml: string): string | null {
           url = null;
         }
         if (!url || !SANITIZED_SEARCH_ENTRY_ALLOWED_IMAGE_PROTOCOLS.has(url.protocol)) {
+          return;
+        }
+        const host = url.hostname.toLowerCase();
+        const allowedHost = SANITIZED_SEARCH_ENTRY_ALLOWED_IMAGE_HOSTS.some(
+          (allowed) => host === allowed || host.endsWith(`.${allowed}`)
+        );
+        if (!allowedHost) {
           return;
         }
         const img = document.createElement("img");

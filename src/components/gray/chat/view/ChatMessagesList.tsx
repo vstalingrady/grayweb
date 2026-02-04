@@ -35,6 +35,7 @@ export type ChatMessagesListProps = {
   handleEditMessage: (messageId: string, newContent: string) => void;
   shouldShowPendingStreamIndicator: boolean;
   scrollAnchorRef: RefObject<HTMLDivElement | null>;
+  isWebSearchInFlight?: boolean;
   reasoningMode?: boolean;
   reasoningSeconds?: number | null;
   isResponding?: boolean;
@@ -61,6 +62,7 @@ export const ChatMessagesList = memo(
     handleEditMessage,
     shouldShowPendingStreamIndicator,
     scrollAnchorRef,
+    isWebSearchInFlight = false,
     reasoningMode = false,
     reasoningSeconds,
     isResponding,
@@ -77,6 +79,8 @@ export const ChatMessagesList = memo(
     const editTextareaRef = useRef<HTMLTextAreaElement | null>(null);
     // Track which message has its action bar expanded (tap to reveal)
     const [expandedMessageId, setExpandedMessageId] = useState<string | null>(null);
+    const shouldShowSearchStatus = Boolean(isWebSearchInFlight && (isResponding || shouldShowPendingStreamIndicator));
+    const searchStatusLabel = shouldShowSearchStatus ? t("Searching") : null;
 
     const startEditing = useCallback((messageId: string, currentContent: string) => {
       setEditingMessageId(messageId);
@@ -215,7 +219,17 @@ export const ChatMessagesList = memo(
                   />
                 ) : (
                   <>
-                    {isAwaitingStreamContent && <GrayStreamingSpinner toolLabel={extractCurrentToolStatus(rawContent, t)} />}
+                    {isAwaitingStreamContent && (() => {
+                      const toolStatus = extractCurrentToolStatus(rawContent, t);
+                      const effectiveLabel = toolStatus ?? searchStatusLabel ?? null;
+                      const isSearchVariant = Boolean(searchStatusLabel && (!toolStatus || toolStatus === searchStatusLabel));
+                      return (
+                        <GrayStreamingSpinner
+                          toolLabel={effectiveLabel}
+                          variant={isSearchVariant ? "search" : "default"}
+                        />
+                      );
+                    })()}
 
                     {assistantReminders.length > 0 ? (
                       <div className={styles.reminderCardList}>
@@ -295,20 +309,26 @@ export const ChatMessagesList = memo(
         {shouldShowPendingStreamIndicator && (
           <div className={styles.chatMessage} data-role="assistant">
             <div className={styles.chatAssistantBlock}>
-              <GrayStreamingSpinner
-                reasoningSeconds={reasoningSeconds}
-                toolLabel={
-                  // Check the very last message in the list if it's an assistant message
+              {(() => {
+                const fallbackToolStatus =
                   messages.length > 0 && messages[messages.length - 1].role === "assistant"
                     ? extractCurrentToolStatus(messages[messages.length - 1].content, t)
-                    : null
-                }
-              />
+                    : null;
+                const effectiveLabel = searchStatusLabel ?? fallbackToolStatus;
+                const isSearchVariant = Boolean(searchStatusLabel && (!fallbackToolStatus || fallbackToolStatus === searchStatusLabel));
+                return (
+                  <GrayStreamingSpinner
+                    reasoningSeconds={reasoningSeconds}
+                    toolLabel={effectiveLabel}
+                    variant={isSearchVariant ? "search" : "default"}
+                  />
+                );
+              })()}
             </div>
           </div>
         )}
 
-        <div ref={scrollAnchorRef} />
+        <div ref={scrollAnchorRef} className={styles.chatScrollAnchor} />
       </div>
     );
   }

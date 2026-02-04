@@ -830,7 +830,7 @@ export function GrayChatView({
         {showIntro ? (
           <div className={styles.chatIntro}>
             {introContent}
-            <div ref={scrollAnchorRef} aria-hidden="true" />
+            <div ref={scrollAnchorRef} aria-hidden="true" className={styles.chatScrollAnchor} />
           </div>
         ) : (
           <ChatMessagesList
@@ -848,6 +848,7 @@ export function GrayChatView({
             handleEditMessage={handleEditMessage}
             shouldShowPendingStreamIndicator={shouldShowPendingStreamIndicator}
             scrollAnchorRef={scrollAnchorRef}
+            isWebSearchInFlight={isWebSearchInFlight}
             reasoningMode={reasoningMode}
             reasoningSeconds={reasoningSeconds}
             isResponding={session?.isResponding}
@@ -879,7 +880,6 @@ export function GrayChatView({
           onAddAttachment={openAttachmentPicker}
           attachmentTray={attachmentTrayNode}
           onPasteFiles={handleAttachmentPaste}
-          isSearchEnabled={isWebSearchInFlight}
         />
       </div>
     </div>

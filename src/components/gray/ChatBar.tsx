@@ -22,7 +22,6 @@ export type GrayChatBarProps = {
   isInputDisabled?: boolean;
   isSubmitting?: boolean;
   onAddAttachment?: () => void;
-  isSearchEnabled?: boolean;
   modelSelector?: React.ReactNode;
   onPasteFiles?: (files: File[]) => void;
   attachmentTray?: React.ReactNode;
@@ -37,7 +36,6 @@ export function GrayChatBar({
   isInputDisabled = false,
   isSubmitting = false,
   onAddAttachment,
-  isSearchEnabled = false,
   modelSelector,
   onPasteFiles,
   attachmentTray,
@@ -123,7 +121,6 @@ export function GrayChatBar({
 
   const isStreaming = isSubmitting;
   const actionLabel = isStreaming ? t("Stop response") : t("Send message");
-  const isWebSearchInFlight = Boolean(isSubmitting && isSearchEnabled);
 
   // Track if textarea is expanded beyond single line
   const [isExpanded, setIsExpanded] = useState(false);
@@ -198,12 +195,6 @@ export function GrayChatBar({
 
         {/* Right group - visible on desktop only */}
         <div className={`${styles.chatBarRightGroup} ${styles.hideOnMobile}`}>
-          {isWebSearchInFlight ? (
-            <div className={styles.chatSearchIndicator} aria-hidden="true">
-              <span>Searching</span>
-              <span className={styles.chatSearchIndicatorBar} />
-            </div>
-          ) : null}
           <div className={styles.chatModelSelectorDirect}>
             {modelSelector}
           </div>
@@ -238,12 +229,6 @@ export function GrayChatBar({
           ) : null}
         </div>
         <div className={styles.chatBarRightGroup}>
-          {isWebSearchInFlight ? (
-            <div className={styles.chatSearchIndicator} aria-hidden="true">
-              <span>Searching</span>
-              <span className={styles.chatSearchIndicatorBar} />
-            </div>
-          ) : null}
           <div className={styles.chatModelSelectorDirect}>
             {modelSelector}
           </div>

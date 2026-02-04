@@ -3,7 +3,6 @@
 import { type ReactNode } from "react";
 import { GrayChatBar, type GrayChatBarProps } from "./ChatBar";
 import styles from "@/components/gray/chat/ChatComposerStyles.module.css";
-import { useChatStore } from "./ChatProvider";
 import { ModelSelector } from "./ModelSelector";
 
 type GrayChatComposerProps = GrayChatBarProps & {
@@ -14,13 +13,8 @@ type GrayChatComposerProps = GrayChatBarProps & {
 const GrayChatComposerBase = ({
   showUnderline = false,
   attachmentTray,
-  isSearchEnabled,
   ...rest
 }: GrayChatComposerProps) => {
-  const { autoWebSearchEnabled, webSearchEnabled } = useChatStore();
-  const resolvedWebSearchEnabled =
-    typeof isSearchEnabled === "boolean" ? isSearchEnabled : autoWebSearchEnabled || webSearchEnabled;
-
   return (
     <div
       className={styles.generalChatComposer}
@@ -30,7 +24,6 @@ const GrayChatComposerBase = ({
       <div className={`${styles.chatBarRow} ${styles.generalChatBarRow}`}>
         <GrayChatBar
           {...rest}
-          isSearchEnabled={resolvedWebSearchEnabled}
           modelSelector={<ModelSelector />}
           attachmentTray={attachmentTray}
         />

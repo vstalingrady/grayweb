@@ -95,7 +95,7 @@ export const extractCurrentToolStatus = (
   const normalized = toolName.toLowerCase();
 
   if (normalized.includes("search") || normalized.includes("web")) {
-    return t("Reading the internet...");
+    return t("Searching");
   }
   if (normalized.includes("image") || normalized.includes("painting")) {
     return t("Painting pixels...");

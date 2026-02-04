@@ -195,6 +195,12 @@
   min-height: 0;
 }
 
+.chatScrollAnchor {
+  width: 100%;
+  height: calc(var(--chat-composer-height, 80px) + var(--gray-chat-bar-clearance, 0px));
+  flex-shrink: 0;
+}
+
 .chatIntro {
   display: flex;
   flex-direction: column;
@@ -757,6 +763,13 @@
   align-items: center;
   vertical-align: middle;
   margin-bottom: -2px;
+}
+
+.chatSearchIcon {
+  width: 16px;
+  height: 16px;
+  color: rgba(255, 255, 255, 0.72);
+  flex-shrink: 0;
 }
 
 .chatStreamingStatus {
@@ -1752,7 +1765,8 @@
   padding: 0;
   /* Preserve bottom padding to push content above chat composer */
   /* Preserve bottom padding to push content above chat composer */
-  padding-bottom: var(--chat-composer-height, 80px);
+  padding-bottom: calc(var(--gray-chat-bar-clearance, 0px));
+  scroll-padding-bottom: calc(var(--gray-chat-bar-clearance, 0px));
   overscroll-behavior-y: contain;
   scroll-behavior: smooth;
   z-index: 0;
@@ -1808,7 +1822,20 @@
 
 @media (max-width: 768px) {
   .chatViewport {
-    padding-bottom: calc(var(--chat-composer-height, 80px) + env(safe-area-inset-bottom, 0px) + 12px) !important;
+    padding-bottom: calc(
+      env(safe-area-inset-bottom, 0px) +
+      var(--gray-chat-bar-clearance, 0px) +
+      12px
+    ) !important;
+    scroll-padding-bottom: calc(
+      env(safe-area-inset-bottom, 0px) +
+      var(--gray-chat-bar-clearance, 0px) +
+      12px
+    ) !important;
+  }
+
+  .chatScrollAnchor {
+    height: calc(var(--chat-composer-height, 80px) + env(safe-area-inset-bottom, 0px));
   }
 
   .chatView {

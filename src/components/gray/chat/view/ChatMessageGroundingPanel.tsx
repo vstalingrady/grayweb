@@ -34,7 +34,7 @@ type SearchEntryResult = {
   thumbnailUrl?: string;
 };
 
-const SEARCH_ENTRY_IMAGE_ATTRS = ["src", "data-src", "data-iurl", "data-srcset", "srcset"];
+const THUMBNAIL_ALLOWED_HOSTS = ["gstatic.com", "googleusercontent.com"];
 
 const normalizeSearchEntryImageUrl = (raw: string | null): string | null => {
   if (!raw) {
@@ -59,90 +59,47 @@ const normalizeSearchEntryImageUrl = (raw: string | null): string | null => {
   }
 };
 
-const extractFirstSrcsetUrl = (raw: string | null): string | null => {
-  if (!raw) {
+const extractImgSrcCandidate = (img: HTMLImageElement): string | null => {
+  const direct = img.getAttribute("src") ?? img.getAttribute("data-src") ?? img.getAttribute("data-iurl");
+  if (direct) {
+    return normalizeSearchEntryImageUrl(direct);
+  }
+  const rawSrcset = img.getAttribute("srcset") ?? img.getAttribute("data-srcset");
+  if (!rawSrcset) {
     return null;
   }
-  const first = raw.split(",")[0]?.trim();
-  if (!first) {
-    return null;
-  }
-  return first.split(/\s+/)[0] ?? null;
+  const firstCandidate = rawSrcset.split(",")[0]?.trim().split(/\s+/)[0] ?? null;
+  return normalizeSearchEntryImageUrl(firstCandidate);
 };
 
-const resolveSearchEntryImageUrl = (img: HTMLImageElement): string | null => {
-  for (const attr of SEARCH_ENTRY_IMAGE_ATTRS) {
-    if (attr.includes("srcset")) {
-      const srcsetValue = img.getAttribute(attr);
-      const candidate = extractFirstSrcsetUrl(srcsetValue);
-      const normalized = normalizeSearchEntryImageUrl(candidate);
-      if (normalized) {
-        return normalized;
-      }
-      continue;
-    }
-
-    const candidate = img.getAttribute(attr);
-    const normalized = normalizeSearchEntryImageUrl(candidate);
-    if (normalized) {
-      return normalized;
-    }
+const isAllowedThumbnailUrl = (url: string): boolean => {
+  if (url.startsWith("data:")) {
+    return true;
   }
-  return null;
-};
-
-const parseNumericAttribute = (value: string | null): number | null => {
-  if (!value) {
-    return null;
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    return THUMBNAIL_ALLOWED_HOSTS.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
+  } catch {
+    return false;
   }
-  const parsed = Number.parseFloat(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
-
-const scoreSearchEntryImage = (img: HTMLImageElement, url: string | null): number => {
-  const width = parseNumericAttribute(img.getAttribute("width"));
-  const height = parseNumericAttribute(img.getAttribute("height"));
-  const area = width && height ? width * height : 1;
-  const smallSide = width && height ? Math.min(width, height) : null;
-  if (smallSide !== null && smallSide < 24) {
-    return 0;
-  }
-  if (url && /(favicon|logo|icon)/i.test(url)) {
-    return area * 0.2;
-  }
-  return area;
 };
 
 const extractSearchEntryThumbnail = (anchor: HTMLAnchorElement): string | null => {
-  const candidates: HTMLImageElement[] = [];
-  const collect = (root: Element | null) => {
-    if (!root) {
-      return;
-    }
-    candidates.push(...Array.from(root.querySelectorAll("img")));
-  };
-  collect(anchor);
-  collect(anchor.parentElement);
-  collect(anchor.parentElement?.parentElement ?? null);
-
-  let bestUrl: string | null = null;
-  let bestScore = 0;
-  const seen = new Set<string>();
-
-  for (const img of candidates) {
-    const url = resolveSearchEntryImageUrl(img);
-    if (!url || seen.has(url)) {
+  const containers = [anchor, anchor.parentElement, anchor.parentElement?.parentElement];
+  for (const container of containers) {
+    if (!container) {
       continue;
     }
-    seen.add(url);
-    const score = scoreSearchEntryImage(img, url);
-    if (score > bestScore) {
-      bestScore = score;
-      bestUrl = url;
+    const images = Array.from(container.querySelectorAll("img"));
+    for (const img of images) {
+      const candidate = extractImgSrcCandidate(img);
+      if (candidate && isAllowedThumbnailUrl(candidate)) {
+        return candidate;
+      }
     }
   }
-
-  return bestUrl;
+  return null;
 };
 
 const normalizeSearchEntryHost = (value?: string | null): string | null => {
@@ -214,6 +171,7 @@ const resolveThumbnailForSource = (
 const handleGroundingImageError = (event: SyntheticEvent<HTMLImageElement>) => {
   const target = event.currentTarget;
   const fallback = target.dataset.fallback;
+  target.parentElement?.removeAttribute("data-image-loaded");
   if (fallback) {
     target.dataset.fallback = "";
     target.dataset.kind = "thumbnail";
@@ -300,11 +258,6 @@ export function ChatMessageGroundingPanel({
   const sanitizedSearchEntryHtml = renderedSearchEntry ? getSanitizedSearchEntryHtml(renderedSearchEntry) : null;
   const searchEntryResults = renderedSearchEntry ? extractSearchEntryResults(renderedSearchEntry) : [];
   const thumbnailIndex = buildSearchEntryThumbnailIndex(searchEntryResults);
-
-  const chunks =
-    metadata?.grounding_chunks ??
-    (metadata as { groundingChunks?: GroundingMetadata["grounding_chunks"] })?.groundingChunks ??
-    [];
 
   const filteredQueries =
     searchQueries.filter((query) => {
