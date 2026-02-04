@@ -93,6 +93,11 @@ def _resolve_web_search_enabled(chat_request: ChatRequest) -> bool:
     if mode == "off":
         return False
     if mode == "auto":
+        # If the client already resolved the decision, honor it to keep
+        # frontend/back-end heuristics aligned. Fall back to server heuristics
+        # only when the client did not supply a boolean.
+        if isinstance(getattr(chat_request, "web_search_enabled", None), bool):
+            return bool(chat_request.web_search_enabled)
         return should_enable_search(chat_request.message)
     return bool(chat_request.web_search_enabled)
 

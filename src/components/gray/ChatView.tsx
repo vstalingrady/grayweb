@@ -382,6 +382,7 @@ export function GrayChatView({
     // Safety: if the UI is no longer streaming, never keep the submit lock held.
     if (!session?.isResponding && !activeStreamingMessageId) {
       isSubmittingRef.current = false;
+      setIsWebSearchInFlight(false);
     }
   }, [activeStreamingMessageId, session?.id, session?.isResponding]);
 

@@ -227,6 +227,28 @@ class AIMessageGenerator:
             except Exception as exc:
                 logger.debug("Failed to load engagement context: %s", exc)
 
+        def _fallback_message(error: Optional[Exception] = None) -> tuple[str, str]:
+            fallback_title = (proactivity.get("label") or "Check-in").strip() or "Check-in"
+            fallback_body = (
+                "Hey! Just checking in. If you want to share what's on your mind today, I'm here."
+            )
+            log_extras = {
+                "event_type": "proactivity_fallback",
+                "user_id": user_id,
+            }
+            if error is not None:
+                logger.warning(
+                    "Proactive message generation failed; using fallback",
+                    extra={**log_extras, "error": str(error)},
+                    exc_info=True,
+                )
+            else:
+                logger.warning(
+                    "Proactive message generation returned empty content; using fallback",
+                    extra=log_extras,
+                )
+            return fallback_title, fallback_body
+
         try:
             preferred_model = None
             if db:
@@ -278,7 +300,7 @@ class AIMessageGenerator:
             )
 
         except Exception as error:
-            raise RuntimeError(f"Proactive message generation failed: {error}") from error
+            return _fallback_message(error)
 
         if isinstance(response, str):
             text = response
@@ -299,7 +321,7 @@ class AIMessageGenerator:
 
         cleaned = (text or "").strip()
         if not cleaned:
-            raise RuntimeError("Proactive message generation returned empty content")
+            return _fallback_message()
 
         # Post-process to avoid stale or hard-coded calendar dates like
         # "Tuesday, November 12th" that can confuse users when the actual date
