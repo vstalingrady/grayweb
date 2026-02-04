@@ -185,8 +185,9 @@ export const useStreamAssistantReply = ({
       const streamingUserId = resolvedUser.id;
       const abortController = new AbortController();
       streamAbortControllerRef.current = abortController;
+      const webSearchMode = webSearchEnabled ? "on" : autoWebSearchEnabled ? "auto" : "off";
       const shouldUseWebSearch =
-        webSearchEnabled || (autoWebSearchEnabled && shouldEnableWebSearch(prompt));
+        webSearchMode === "on" || (webSearchMode === "auto" && shouldEnableWebSearch(prompt));
       const resolveConversationIdUpdate = (candidate?: string | null) => {
         if (!candidate) {
           return session?.conversationId ?? undefined;
@@ -246,6 +247,7 @@ export const useStreamAssistantReply = ({
             attachments: buildAttachmentPayloads(),
             should_generate_title: requestTitleHint,
             web_search_enabled: shouldUseWebSearch,
+            web_search_mode: webSearchMode,
             model: selectedModelId ?? modelTier,
             reasoning_mode: reasoningMode,
             reminders_enabled: remindersEnabled,
@@ -407,6 +409,7 @@ export const useStreamAssistantReply = ({
             context_cache_id: contextCacheId ?? undefined,
             attachments: buildAttachmentPayloads(),
             web_search_enabled: shouldUseWebSearch,
+            web_search_mode: webSearchMode,
             should_generate_title: requestTitleHint,
             model: selectedModelId ?? modelTier,
             reasoning_mode: reasoningMode,

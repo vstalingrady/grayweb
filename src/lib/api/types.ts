@@ -375,6 +375,7 @@ export interface ChatRequest {
   responseMimeType?: string;
   context_cache_id?: number;
   web_search_enabled?: boolean;
+  web_search_mode?: "auto" | "on" | "off";
   web_search_engine?: string;
   web_search_max_results?: number;
   web_search_prompt?: string;

@@ -161,8 +161,9 @@ export const useSendGeneralMessage = ({
       let streamedConversationId: string | null = requestConversationId ?? null;
       const includeWorkspaceContext = shouldAttachWorkspaceContextForSession(generalSession.id, trimmed);
       const contextPayload = includeWorkspaceContext ? workspaceContext ?? undefined : undefined;
+      const webSearchMode = webSearchEnabled ? "on" : autoWebSearchEnabled ? "auto" : "off";
       const shouldUseWebSearch =
-        webSearchEnabled || (autoWebSearchEnabled && shouldEnableWebSearch(trimmed));
+        webSearchMode === "on" || (webSearchMode === "auto" && shouldEnableWebSearch(trimmed));
 
       (async () => {
         let accumulated = "";
@@ -223,6 +224,7 @@ export const useSendGeneralMessage = ({
             attachments: attachmentPayloads,
             should_generate_title: shouldGenerateTitle,
             web_search_enabled: shouldUseWebSearch,
+            web_search_mode: webSearchMode,
             reasoning_mode: reasoningMode,
             reminders_enabled: remindersEnabled,
             model: selectedModelId ?? modelTier,

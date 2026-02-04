@@ -50,6 +50,7 @@ from backend.onboarding_tools import ONBOARDING_TOOLS
 from backend.core.chat_starter_helpers import sse_event as _sse_event
 from backend.core.title_generator import generate_chat_title_inline as _generate_chat_title_inline
 from backend.core.media_attachments import resolve_attachment_metadata
+from backend.core.message_detection import should_enable_search
 from backend.core.streaks import (
     append_streak_context,
     build_engagement_context,
@@ -83,6 +84,17 @@ def _resolve_conversation_memory_enabled(
     if isinstance(request_value, bool):
         return request_value
     return True
+
+
+def _resolve_web_search_enabled(chat_request: ChatRequest) -> bool:
+    mode = getattr(chat_request, "web_search_mode", None)
+    if mode == "on":
+        return True
+    if mode == "off":
+        return False
+    if mode == "auto":
+        return should_enable_search(chat_request.message)
+    return bool(chat_request.web_search_enabled)
 
 def _append_custom_instructions(
     system_prompt: Optional[str],
@@ -530,6 +542,8 @@ async def chat_route(
                 message_id=assistant_message_id,
             )
 
+        search_enabled = _resolve_web_search_enabled(chat_request)
+
         # Generate AI response
         ai_response, grounding_metadata = await _generate_ai_response(
             chat_request.message,
@@ -545,7 +559,7 @@ async def chat_route(
             response_schema=chat_request.response_json_schema,
             response_mime_type=chat_request.response_mime_type,
             context_cache_id=chat_request.context_cache_id,
-            search_enabled=chat_request.web_search_enabled,
+            search_enabled=search_enabled,
             web_search_engine=chat_request.web_search_engine,
             web_search_max_results=chat_request.web_search_max_results,
             web_search_prompt=chat_request.web_search_prompt,
@@ -953,6 +967,8 @@ async def chat_stream_route(
             clear_request_context()
             return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)
 
+        search_enabled = _resolve_web_search_enabled(chat_request)
+
         async def event_stream() -> AsyncGenerator[str, None]:
             nonlocal session_title
             start_time_stream = time.perf_counter()
@@ -977,7 +993,7 @@ async def chat_stream_route(
                     attachments=chat_request.attachments,
                     conversation_id=conversation_id,
                     context_cache_id=chat_request.context_cache_id,
-                    search_enabled=chat_request.web_search_enabled,
+                    search_enabled=search_enabled,
                     web_search_engine=chat_request.web_search_engine,
                     web_search_max_results=chat_request.web_search_max_results,
                     web_search_prompt=chat_request.web_search_prompt,
