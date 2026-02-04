@@ -14,10 +14,12 @@ type GrayChatComposerProps = GrayChatBarProps & {
 const GrayChatComposerBase = ({
   showUnderline = false,
   attachmentTray,
+  isSearchEnabled,
   ...rest
 }: GrayChatComposerProps) => {
   const { autoWebSearchEnabled, webSearchEnabled } = useChatStore();
-  const isWebSearchEnabled = autoWebSearchEnabled || webSearchEnabled;
+  const resolvedWebSearchEnabled =
+    typeof isSearchEnabled === "boolean" ? isSearchEnabled : autoWebSearchEnabled || webSearchEnabled;
 
   return (
     <div
@@ -28,7 +30,7 @@ const GrayChatComposerBase = ({
       <div className={`${styles.chatBarRow} ${styles.generalChatBarRow}`}>
         <GrayChatBar
           {...rest}
-          isSearchEnabled={isWebSearchEnabled}
+          isSearchEnabled={resolvedWebSearchEnabled}
           modelSelector={<ModelSelector />}
           attachmentTray={attachmentTray}
         />

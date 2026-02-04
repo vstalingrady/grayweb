@@ -38,6 +38,7 @@ import { useChatConversationUsage } from "./chat/view/useChatConversationUsage";
 import { useChatViewScroll } from "./chat/view/useChatViewScroll";
 import { useStreamAssistantReply } from "./chat/view/useStreamAssistantReply";
 import { buildGroundingSourceFaviconUrl, type DerivedGroundingSource } from "./chat/view/groundingSources";
+import { shouldEnableWebSearch } from "./chat/utils/webSearchHeuristics";
 
 type GrayChatViewProps = {
   sessionId: string | null;
@@ -187,6 +188,7 @@ export function GrayChatView({
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const isLoadingHistoryRef = useRef(false);
   const activeSessionIdRef = useRef<string | null>(null);
+  const [isWebSearchInFlight, setIsWebSearchInFlight] = useState(false);
 
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const handleAttachmentInputChange = useCallback(
@@ -228,6 +230,23 @@ export function GrayChatView({
     }
     return waitForUser();
   }, [user, waitForUser]);
+
+  const resolveWebSearchForPrompt = useCallback(
+    (prompt: string) => {
+      const trimmed = prompt.trim();
+      if (!trimmed) {
+        return false;
+      }
+      if (webSearchEnabled) {
+        return true;
+      }
+      if (!autoWebSearchEnabled) {
+        return false;
+      }
+      return shouldEnableWebSearch(trimmed);
+    },
+    [autoWebSearchEnabled, webSearchEnabled]
+  );
 
   // Sync the conversation ID ref when session changes
   useEffect(() => {
@@ -449,6 +468,34 @@ export function GrayChatView({
     loadConversationMessages,
   });
 
+  const handleRetryUserMessageWithSearch = useCallback(
+    (messageId: string) => {
+      const message = messages.find((item) => item.id === messageId);
+      if (message?.role === "user") {
+        setIsWebSearchInFlight(resolveWebSearchForPrompt(message.content ?? ""));
+      }
+      handleRetryUserMessage(messageId);
+    },
+    [handleRetryUserMessage, messages, resolveWebSearchForPrompt]
+  );
+
+  const handleRegenerateWithSearch = useCallback(
+    (messageId: string) => {
+      const assistantIndex = messages.findIndex((item) => item.id === messageId);
+      if (assistantIndex !== -1) {
+        let userIndex = assistantIndex - 1;
+        while (userIndex >= 0 && messages[userIndex].role !== "user") {
+          userIndex -= 1;
+        }
+        if (userIndex >= 0) {
+          setIsWebSearchInFlight(resolveWebSearchForPrompt(messages[userIndex].content ?? ""));
+        }
+      }
+      handleRegenerate(messageId);
+    },
+    [handleRegenerate, messages, resolveWebSearchForPrompt]
+  );
+
   useEffect(() => {
     if (!session) {
       if (sessionId) {
@@ -532,6 +579,8 @@ export function GrayChatView({
     // Mark that we've handled this specific user message so we don't re-trigger.
     markAutoStreamTriggered(sessionAutoStreamId, safeLastUserMessage.id);
 
+    setIsWebSearchInFlight(resolveWebSearchForPrompt(safeLastUserMessage.content));
+
     // Set isResponding: true immediately to prevent spinner disappearing during race condition
     // between clearing pendingAutoStream and streamAssistantReply setting isResponding.
     updateSession(sessionAutoStreamId, { pendingAutoStream: false, isResponding: true });
@@ -552,6 +601,7 @@ export function GrayChatView({
     sessionAutoStreamId,
     sessionConversationId,
     sessionPendingAutoStream,
+    resolveWebSearchForPrompt,
     streamAssistantReply,
     updateSession,
     user,
@@ -616,6 +666,7 @@ export function GrayChatView({
       isSubmittingRef.current = false;
       return;
     }
+    setIsWebSearchInFlight(resolveWebSearchForPrompt(content));
 
     // General chat handles its own optimistic append to avoid duplicate user messages
     if (targetSession.scope === "general") {
@@ -797,8 +848,8 @@ export function GrayChatView({
             markdownComponents={markdownComponents}
             getResponseDurationLabel={getResponseDurationLabel}
             handleCopyMessage={handleCopyMessage}
-            handleRegenerate={handleRegenerate}
-            handleRetryUserMessage={handleRetryUserMessage}
+            handleRegenerate={handleRegenerateWithSearch}
+            handleRetryUserMessage={handleRetryUserMessageWithSearch}
             handleDeleteMessage={handleDeleteMessage}
             handleCycleAssistantVariant={handleCycleAssistantVariant}
             handleEditMessage={handleEditMessage}
@@ -835,6 +886,7 @@ export function GrayChatView({
           onAddAttachment={openAttachmentPicker}
           attachmentTray={attachmentTrayNode}
           onPasteFiles={handleAttachmentPaste}
+          isSearchEnabled={isWebSearchInFlight}
         />
       </div>
     </div>
