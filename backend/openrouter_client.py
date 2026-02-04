@@ -39,6 +39,11 @@ def _float_env(name: str, default: float) -> float:
 def _trim(text: Optional[str]) -> Optional[str]:
     if text is None:
         return None
+    if not isinstance(text, str):
+        try:
+            text = str(text)
+        except Exception:
+            return None
     trimmed = text.strip()
     return trimmed if trimmed else None
 
