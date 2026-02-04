@@ -78,6 +78,10 @@ export const shouldEnableWebSearch = (message: string): boolean => {
     return true;
   }
 
+  if (normalized.includes("what happened")) {
+    return true;
+  }
+
   if (/\b(202[3-9]|203[0-9])\b/.test(normalized)) {
     if (["news", "update", "updates", "trending"].some((phrase) => normalized.includes(phrase))) {
       return true;

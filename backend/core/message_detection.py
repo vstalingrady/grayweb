@@ -132,6 +132,10 @@ def should_use_web_search(message: str, model: Optional[str] = None) -> bool:
     if "what's happening" in normalized or "whats happening" in normalized:
         return True
 
+    # Queries about what happened in an ongoing situation often need current info.
+    if "what happened" in normalized:
+        return True
+
     # Simple year-based heuristic: questions that mention a near-future or
     # current year along with "news" or "update" are likely live.
     if re.search(r"\b(202[3-9]|203[0-9])\b", normalized) and any(

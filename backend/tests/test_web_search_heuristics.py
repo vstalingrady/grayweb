@@ -28,3 +28,7 @@ def test_should_enable_search_not_for_research_word():
 
 def test_should_enable_search_not_for_generic_person_question():
     assert main._should_enable_search("Who is Albert Einstein?") is False
+
+
+def test_should_enable_search_for_what_happened():
+    assert main._should_enable_search("What happened in the Epstein files?") is True
