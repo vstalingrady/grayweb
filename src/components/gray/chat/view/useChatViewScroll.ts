@@ -160,28 +160,49 @@ export const useChatViewScroll = ({
   useLayoutEffect(() => {
     const composer = composerDockRef.current;
     const viewport = chatViewportRef.current;
-    if (!composer || !viewport || typeof window === "undefined" || typeof ResizeObserver === "undefined") {
+    if (!composer || !viewport || typeof window === "undefined") {
       return;
     }
 
     let lastHeight = composer.offsetHeight;
     setComposerHeight(lastHeight);
 
+    const applyHeight = (nextHeight: number) => {
+      if (!Number.isFinite(nextHeight)) {
+        return;
+      }
+      const diff = nextHeight - lastHeight;
+      if (diff > 0) {
+        const isNearBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 50;
+        if (isNearBottom) {
+          viewport.scrollTop += diff;
+        }
+      }
+      lastHeight = nextHeight;
+      setComposerHeight((prev) => (prev === nextHeight ? prev : nextHeight));
+    };
+
+    if (typeof ResizeObserver === "undefined") {
+      const handleResize = () => {
+        applyHeight(composer.offsetHeight);
+      };
+      window.addEventListener("resize", handleResize);
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", handleResize);
+      }
+      return () => {
+        window.removeEventListener("resize", handleResize);
+        if (window.visualViewport) {
+          window.visualViewport.removeEventListener("resize", handleResize);
+        }
+      };
+    }
+
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const newHeight =
           entry.borderBoxSize?.[0]?.blockSize ?? entry.target.getBoundingClientRect().height;
-        const diff = newHeight - lastHeight;
-
-        if (diff > 0) {
-          const isNearBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 50;
-          if (isNearBottom) {
-            viewport.scrollTop += diff;
-          }
-        }
-
-        lastHeight = newHeight;
-        setComposerHeight((prev) => (prev === newHeight ? prev : newHeight));
+        applyHeight(newHeight);
       }
     });
 
