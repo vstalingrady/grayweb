@@ -20,6 +20,7 @@ import {
   deriveTitleFromMessage,
   shouldRequestAutoTitleForSession,
 } from "../utils";
+import { shouldEnableWebSearch } from "../utils/webSearchHeuristics";
 
 type UseStreamAssistantReplyOptions = {
   session?: ChatSession;
@@ -184,7 +185,8 @@ export const useStreamAssistantReply = ({
       const streamingUserId = resolvedUser.id;
       const abortController = new AbortController();
       streamAbortControllerRef.current = abortController;
-      const shouldUseWebSearch = autoWebSearchEnabled || webSearchEnabled;
+      const shouldUseWebSearch =
+        webSearchEnabled || (autoWebSearchEnabled && shouldEnableWebSearch(prompt));
       const resolveConversationIdUpdate = (candidate?: string | null) => {
         if (!candidate) {
           return session?.conversationId ?? undefined;

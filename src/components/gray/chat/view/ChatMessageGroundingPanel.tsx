@@ -2,7 +2,11 @@
 
 import styles from "./ChatMessageGroundingPanel.module.css";
 import type { GroundingMetadata } from "@/lib/api";
-import { buildGroundingSourceCards, buildGroundingSourceFaviconUrl } from "./groundingSources";
+import {
+  buildGroundingSourceCards,
+  buildGroundingSourceFaviconUrl,
+  buildGroundingSourceInitials,
+} from "./groundingSources";
 import { getSanitizedSearchEntryHtml } from "./searchEntrySanitizer";
 
 const getRenderedSearchEntry = (candidate: unknown): string | null => {
@@ -19,6 +23,64 @@ const getRenderedSearchEntry = (candidate: unknown): string | null => {
     return camel;
   }
   return null;
+};
+
+type SearchEntryResult = {
+  id: string;
+  title: string;
+  href: string;
+  siteLabel?: string;
+};
+
+const extractSearchEntryResults = (rawHtml: string): SearchEntryResult[] => {
+  if (typeof window === "undefined" || typeof document === "undefined" || typeof DOMParser === "undefined") {
+    return [];
+  }
+  try {
+    const parsed = new DOMParser().parseFromString(rawHtml, "text/html");
+    const anchors = Array.from(parsed.querySelectorAll("a[href]"));
+    const results: SearchEntryResult[] = [];
+    const seen = new Set<string>();
+
+    for (const anchor of anchors) {
+      const href = anchor.getAttribute("href");
+      if (!href) {
+        continue;
+      }
+      let url: URL | null = null;
+      try {
+        url = new URL(href);
+      } catch {
+        url = null;
+      }
+      if (!url || (url.protocol !== "http:" && url.protocol !== "https:")) {
+        continue;
+      }
+      const title = (anchor.textContent ?? "").trim();
+      if (!title) {
+        continue;
+      }
+      const normalizedHref = url.toString();
+      if (seen.has(normalizedHref)) {
+        continue;
+      }
+      seen.add(normalizedHref);
+      const siteLabel = url.hostname.replace(/^www\./i, "");
+      results.push({
+        id: `search-${results.length}`,
+        title,
+        href: normalizedHref,
+        siteLabel: siteLabel || undefined,
+      });
+      if (results.length >= 6) {
+        break;
+      }
+    }
+
+    return results;
+  } catch {
+    return [];
+  }
 };
 
 export type ChatMessageGroundingPanelProps = {
@@ -42,6 +104,7 @@ export function ChatMessageGroundingPanel({
     null;
   const renderedSearchEntry = getRenderedSearchEntry(searchEntryPoint);
   const sanitizedSearchEntryHtml = renderedSearchEntry ? getSanitizedSearchEntryHtml(renderedSearchEntry) : null;
+  const searchEntryResults = renderedSearchEntry ? extractSearchEntryResults(renderedSearchEntry) : [];
 
   const chunks =
     metadata?.grounding_chunks ??
@@ -62,15 +125,74 @@ export function ChatMessageGroundingPanel({
 
   const sourceCards = buildGroundingSourceCards(metadata, t);
 
-  if (sourceCards.length === 0 && filteredQueries.length === 0 && !sanitizedSearchEntryHtml) {
+  if (
+    sourceCards.length === 0 &&
+    filteredQueries.length === 0 &&
+    !sanitizedSearchEntryHtml &&
+    searchEntryResults.length === 0
+  ) {
     return null;
   }
 
   return (
     <div className={styles.chatGroundingPanel}>
-      {sanitizedSearchEntryHtml ? (
+      {searchEntryResults.length > 0 ? (
         <div className={styles.chatGroundingSearchEntryDeck}>
-          <div className={styles.chatGroundingSearchEntry} dangerouslySetInnerHTML={{ __html: sanitizedSearchEntryHtml }} />
+          <div className={styles.chatGroundingSearchResults}>
+            {searchEntryResults.map((result) => {
+              const faviconUrl = buildGroundingSourceFaviconUrl({
+                id: result.id,
+                title: result.title,
+                isReferenced: false,
+                href: result.href,
+                siteLabel: result.siteLabel,
+              });
+              const initials = buildGroundingSourceInitials(result.siteLabel ?? result.title);
+
+              return (
+                <a
+                  key={result.id}
+                  href={result.href}
+                  target="_self"
+                  rel="noreferrer"
+                  className={styles.chatGroundingSearchResult}
+                >
+                  <div className={styles.chatGroundingSearchResultIcon}>
+                    <span className={styles.chatGroundingSearchResultFallback}>{initials}</span>
+                    {faviconUrl ? (
+                      /* eslint-disable-next-line @next/next/no-img-element -- Favicon URLs are arbitrary; prefer a plain img with graceful fallback. */
+                      <img
+                        src={faviconUrl}
+                        alt=""
+                        referrerPolicy="no-referrer"
+                        className={styles.chatGroundingSearchResultFavicon}
+                        onLoad={(event) => {
+                          event.currentTarget.style.opacity = "1";
+                          event.currentTarget.parentElement?.setAttribute("data-image-loaded", "true");
+                        }}
+                        onError={(event) => {
+                          event.currentTarget.style.display = "none";
+                        }}
+                      />
+                    ) : null}
+                  </div>
+                  <div className={styles.chatGroundingSearchResultContent}>
+                    <div className={styles.chatGroundingSearchResultTitle}>{result.title}</div>
+                    {result.siteLabel ? (
+                      <div className={styles.chatGroundingSearchResultSite}>{result.siteLabel}</div>
+                    ) : null}
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      ) : sanitizedSearchEntryHtml ? (
+        <div className={styles.chatGroundingSearchEntryDeck}>
+          <div
+            className={styles.chatGroundingSearchEntry}
+            dangerouslySetInnerHTML={{ __html: sanitizedSearchEntryHtml }}
+          />
         </div>
       ) : null}
       {filteredQueries.length > 0 ? (
@@ -87,10 +209,12 @@ export function ChatMessageGroundingPanel({
           <div className={styles.chatGroundingSourceCards}>
             {sourceCards.map((source) => {
               const faviconUrl = buildGroundingSourceFaviconUrl(source);
+              const initials = buildGroundingSourceInitials(source.siteLabel ?? source.title);
 
               const cardContent = (
                 <>
                   <div className={styles.chatGroundingSourceCardAvatar}>
+                    <span className={styles.chatGroundingSourceCardFallback}>{initials}</span>
                     {faviconUrl ? (
                       /* eslint-disable-next-line @next/next/no-img-element -- Favicon URLs are arbitrary; prefer a plain img with graceful fallback. */
                       <img
@@ -100,6 +224,7 @@ export function ChatMessageGroundingPanel({
                         className={styles.chatGroundingSourceCardFavicon}
                         onLoad={(event) => {
                           event.currentTarget.style.opacity = "1";
+                          event.currentTarget.parentElement?.setAttribute("data-image-loaded", "true");
                         }}
                         onError={(event) => {
                           event.currentTarget.style.display = "none";
