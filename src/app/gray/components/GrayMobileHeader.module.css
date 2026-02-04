@@ -64,6 +64,11 @@
   font-weight: 600;
 }
 
+.mobileStreakIcon {
+  color: #f97316;
+  flex-shrink: 0;
+}
+
 .mobileStreakCount {
   min-width: 1ch;
   text-align: center;

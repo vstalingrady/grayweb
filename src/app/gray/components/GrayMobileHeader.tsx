@@ -1,6 +1,6 @@
 "use client";
 
-import { Menu, MessageCircle, MessageSquarePlus, Zap } from "lucide-react";
+import { Flame, Menu, MessageCircle, MessageSquarePlus, Zap } from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
 
 import styles from "./GrayMobileHeader.module.css";
@@ -83,7 +83,8 @@ export function GrayMobileHeader({
         <div className={styles.mobileHeaderRight}>
           {showStreak ? (
             <div className={styles.mobileStreakBadge} aria-label={streakLabel} title={streakLabel}>
-              <span className={styles.mobileStreakCount}>{streakCount}d</span>
+              <Flame size={14} className={styles.mobileStreakIcon} aria-hidden="true" />
+              <span className={styles.mobileStreakCount}>{streakCount}</span>
             </div>
           ) : null}
           <button
