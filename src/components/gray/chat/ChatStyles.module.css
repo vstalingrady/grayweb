@@ -331,7 +331,7 @@
 .chatBubble {
   position: relative;
   max-width: 100%;
-  padding: 12px 16px;
+  padding: 10px 14px;
   border-radius: 20px;
   border-bottom-left-radius: 4px;
   border-top-right-radius: 3px;
@@ -1856,7 +1856,7 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 18px;
   border-top-right-radius: 5px;
-  padding: 12px 16px;
+  padding: 10px 14px;
   align-self: flex-end;
 }
 
@@ -1948,6 +1948,10 @@
 }
 
 @media (max-width: 768px) {
+  .chatBubble {
+    padding: 8px 12px;
+  }
+
   .chatBubbleUser {
     max-width: 100%;
   }
@@ -1960,5 +1964,6 @@
   .chatEditContainer {
     max-width: 100%;
     width: 100%;
+    padding: 8px 12px;
   }
 }
