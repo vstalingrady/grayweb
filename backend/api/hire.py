@@ -26,6 +26,7 @@ from backend.core.turnstile import verify_turnstile_token
 from backend.database import get_database, hire_applications
 from backend.discord_notifier import notify_hiring_submission
 from backend.time_utils import utcnow
+from backend.auth import get_current_user_optional, require_admin
 
 router = APIRouter(tags=["hiring"])
 _HIRING_RESUME_TOKEN = (os.getenv("HIRING_RESUME_TOKEN") or "").strip()
@@ -89,6 +90,8 @@ def _resume_token_suffix() -> str:
 
 
 def _build_resume_url(*, application_id: int, storage_name: str) -> Optional[str]:
+    if not _HIRING_RESUME_TOKEN:
+        return None
     if STORAGE_BASE_URL:
         return f"{STORAGE_BASE_URL.rstrip('/')}/{storage_name}"
 
@@ -108,6 +111,8 @@ def _build_resume_url(*, application_id: int, storage_name: str) -> Optional[str
 
 
 def _build_resume_preview_url(*, application_id: int) -> Optional[str]:
+    if not _HIRING_RESUME_TOKEN:
+        return None
     backend_api_url = (os.getenv("BACKEND_API_URL") or "").strip()
     if backend_api_url:
         return (
@@ -127,6 +132,25 @@ def _build_resume_preview_url(*, application_id: int) -> Optional[str]:
             f"{application_id}/resume-preview{_resume_token_suffix()}"
         )
     return None
+
+
+def _require_resume_access(
+    token: Optional[str],
+    current_user: Optional[Dict[str, Any]],
+) -> None:
+    if _HIRING_RESUME_TOKEN:
+        if token == _HIRING_RESUME_TOKEN:
+            return
+        if current_user:
+            require_admin(current_user)
+            return
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized resume access.")
+
+    if current_user:
+        require_admin(current_user)
+        return
+
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized resume access.")
 
 
 async def _parse_request_payload(
@@ -170,9 +194,9 @@ async def get_hire_resume(
     application_id: int,
     token: Optional[str] = Query(None),
     db: databases.Database = Depends(get_database),
+    current_user: Optional[Dict[str, Any]] = Depends(get_current_user_optional),
 ) -> FileResponse:
-    if _HIRING_RESUME_TOKEN and token != _HIRING_RESUME_TOKEN:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid resume token.")
+    _require_resume_access(token, current_user)
 
     record = await db.fetch_one(hire_applications.select().where(hire_applications.c.id == application_id))
     if not record or not record["resume_storage_path"]:
@@ -203,9 +227,9 @@ async def get_hire_resume_preview(
     token: Optional[str] = Query(None),
     page: Optional[int] = Query(None, ge=1),
     db: databases.Database = Depends(get_database),
+    current_user: Optional[Dict[str, Any]] = Depends(get_current_user_optional),
 ) -> Response:
-    if _HIRING_RESUME_TOKEN and token != _HIRING_RESUME_TOKEN:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid resume token.")
+    _require_resume_access(token, current_user)
 
     record = await db.fetch_one(hire_applications.select().where(hire_applications.c.id == application_id))
     if not record or not record["resume_storage_path"]:

@@ -220,7 +220,15 @@ function GrayPageClientInner({
     return new Date(year, monthIndex, day, 0, 0, 0, 0);
   }, [nowDateKey]);
   const [mobilePulseActive, setMobilePulseActive] = useState(false);
-  const shouldLoadCalendarData = variant === "dashboard" || mobilePulseActive;
+  const shouldLoadCalendarData =
+    hasCalendarAccess &&
+    (variant === "dashboard" ||
+      mobilePulseActive ||
+      activeNav === "calendar" ||
+      initialDashboardTab === "calendar" ||
+      pathname === "/cal" ||
+      pathname?.startsWith("/cal") ||
+      pathname?.startsWith("/gray/dashboard"));
 
   // Custom Hooks
   const {
@@ -928,7 +936,7 @@ function GrayPageClientInner({
     try {
       const supabase = getSupabaseClient();
       if (supabase) {
-        await supabase.auth.signOut();
+        await supabase.auth.signOut({ scope: "local" });
       }
     } catch (error) {
       console.error("Failed to log out:", error);

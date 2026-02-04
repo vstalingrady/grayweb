@@ -1149,8 +1149,29 @@
   align-items: flex-start;
   gap: 3px;
   flex: 1;
-  justify-content: space-between;
+  justify-content: flex-start;
   min-height: 0;
+}
+
+.eventCardTime {
+  font-size: 0.76rem;
+  line-height: 1.2;
+  color: var(--event-card-time-color, rgba(247, 247, 247, 0.78));
+  letter-spacing: 0.02em;
+}
+
+.eventCardDetails {
+  font-size: 0.68rem;
+  line-height: 1.25;
+  color: var(--event-card-detail-color, rgba(240, 240, 244, 0.78));
+  font-family: var(--font-mono, "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+  max-width: 100%;
 }
 
 .eventCard[data-dragging="true"] {
@@ -1171,6 +1192,14 @@
 }
 
 .eventCard[data-display-hint="line"] .eventCardTitle {
+  display: none;
+}
+
+.eventCard[data-display-hint="line"] .eventCardTime {
+  display: none;
+}
+
+.eventCard[data-display-hint="line"] .eventCardDetails {
   display: none;
 }
 
@@ -1219,6 +1248,14 @@
 }
 
 .eventCard[data-entry-type="reminder"] .eventCardTitle {
+  display: none;
+}
+
+.eventCard[data-entry-type="reminder"] .eventCardTime {
+  display: none;
+}
+
+.eventCard[data-entry-type="reminder"] .eventCardDetails {
   display: none;
 }
 
@@ -1295,7 +1332,7 @@
 }
 
 .eventCard strong {
-  font-size: 0.82rem;
+  font-size: 0.96rem;
   letter-spacing: 0.04em;
   font-weight: 400;
 }

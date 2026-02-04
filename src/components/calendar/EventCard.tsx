@@ -140,6 +140,7 @@ export const EventCard = memo(function EventCard({
     segments.push(timeLabel);
     return segments.join("\n");
   }, [event.title, event.description, timeLabel]);
+  const detailText = event.description?.trim();
 
   const backgroundColor = event.color || DEFAULT_CARD_COLOR;
   const luminance = getRelativeLuminance(parseColorString(backgroundColor));
@@ -217,6 +218,10 @@ export const EventCard = memo(function EventCard({
         >
           {event.title}
         </strong>
+        <span className={styles.eventCardTime}>{timeLabel}</span>
+        {detailText ? (
+          <span className={styles.eventCardDetails}>{detailText}</span>
+        ) : null}
       </div>
       {taskAction ? (
         <button

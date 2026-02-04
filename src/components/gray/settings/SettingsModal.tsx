@@ -417,7 +417,7 @@ export function SettingsModal({
     try {
       const supabase = getSupabaseClient();
       if (supabase) {
-        await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: "local" });
       }
     } catch (error) {
       console.error("Failed to log out:", error);

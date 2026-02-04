@@ -132,6 +132,15 @@ def should_use_web_search(message: str, model: Optional[str] = None) -> bool:
     if "what's happening" in normalized or "whats happening" in normalized:
         return True
 
+    # Explicit slang guard: Messages that are just slang terms (or simple "what is X")
+    # should be handled by the LLM's internal knowledge to avoid robotic "According to..." headers.
+    _SLANG_GUARD_TERMS = {
+        "wtf", "idk", "omg", "lol", "lmfao", "rofl", "ngl", "tbh", "brb", "gtg",
+        "what is wtf", "what does wtf mean",
+    }
+    if normalized in _SLANG_GUARD_TERMS:
+        return False
+
     # Queries about what happened in an ongoing situation often need current info.
     if "what happened" in normalized:
         return True

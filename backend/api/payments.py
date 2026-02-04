@@ -5,6 +5,7 @@ This router handles payment charge creation and webhook notifications.
 """
 
 import os
+from urllib.parse import urlparse
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -18,6 +19,7 @@ from backend.database import database, transactions, users, get_database
 from backend.auth import get_current_user
 from backend.time_utils import utcnow
 from backend.compat_imports import row_get as _row_get
+from backend.core.cors_utils import IS_PRODUCTION
 
 router = APIRouter(tags=["payments"])
 
@@ -127,15 +129,91 @@ def _resolve_plan_from_product_id(product_id: Optional[str]) -> Tuple[Optional[s
     return None, None
 
 
+def _normalize_allowed_host(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    if "://" in cleaned:
+        parsed = urlparse(cleaned)
+        host = parsed.hostname
+    else:
+        host = cleaned
+    if not host:
+        return None
+    return host.lower().strip(".")
+
+
+def _get_allowed_return_hosts() -> List[str]:
+    hosts = set()
+    for candidate in (
+        os.getenv("DODO_PAYMENTS_RETURN_URL"),
+        os.getenv("NEXT_PUBLIC_SITE_URL"),
+        os.getenv("SITE_URL"),
+    ):
+        host = _normalize_allowed_host(candidate)
+        if host:
+            hosts.add(host)
+
+    allowlist = os.getenv("DODO_RETURN_URL_ALLOWLIST")
+    if allowlist:
+        for entry in allowlist.split(","):
+            host = _normalize_allowed_host(entry)
+            if host:
+                hosts.add(host)
+    return sorted(hosts)
+
+
+def _is_allowed_host(host: str, allowed_hosts: List[str]) -> bool:
+    normalized = host.lower().strip(".")
+    for allowed in allowed_hosts:
+        if normalized == allowed or normalized.endswith(f".{allowed}"):
+            return True
+    return False
+
+
+def _normalize_return_url(raw: Optional[str]) -> Optional[str]:
+    if not raw:
+        return None
+    candidate = raw.strip()
+    if not candidate:
+        return None
+
+    if candidate.startswith("/"):
+        site_url = os.getenv("NEXT_PUBLIC_SITE_URL") or os.getenv("SITE_URL")
+        if not site_url:
+            return None
+        candidate = f"{site_url.rstrip('/')}{candidate}"
+
+    parsed = urlparse(candidate)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return None
+    if IS_PRODUCTION and parsed.scheme != "https":
+        return None
+
+    allowed_hosts = _get_allowed_return_hosts()
+    if not allowed_hosts or not _is_allowed_host(parsed.hostname, allowed_hosts):
+        return None
+
+    return parsed._replace(fragment="").geturl()
+
+
 def _get_dodo_return_url(request: PaymentRequest) -> Optional[str]:
     if request.return_url:
-        return request.return_url
+        normalized = _normalize_return_url(request.return_url)
+        if not normalized:
+            raise HTTPException(status_code=400, detail="Invalid return_url")
+        return normalized
     env_return = os.getenv("DODO_PAYMENTS_RETURN_URL")
     if env_return:
-        return env_return
+        normalized = _normalize_return_url(env_return)
+        if normalized:
+            return normalized
+        return None
     site_url = os.getenv("NEXT_PUBLIC_SITE_URL") or os.getenv("SITE_URL")
     if site_url:
-        return f"{site_url.rstrip('/')}/payment/finish"
+        return _normalize_return_url(f"{site_url.rstrip('/')}/payment/finish")
     return None
 
 

@@ -32,3 +32,9 @@ def test_should_enable_search_not_for_generic_person_question():
 
 def test_should_enable_search_for_what_happened():
     assert main._should_enable_search("What happened in the Epstein files?") is True
+
+
+def test_should_enable_search_slang_guard():
+    assert main._should_enable_search("wtf") is False
+    assert main._should_enable_search("what is wtf") is False
+    assert main._should_enable_search("idk") is False

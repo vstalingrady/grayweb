@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import zipfile
 from dataclasses import dataclass
@@ -11,6 +12,10 @@ MAX_FACTS = 80
 MAX_TITLES = 30
 MAX_SUMMARY_CHARS = 8000
 MAX_MESSAGE_SCAN = 20000
+MAX_ZIP_BYTES = int(os.getenv("CHATGPT_IMPORT_MAX_ZIP_BYTES", "26214400"))  # 25MB
+MAX_ZIP_UNCOMPRESSED_BYTES = int(os.getenv("CHATGPT_IMPORT_MAX_UNCOMPRESSED_BYTES", "104857600"))  # 100MB
+MAX_ZIP_FILES = int(os.getenv("CHATGPT_IMPORT_MAX_FILES", "500"))
+MAX_JSON_BYTES = int(os.getenv("CHATGPT_IMPORT_MAX_JSON_BYTES", "52428800"))  # 50MB
 
 IGNORED_TITLES = {
     "",
@@ -71,6 +76,17 @@ def _extract_text_from_part(part: Any) -> str:
         return text.strip() if isinstance(text, str) else ""
     text = part.get("text")
     return text.strip() if isinstance(text, str) else ""
+
+
+def _safe_file_size(file_obj) -> Optional[int]:
+    try:
+        current = file_obj.tell()
+        file_obj.seek(0, os.SEEK_END)
+        size = file_obj.tell()
+        file_obj.seek(current)
+        return size
+    except Exception:
+        return None
 
 
 def _extract_text_from_content(content: Dict[str, Any]) -> str:
@@ -187,14 +203,29 @@ def _build_summary(
 
 
 def extract_chatgpt_memory_from_zip(file_obj) -> ChatGptMemorySummary:
+    file_size = _safe_file_size(file_obj)
+    if file_size is not None and file_size > MAX_ZIP_BYTES:
+        raise ValueError("Zip file too large.")
     file_obj.seek(0)
     try:
         with zipfile.ZipFile(file_obj) as archive:
+            infos = archive.infolist()
+            if len(infos) > MAX_ZIP_FILES:
+                raise ValueError("Zip file contains too many files.")
+            total_uncompressed = sum(info.file_size for info in infos)
+            if total_uncompressed > MAX_ZIP_UNCOMPRESSED_BYTES:
+                raise ValueError("Zip file uncompressed size too large.")
             try:
-                with archive.open("conversations.json") as handle:
-                    conversations = json.load(handle)
+                info = archive.getinfo("conversations.json")
             except KeyError as exc:
                 raise ValueError("Missing conversations.json in the export zip.") from exc
+            if info.file_size > MAX_JSON_BYTES:
+                raise ValueError("conversations.json is too large.")
+            with archive.open(info) as handle:
+                raw = handle.read(MAX_JSON_BYTES + 1)
+            if len(raw) > MAX_JSON_BYTES:
+                raise ValueError("conversations.json is too large.")
+            conversations = json.loads(raw)
     except zipfile.BadZipFile as exc:
         raise ValueError("Invalid zip file.") from exc
     except json.JSONDecodeError as exc:

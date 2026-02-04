@@ -74,8 +74,10 @@ export const buildGroundingSourceFaviconUrl = (source: DerivedGroundingSource): 
     const normalized = normalizeFaviconCandidate(candidate);
     if (normalized) {
       try {
-        const encoded = encodeURIComponent(normalized);
-        return `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=${encoded}&size=32`;
+        // Extract domain from the normalized URL for the S2 favicon API
+        const url = new URL(normalized);
+        const domain = encodeURIComponent(url.hostname);
+        return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
       } catch {
         continue;
       }
