@@ -129,7 +129,7 @@ export function DashboardPulseGrid({
 
   return (
     <div className={styles.dashboardGridFinal}>
-      {/* EVENTS CARD FIRST */}
+      {/* EVENTS + PLANS + HABITS */}
       <div className={`${styles.dashboardCard} ${styles.dashboardCardEvents}`}>
         <div className={styles.dashboardCardHeader}>
           <h2 className={styles.dashboardCardTitle}>{t("Events")}</h2>
@@ -145,27 +145,106 @@ export function DashboardPulseGrid({
           )}
         </div>
         <div className={styles.dashboardCardBody}>
-          <div className={styles.dashboardEventList}>
-            {eventsForDay.length > 0 ? (
-              eventsForDay.map((event) => (
-                <div key={event.id} className={styles.dashboardEventItem}>
-                  <div
-                    className={styles.dashboardEventMarker}
-                    style={{ backgroundColor: event.color }}
-                  />
-                  <div className={styles.dashboardEventInfo}>
-                    <div className={styles.dashboardEventTitle}>{event.title}</div>
-                    <div className={styles.dashboardEventTime}>
-                      {event.start.toLocaleTimeString(undefined, {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+          <div className={styles.dashboardSection}>
+            <div className={styles.dashboardEventList}>
+              {eventsForDay.length > 0 ? (
+                eventsForDay.map((event) => (
+                  <div key={event.id} className={styles.dashboardEventItem}>
+                    <div
+                      className={styles.dashboardEventMarker}
+                      style={{ backgroundColor: event.color }}
+                    />
+                    <div className={styles.dashboardEventInfo}>
+                      <div className={styles.dashboardEventTitle}>{event.title}</div>
+                      <div className={styles.dashboardEventTime}>
+                        {event.start.toLocaleTimeString(undefined, {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </div>
+                      {event.description?.trim() ? (
+                        <div className={styles.dashboardEventDetails}>
+                          {event.description.trim()}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
-                </div>
-              ))
+                ))
+              ) : (
+                <div className={styles.dashboardListEmpty}>{t("No events for today")}</div>
+              )}
+            </div>
+          </div>
+
+          <div className={styles.dashboardSection}>
+            <div className={styles.dashboardSectionHeader}>
+              <h3 className={styles.dashboardSectionTitle}>{t("Plans")}</h3>
+            </div>
+            {visiblePlans.length > 0 ? (
+              <ul className={styles.dashboardList}>
+                {visiblePlans.map((plan) => (
+                  <li key={plan.id} className={styles.dashboardListItem}>
+                    <button
+                      type="button"
+                      className={styles.planCheckboxButton}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onTogglePlan?.(plan.id);
+                      }}
+                      aria-label={
+                        plan.completed ? t("Mark plan as incomplete") : t("Mark plan as complete")
+                      }
+                    >
+                      {plan.completed ? <Check size={14} /> : <Square size={14} color="#52525b" />}
+                    </button>
+                    <span
+                      className={styles.dashboardTaskLabel}
+                      data-completed={plan.completed ? "true" : "false"}
+                    >
+                      {plan.label}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             ) : (
-              <div className={styles.dashboardListEmpty}>{t("No events for today")}</div>
+              <div className={styles.dashboardListEmpty}>{t("No active plans")}</div>
+            )}
+          </div>
+
+          <div className={styles.dashboardSection}>
+            <div className={styles.dashboardSectionHeader}>
+              <h3 className={styles.dashboardSectionTitle}>{t("Habits")}</h3>
+            </div>
+            {visibleHabits.length > 0 ? (
+              <ul className={styles.dashboardList}>
+                {visibleHabits.map((habit) => (
+                  <li key={habit.id} className={styles.dashboardListItem}>
+                    <button
+                      type="button"
+                      className={styles.planCheckboxButton}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onToggleHabit?.(habit.id);
+                      }}
+                      aria-label={
+                        habit.completed ? t("Mark habit as incomplete") : t("Mark habit as complete")
+                      }
+                    >
+                      {habit.completed ? <Check size={14} /> : <Square size={14} color="#52525b" />}
+                    </button>
+                    <span
+                      className={styles.dashboardTaskLabel}
+                      data-completed={habit.completed ? "true" : "false"}
+                    >
+                      {habit.label}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className={styles.dashboardListEmpty}>{t("No active habits")}</div>
             )}
           </div>
         </div>
@@ -220,89 +299,6 @@ export function DashboardPulseGrid({
         </div>
       </div>
 
-      {/* PLANS CARD */}
-      <div className={`${styles.dashboardCard} ${styles.dashboardCardPlans}`}>
-        <div className={styles.dashboardCardHeader}>
-          <div className={`${styles.dashboardCardIcon} ${styles.iconBlue}`}>
-            <Square size={16} />
-          </div>
-          <h2 className={styles.dashboardCardTitle}>{t("Plans")}</h2>
-        </div>
-        <div className={styles.dashboardCardBody}>
-          {visiblePlans.length > 0 ? (
-            <ul className={styles.dashboardList}>
-              {visiblePlans.map((plan) => (
-                <li key={plan.id} className={styles.dashboardListItem}>
-                  <button
-                    type="button"
-                    className={styles.planCheckboxButton}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      onTogglePlan?.(plan.id);
-                    }}
-                    aria-label={
-                      plan.completed ? t("Mark plan as incomplete") : t("Mark plan as complete")
-                    }
-                  >
-                    {plan.completed ? <Check size={14} /> : <Square size={14} color="#52525b" />}
-                  </button>
-                  <span
-                    className={styles.dashboardTaskLabel}
-                    data-completed={plan.completed ? "true" : "false"}
-                  >
-                    {plan.label}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className={styles.dashboardListEmpty}>{t("No active plans")}</div>
-          )}
-        </div>
-      </div>
-
-      {/* HABITS CARD */}
-      <div className={`${styles.dashboardCard} ${styles.dashboardCardHabits}`}>
-        <div className={styles.dashboardCardHeader}>
-          <div className={`${styles.dashboardCardIcon} ${styles.iconCyan}`}>
-            <Check size={16} />
-          </div>
-          <h2 className={styles.dashboardCardTitle}>{t("Habits")}</h2>
-        </div>
-        <div className={styles.dashboardCardBody}>
-          {visibleHabits.length > 0 ? (
-            <ul className={styles.dashboardList}>
-              {visibleHabits.map((habit) => (
-                <li key={habit.id} className={styles.dashboardListItem}>
-                  <button
-                    type="button"
-                    className={styles.planCheckboxButton}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      onToggleHabit?.(habit.id);
-                    }}
-                    aria-label={
-                      habit.completed ? t("Mark habit as incomplete") : t("Mark habit as complete")
-                    }
-                  >
-                    {habit.completed ? <Check size={14} /> : <Square size={14} color="#52525b" />}
-                  </button>
-                  <span
-                    className={styles.dashboardTaskLabel}
-                    data-completed={habit.completed ? "true" : "false"}
-                  >
-                    {habit.label}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className={styles.dashboardListEmpty}>{t("No active habits")}</div>
-          )}
-        </div>
-      </div>
     </div>
   );
 }

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple
 from zoneinfo import ZoneInfo
 
-from backend.core.env_helpers import _parse_utc_offset
+from backend.core.env_helpers import _parse_utc_offset, ensure_datetime_value
 from backend.time_utils import utcnow
 
 
@@ -27,6 +27,19 @@ def _ensure_aware_utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
+def _coerce_datetime(value: Any) -> Optional[datetime]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return ensure_datetime_value(value)
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
 def _local_date_key(now_utc: datetime, tz_label: Optional[str]) -> str:
     tzinfo = _resolve_timezone(tz_label)
     local_dt = _ensure_aware_utc(now_utc).astimezone(tzinfo)
@@ -46,12 +59,8 @@ def build_streak_context(streak_count: Optional[int], streak_last_date: Optional
     """Build a short context line for the AI about user engagement streak."""
     if not streak_count or streak_count <= 0:
         return None
-    last_label = streak_last_date or "unknown"
-    return (
-        "Engagement: current streak is "
-        f"{streak_count} day(s). Last active date: {last_label}. "
-        "Encourage the user to maintain the streak and return daily."
-    )
+    _ = streak_last_date
+    return f"🔥 {int(streak_count)}"
 
 
 def _format_local_date(value: Optional[datetime], tz_label: Optional[str]) -> Optional[str]:
@@ -69,12 +78,13 @@ def compute_inactivity_days(
     timezone_label: Optional[str] = None,
 ) -> Tuple[Optional[int], Optional[str]]:
     """Return (days_since_last_message, last_message_local_date)."""
-    if not last_message_at:
+    last_value = _coerce_datetime(last_message_at)
+    if not last_value:
         return None, None
-    now = now_utc or utcnow()
+    now = _coerce_datetime(now_utc) or utcnow()
     tzinfo = _resolve_timezone(timezone_label)
     now_local_date = _ensure_aware_utc(now).astimezone(tzinfo).date()
-    last_local_date = _ensure_aware_utc(last_message_at).astimezone(tzinfo).date()
+    last_local_date = _ensure_aware_utc(last_value).astimezone(tzinfo).date()
     return (now_local_date - last_local_date).days, last_local_date.isoformat()
 
 
@@ -87,8 +97,8 @@ def build_engagement_context(
 ) -> Optional[str]:
     parts = []
     if streak_count and streak_count > 0:
-        last_label = streak_last_date or "unknown"
-        parts.append(f"Current streak: {int(streak_count)} day(s). Last active date: {last_label}.")
+        _ = streak_last_date
+        parts.append(f"🔥 {int(streak_count)}")
     if inactivity_days is not None:
         if inactivity_days <= 0:
             parts.append("User is active today.")
@@ -102,6 +112,8 @@ def build_engagement_context(
         parts.append(f"Ignored proactive check-ins: {int(ignored_pings)} in the last 30 days.")
     if not parts:
         return None
+    if len(parts) == 1 and parts[0].startswith("🔥"):
+        return parts[0]
     parts.append("Be supportive and encouraging; avoid guilt or pressure.")
     return "Engagement notes: " + " ".join(parts)
 
@@ -144,7 +156,7 @@ async def load_last_user_message_at(db, user_id: int) -> Optional[datetime]:
             {"user_id": user_id},
         )
         if general_row:
-            last_general = general_row["created_at"]
+            last_general = _coerce_datetime(general_row["created_at"])
     except Exception:
         last_general = None
 
@@ -161,7 +173,7 @@ async def load_last_user_message_at(db, user_id: int) -> Optional[datetime]:
             {"user_id": user_id},
         )
         if thread_row:
-            last_thread = thread_row["created_at"]
+            last_thread = _coerce_datetime(thread_row["created_at"])
     except Exception:
         last_thread = None
 

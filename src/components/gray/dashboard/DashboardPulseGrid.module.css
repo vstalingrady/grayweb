@@ -2,11 +2,10 @@
   display: grid;
   width: 100%;
   grid-template-columns: 320px 1fr;
-  grid-template-rows: min-content min-content 1fr;
+  grid-template-rows: min-content 1fr;
   grid-template-areas:
     "header header"
-    "events plans"
-    "proactivity habits";
+    "proactivity events";
   gap: 24px;
   padding: 24px 0;
   max-width: 1400px;
@@ -149,6 +148,18 @@
   letter-spacing: 0.06em;
 }
 
+.dashboardEventDetails {
+  color: rgba(226, 232, 240, 0.75);
+  font-size: 0.75rem;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+}
+
 .dashboardCardHeader {
   display: flex;
   flex-direction: row;
@@ -192,6 +203,33 @@
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+}
+
+.dashboardSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dashboardSection + .dashboardSection {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dashboardSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dashboardSectionTitle {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.48);
 }
 
 .dashboardButtonNeutral {
@@ -395,14 +433,17 @@
     grid-template-areas:
       "header"
       "events"
-      "proactivity"
-      "plans"
-      "habits";
+      "proactivity";
     padding: 16px 0;
   }
 
   .dashboardHeaderArea {
     padding: 18px;
+  }
+
+  .dashboardHeaderArea,
+  .dashboardCard {
+    box-shadow: none;
   }
 
   .dashboardCard {
