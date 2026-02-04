@@ -1,8 +1,6 @@
 "use client";
 
 import styles from "@/components/gray/chat/ChatComposerStyles.module.css";
-import pageStyles from "@/app/gray/GrayPageClient.module.css";
-import Image from "next/image";
 import { Paperclip, ArrowUpRight } from "lucide-react";
 import {
   type ClipboardEvent as ReactClipboardEvent,
@@ -201,14 +199,10 @@ export function GrayChatBar({
         {/* Right group - visible on desktop only */}
         <div className={`${styles.chatBarRightGroup} ${styles.hideOnMobile}`}>
           {isWebSearchInFlight ? (
-            <Image
-              src="/grayaiwhitenotspinning.svg"
-              alt=""
-              aria-hidden="true"
-              width={18}
-              height={18}
-              className={`${styles.chatSearchSpinner} ${pageStyles.uiIconImage}`}
-            />
+            <div className={styles.chatSearchIndicator} aria-hidden="true">
+              <span>Searching</span>
+              <span className={styles.chatSearchIndicatorBar} />
+            </div>
           ) : null}
           <div className={styles.chatModelSelectorDirect}>
             {modelSelector}
@@ -245,14 +239,10 @@ export function GrayChatBar({
         </div>
         <div className={styles.chatBarRightGroup}>
           {isWebSearchInFlight ? (
-            <Image
-              src="/grayaiwhitenotspinning.svg"
-              alt=""
-              aria-hidden="true"
-              width={18}
-              height={18}
-              className={`${styles.chatSearchSpinner} ${pageStyles.uiIconImage}`}
-            />
+            <div className={styles.chatSearchIndicator} aria-hidden="true">
+              <span>Searching</span>
+              <span className={styles.chatSearchIndicatorBar} />
+            </div>
           ) : null}
           <div className={styles.chatModelSelectorDirect}>
             {modelSelector}

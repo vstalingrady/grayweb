@@ -28,9 +28,63 @@
   opacity: 0.9;
 }
 
+@keyframes chatSearchSweep {
+  0% {
+    transform: translateX(-60%);
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(220%);
+    opacity: 0.2;
+  }
+}
+
+.chatSearchIndicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.chatSearchIndicatorBar {
+  position: relative;
+  width: 44px;
+  height: 4px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.chatSearchIndicatorBar::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 35%;
+  height: 100%;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.8);
+  animation: chatSearchSweep 1.2s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chatSearchSpinner {
     animation: none;
+  }
+  .chatSearchIndicatorBar::after {
+    animation: none;
+    opacity: 0.6;
+    transform: translateX(0);
   }
 }
 
