@@ -7,6 +7,7 @@ const SANITIZED_SEARCH_ENTRY_ALLOWED_TAGS = new Set([
   "code",
   "div",
   "em",
+  "img",
   "i",
   "li",
   "ol",
@@ -16,6 +17,7 @@ const SANITIZED_SEARCH_ENTRY_ALLOWED_TAGS = new Set([
   "ul",
 ]);
 const SANITIZED_SEARCH_ENTRY_ALLOWED_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
+const SANITIZED_SEARCH_ENTRY_ALLOWED_IMAGE_PROTOCOLS = new Set(["http:", "https:", "data:"]);
 const SANITIZED_SEARCH_ENTRY_DROP_TAGS = new Set([
   "embed",
   "iframe",
@@ -62,6 +64,66 @@ function sanitizeSearchEntryHtml(rawHtml: string): string | null {
 
       if (tagName === "br") {
         parent.appendChild(document.createElement("br"));
+        return;
+      }
+
+      if (tagName === "img") {
+        const rawSrc =
+          element.getAttribute("src") ??
+          element.getAttribute("data-src") ??
+          element.getAttribute("data-iurl");
+        const rawSrcset = element.getAttribute("data-srcset") ?? element.getAttribute("srcset");
+        const rawCandidate = rawSrc ?? rawSrcset?.split(",")[0]?.trim().split(/\s+/)[0] ?? null;
+        if (!rawCandidate) {
+          return;
+        }
+        let url: URL | null = null;
+        let src = rawCandidate.trim();
+        if (!src) {
+          return;
+        }
+        if (src.startsWith("data:")) {
+          const img = document.createElement("img");
+          img.setAttribute("src", src);
+          img.setAttribute("loading", "lazy");
+          img.setAttribute("decoding", "async");
+          img.setAttribute("referrerpolicy", "no-referrer");
+          const alt = element.getAttribute("alt");
+          if (alt) {
+            img.setAttribute("alt", alt);
+          }
+          parent.appendChild(img);
+          return;
+        }
+        if (src.startsWith("//")) {
+          src = `https:${src}`;
+        }
+        try {
+          url = new URL(src);
+        } catch {
+          url = null;
+        }
+        if (!url || !SANITIZED_SEARCH_ENTRY_ALLOWED_IMAGE_PROTOCOLS.has(url.protocol)) {
+          return;
+        }
+        const img = document.createElement("img");
+        img.setAttribute("src", url.toString());
+        img.setAttribute("loading", "lazy");
+        img.setAttribute("decoding", "async");
+        img.setAttribute("referrerpolicy", "no-referrer");
+        const alt = element.getAttribute("alt");
+        if (alt) {
+          img.setAttribute("alt", alt);
+        }
+        const width = element.getAttribute("width");
+        if (width) {
+          img.setAttribute("width", width);
+        }
+        const height = element.getAttribute("height");
+        if (height) {
+          img.setAttribute("height", height);
+        }
+        parent.appendChild(img);
         return;
       }
 
@@ -131,4 +193,3 @@ export function getSanitizedSearchEntryHtml(rawHtml: string): string | null {
   }
   return sanitized;
 }
-

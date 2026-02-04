@@ -1,5 +1,6 @@
 "use client";
 
+import type { SyntheticEvent } from "react";
 import styles from "./ChatMessageGroundingPanel.module.css";
 import type { GroundingMetadata } from "@/lib/api";
 import {
@@ -30,6 +31,197 @@ type SearchEntryResult = {
   title: string;
   href: string;
   siteLabel?: string;
+  thumbnailUrl?: string;
+};
+
+const SEARCH_ENTRY_IMAGE_ATTRS = ["src", "data-src", "data-iurl", "data-srcset", "srcset"];
+
+const normalizeSearchEntryImageUrl = (raw: string | null): string | null => {
+  if (!raw) {
+    return null;
+  }
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (trimmed.startsWith("data:")) {
+    return trimmed;
+  }
+  const candidate = trimmed.startsWith("//") ? `https:${trimmed}` : trimmed;
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+};
+
+const extractFirstSrcsetUrl = (raw: string | null): string | null => {
+  if (!raw) {
+    return null;
+  }
+  const first = raw.split(",")[0]?.trim();
+  if (!first) {
+    return null;
+  }
+  return first.split(/\s+/)[0] ?? null;
+};
+
+const resolveSearchEntryImageUrl = (img: HTMLImageElement): string | null => {
+  for (const attr of SEARCH_ENTRY_IMAGE_ATTRS) {
+    if (attr.includes("srcset")) {
+      const srcsetValue = img.getAttribute(attr);
+      const candidate = extractFirstSrcsetUrl(srcsetValue);
+      const normalized = normalizeSearchEntryImageUrl(candidate);
+      if (normalized) {
+        return normalized;
+      }
+      continue;
+    }
+
+    const candidate = img.getAttribute(attr);
+    const normalized = normalizeSearchEntryImageUrl(candidate);
+    if (normalized) {
+      return normalized;
+    }
+  }
+  return null;
+};
+
+const parseNumericAttribute = (value: string | null): number | null => {
+  if (!value) {
+    return null;
+  }
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const scoreSearchEntryImage = (img: HTMLImageElement, url: string | null): number => {
+  const width = parseNumericAttribute(img.getAttribute("width"));
+  const height = parseNumericAttribute(img.getAttribute("height"));
+  const area = width && height ? width * height : 1;
+  const smallSide = width && height ? Math.min(width, height) : null;
+  if (smallSide !== null && smallSide < 24) {
+    return 0;
+  }
+  if (url && /(favicon|logo|icon)/i.test(url)) {
+    return area * 0.2;
+  }
+  return area;
+};
+
+const extractSearchEntryThumbnail = (anchor: HTMLAnchorElement): string | null => {
+  const candidates: HTMLImageElement[] = [];
+  const collect = (root: Element | null) => {
+    if (!root) {
+      return;
+    }
+    candidates.push(...Array.from(root.querySelectorAll("img")));
+  };
+  collect(anchor);
+  collect(anchor.parentElement);
+  collect(anchor.parentElement?.parentElement ?? null);
+
+  let bestUrl: string | null = null;
+  let bestScore = 0;
+  const seen = new Set<string>();
+
+  for (const img of candidates) {
+    const url = resolveSearchEntryImageUrl(img);
+    if (!url || seen.has(url)) {
+      continue;
+    }
+    seen.add(url);
+    const score = scoreSearchEntryImage(img, url);
+    if (score > bestScore) {
+      bestScore = score;
+      bestUrl = url;
+    }
+  }
+
+  return bestUrl;
+};
+
+const normalizeSearchEntryHost = (value?: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+  const normalized = value.trim().replace(/^www\./i, "");
+  return normalized ? normalized.toLowerCase() : null;
+};
+
+const buildSearchEntryThumbnailIndex = (results: SearchEntryResult[]) => {
+  const byHref = new Map<string, string>();
+  const byHost = new Map<string, string>();
+
+  for (const result of results) {
+    if (!result.thumbnailUrl) {
+      continue;
+    }
+    byHref.set(result.href, result.thumbnailUrl);
+    const host = normalizeSearchEntryHost(result.siteLabel);
+    if (host && !byHost.has(host)) {
+      byHost.set(host, result.thumbnailUrl);
+      continue;
+    }
+    if (!host) {
+      try {
+        const parsed = new URL(result.href);
+        const resolvedHost = normalizeSearchEntryHost(parsed.hostname);
+        if (resolvedHost && !byHost.has(resolvedHost)) {
+          byHost.set(resolvedHost, result.thumbnailUrl);
+        }
+      } catch {
+        // Ignore malformed URLs; href is already sanitized.
+      }
+    }
+  }
+
+  return { byHref, byHost };
+};
+
+const resolveThumbnailForSource = (
+  source: ReturnType<typeof buildGroundingSourceCards>[number],
+  thumbnailIndex: ReturnType<typeof buildSearchEntryThumbnailIndex>
+): string | undefined => {
+  if (source.href) {
+    const directMatch = thumbnailIndex.byHref.get(source.href);
+    if (directMatch) {
+      return directMatch;
+    }
+  }
+  const host = normalizeSearchEntryHost(source.siteLabel);
+  if (host) {
+    return thumbnailIndex.byHost.get(host);
+  }
+  if (source.href) {
+    try {
+      const parsed = new URL(source.href);
+      const parsedHost = normalizeSearchEntryHost(parsed.hostname);
+      if (parsedHost) {
+        return thumbnailIndex.byHost.get(parsedHost);
+      }
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+};
+
+const handleGroundingImageError = (event: SyntheticEvent<HTMLImageElement>) => {
+  const target = event.currentTarget;
+  const fallback = target.dataset.fallback;
+  if (fallback) {
+    target.dataset.fallback = "";
+    target.dataset.kind = "thumbnail";
+    target.parentElement?.setAttribute("data-kind", "thumbnail");
+    target.src = fallback;
+    return;
+  }
+  target.style.display = "none";
 };
 
 const extractSearchEntryResults = (rawHtml: string): SearchEntryResult[] => {
@@ -66,11 +258,13 @@ const extractSearchEntryResults = (rawHtml: string): SearchEntryResult[] => {
       }
       seen.add(normalizedHref);
       const siteLabel = url.hostname.replace(/^www\./i, "");
+      const thumbnailUrl = extractSearchEntryThumbnail(anchor);
       results.push({
         id: `search-${results.length}`,
         title,
         href: normalizedHref,
         siteLabel: siteLabel || undefined,
+        thumbnailUrl: thumbnailUrl ?? undefined,
       });
       if (results.length >= 6) {
         break;
@@ -105,6 +299,7 @@ export function ChatMessageGroundingPanel({
   const renderedSearchEntry = getRenderedSearchEntry(searchEntryPoint);
   const sanitizedSearchEntryHtml = renderedSearchEntry ? getSanitizedSearchEntryHtml(renderedSearchEntry) : null;
   const searchEntryResults = renderedSearchEntry ? extractSearchEntryResults(renderedSearchEntry) : [];
+  const thumbnailIndex = buildSearchEntryThumbnailIndex(searchEntryResults);
 
   const chunks =
     metadata?.grounding_chunks ??
@@ -147,6 +342,9 @@ export function ChatMessageGroundingPanel({
                 href: result.href,
                 siteLabel: result.siteLabel,
               });
+              const thumbnailUrl = result.thumbnailUrl;
+              const imageUrl = faviconUrl ?? thumbnailUrl;
+              const imageKind = faviconUrl ? "favicon" : "thumbnail";
               const initials = buildGroundingSourceInitials(result.siteLabel ?? result.title);
 
               return (
@@ -157,22 +355,22 @@ export function ChatMessageGroundingPanel({
                   rel="noreferrer"
                   className={styles.chatGroundingSearchResult}
                 >
-                  <div className={styles.chatGroundingSearchResultIcon}>
+                  <div className={styles.chatGroundingSearchResultIcon} data-kind={imageKind}>
                     <span className={styles.chatGroundingSearchResultFallback}>{initials}</span>
-                    {faviconUrl ? (
+                    {imageUrl ? (
                       /* eslint-disable-next-line @next/next/no-img-element -- Favicon URLs are arbitrary; prefer a plain img with graceful fallback. */
                       <img
-                        src={faviconUrl}
+                        src={imageUrl}
                         alt=""
                         referrerPolicy="no-referrer"
-                        className={styles.chatGroundingSearchResultFavicon}
+                        className={styles.chatGroundingSearchResultImage}
+                        data-kind={imageKind}
+                        data-fallback={faviconUrl && thumbnailUrl ? thumbnailUrl : undefined}
                         onLoad={(event) => {
                           event.currentTarget.style.opacity = "1";
                           event.currentTarget.parentElement?.setAttribute("data-image-loaded", "true");
                         }}
-                        onError={(event) => {
-                          event.currentTarget.style.display = "none";
-                        }}
+                        onError={handleGroundingImageError}
                       />
                     ) : null}
                   </div>
@@ -209,26 +407,29 @@ export function ChatMessageGroundingPanel({
           <div className={styles.chatGroundingSourceCards}>
             {sourceCards.map((source) => {
               const faviconUrl = buildGroundingSourceFaviconUrl(source);
+              const thumbnailUrl = resolveThumbnailForSource(source, thumbnailIndex);
+              const imageUrl = faviconUrl ?? thumbnailUrl;
+              const imageKind = faviconUrl ? "favicon" : "thumbnail";
               const initials = buildGroundingSourceInitials(source.siteLabel ?? source.title);
 
               const cardContent = (
                 <>
-                  <div className={styles.chatGroundingSourceCardAvatar}>
+                  <div className={styles.chatGroundingSourceCardAvatar} data-kind={imageKind}>
                     <span className={styles.chatGroundingSourceCardFallback}>{initials}</span>
-                    {faviconUrl ? (
+                    {imageUrl ? (
                       /* eslint-disable-next-line @next/next/no-img-element -- Favicon URLs are arbitrary; prefer a plain img with graceful fallback. */
                       <img
-                        src={faviconUrl}
+                        src={imageUrl}
                         alt=""
                         referrerPolicy="no-referrer"
-                        className={styles.chatGroundingSourceCardFavicon}
+                        className={styles.chatGroundingSourceCardImage}
+                        data-kind={imageKind}
+                        data-fallback={faviconUrl && thumbnailUrl ? thumbnailUrl : undefined}
                         onLoad={(event) => {
                           event.currentTarget.style.opacity = "1";
                           event.currentTarget.parentElement?.setAttribute("data-image-loaded", "true");
                         }}
-                        onError={(event) => {
-                          event.currentTarget.style.display = "none";
-                        }}
+                        onError={handleGroundingImageError}
                       />
                     ) : null}
                   </div>

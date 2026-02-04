@@ -21,7 +21,7 @@ import {
   resolveClientTimezone,
   shouldRequestAutoTitleForSession,
 } from "../utils";
-import { shouldEnableWebSearch } from "../utils/webSearchHeuristics";
+import { resolveWebSearchDecision } from "../utils/webSearchHeuristics";
 import { extractGrayRemindersFromText, resolveAssistantReminders } from "../reminderUtils";
 
 declare global {
@@ -161,9 +161,11 @@ export const useSendGeneralMessage = ({
       let streamedConversationId: string | null = requestConversationId ?? null;
       const includeWorkspaceContext = shouldAttachWorkspaceContextForSession(generalSession.id, trimmed);
       const contextPayload = includeWorkspaceContext ? workspaceContext ?? undefined : undefined;
-      const webSearchMode = webSearchEnabled ? "on" : autoWebSearchEnabled ? "auto" : "off";
-      const shouldUseWebSearch =
-        webSearchMode === "on" || (webSearchMode === "auto" && shouldEnableWebSearch(trimmed));
+      const { enabled: shouldUseWebSearch, mode: webSearchMode } = resolveWebSearchDecision({
+        message: trimmed,
+        autoEnabled: autoWebSearchEnabled,
+        manualEnabled: webSearchEnabled,
+      });
 
       (async () => {
         let accumulated = "";

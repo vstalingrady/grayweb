@@ -38,7 +38,7 @@ import { useChatConversationUsage } from "./chat/view/useChatConversationUsage";
 import { useChatViewScroll } from "./chat/view/useChatViewScroll";
 import { useStreamAssistantReply } from "./chat/view/useStreamAssistantReply";
 import { buildGroundingSourceFaviconUrl, type DerivedGroundingSource } from "./chat/view/groundingSources";
-import { shouldEnableWebSearch } from "./chat/utils/webSearchHeuristics";
+import { resolveWebSearchDecision } from "./chat/utils/webSearchHeuristics";
 
 type GrayChatViewProps = {
   sessionId: string | null;
@@ -232,19 +232,12 @@ export function GrayChatView({
   }, [user, waitForUser]);
 
   const resolveWebSearchForPrompt = useCallback(
-    (prompt: string) => {
-      const trimmed = prompt.trim();
-      if (!trimmed) {
-        return false;
-      }
-      if (webSearchEnabled) {
-        return true;
-      }
-      if (!autoWebSearchEnabled) {
-        return false;
-      }
-      return shouldEnableWebSearch(trimmed);
-    },
+    (prompt: string) =>
+      resolveWebSearchDecision({
+        message: prompt,
+        autoEnabled: autoWebSearchEnabled,
+        manualEnabled: webSearchEnabled,
+      }).enabled,
     [autoWebSearchEnabled, webSearchEnabled]
   );
 
