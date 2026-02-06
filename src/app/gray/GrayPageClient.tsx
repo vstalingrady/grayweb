@@ -219,7 +219,13 @@ function GrayPageClientInner({
 
     return new Date(year, monthIndex, day, 0, 0, 0, 0);
   }, [nowDateKey]);
-  const [mobilePulseActive, setMobilePulseActive] = useState(false);
+  const [mobilePulseActive, setMobilePulseActive] = useState(() => {
+    return (
+      pathname === "/pulse" ||
+      pathname?.startsWith("/cal") ||
+      pathname?.startsWith("/gray/dashboard")
+    );
+  });
   const shouldLoadCalendarData =
     hasCalendarAccess &&
     (variant === "dashboard" ||
@@ -242,6 +248,17 @@ function GrayPageClientInner({
     setCalendarEvents,
     refreshPlansAndHabits
   } = useWorkspaceData(userId, variant, hasCalendarAccess, shouldLoadCalendarData);
+
+  useEffect(() => {
+    const shouldAutoActivate =
+      pathname === "/pulse" ||
+      pathname?.startsWith("/cal") ||
+      pathname?.startsWith("/gray/dashboard");
+
+    if (isMobileViewport && shouldAutoActivate && !mobilePulseActive) {
+      setMobilePulseActive(true);
+    }
+  }, [isMobileViewport, mobilePulseActive, pathname]);
 
   const {
     proactivity,

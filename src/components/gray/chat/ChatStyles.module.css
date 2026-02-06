@@ -913,6 +913,8 @@
 }
 
 .chatThinkingInline {
+  --thinking-icon-size: 14px;
+  --thinking-line-width: 3px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -945,6 +947,8 @@
 
 .chatThinkingIcon {
   flex-shrink: 0;
+  width: var(--thinking-icon-size);
+  height: var(--thinking-icon-size);
   opacity: 0.6;
 }
 
@@ -970,9 +974,9 @@
 
 .chatThinkingQuote {
   margin: 0;
-  margin-left: 7px;
+  margin-left: calc((var(--thinking-icon-size) - var(--thinking-line-width)) / 2);
   padding: 0 0 0 12px;
-  border-left: 3px solid rgba(255, 255, 255, 0.22);
+  border-left: var(--thinking-line-width) solid rgba(255, 255, 255, 0.22);
   background: transparent;
 }
 
