@@ -99,23 +99,6 @@ export const useModelPreferences = ({
 
     if (selectedModelId === "moonshotai/kimi-k2-fast") {
       setSelectedModelId("moonshotai/kimi-k2-0905");
-      if (reasoningMode) {
-        setReasoningMode(false);
-      }
-      return;
-    }
-
-    if (selectedModelId === "moonshotai/kimi-k2-0905") {
-      if (reasoningMode) {
-        setReasoningMode(false);
-      }
-      return;
-    }
-
-    if (selectedModelId === "moonshotai/kimi-k2.5") {
-      if (!reasoningMode) {
-        setReasoningMode(true);
-      }
       return;
     }
 
@@ -126,8 +109,12 @@ export const useModelPreferences = ({
       if (selectedModelId) {
         setSelectedModelId(null);
       }
-      if (reasoningMode) {
-        setReasoningMode(false);
+      return;
+    }
+
+    if (selectedModelId === "moonshotai/kimi-k2.5") {
+      if (!reasoningMode) {
+        setReasoningMode(true);
       }
       return;
     }

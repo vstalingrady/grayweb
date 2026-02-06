@@ -919,6 +919,21 @@
   margin: 6px 0 14px;
 }
 
+.chatThinkingInlineToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 .chatThinkingInlineMeta {
   display: inline-flex;
   align-items: center;
@@ -939,10 +954,25 @@
   letter-spacing: 0.01em;
 }
 
+.chatThinkingChevron {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.46);
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.chatThinkingInlineToggle:hover .chatThinkingChevron {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.chatThinkingChevronExpanded {
+  transform: rotate(180deg);
+}
+
 .chatThinkingQuote {
   margin: 0;
-  padding: 0 0 0 10px;
-  border-left: 2px solid rgba(255, 255, 255, 0.2);
+  margin-left: 7px;
+  padding: 0 0 0 12px;
+  border-left: 3px solid rgba(255, 255, 255, 0.22);
   background: transparent;
 }
 

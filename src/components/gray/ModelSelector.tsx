@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useCallback, useMemo, useState, useRef, useEffect } from "react";
-import { Zap, Lock, ChevronUp, Grid, ChevronRight, Check, Brain, Settings, Box, Calendar } from "lucide-react";
+import { Zap, Lock, ChevronUp, Grid, ChevronRight, Check, Atom, Settings, Box, Calendar } from "lucide-react";
 import Image from "next/image";
 import { useChatStore } from "@/components/gray/ChatProvider";
 import { useUser } from "@/contexts/UserContext";
@@ -51,14 +51,10 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
 
   const currentTier = normalizePlanTier(user);
   const currentLevel = PLAN_TIER_LEVELS[currentTier] ?? 0;
-  const isReasoningLocked = currentTier === "scout";
-  const isReasoningLockedByModel =
-    selectedModelId === "moonshotai/kimi-k2-0905" ||
-    selectedModelId === "moonshotai/kimi-k2.5";
   const isReasoningForcedOn = selectedModelId === "moonshotai/kimi-k2.5";
   const shouldShowReasoningLevel =
     selectedModelId === "google/gemini-3-pro-preview" || modelTier === "pro";
-  const isReasoningToggleDisabled = isReasoningLocked || isReasoningLockedByModel;
+  const isReasoningToggleDisabled = isReasoningForcedOn;
   const reasoningDescription = isReasoningForcedOn
     ? null
     : shouldShowReasoningLevel
@@ -304,7 +300,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                       type="button"
                     >
                       <div className={styles.itemIconWrapper}>
-                        <Brain size={16} className={reasoningMode ? styles.glowIcon : ""} />
+                        <Atom size={16} />
                       </div>
                       <div className={styles.itemInfo}>
                         <div className={styles.itemLabel}>{t("Reasoning")}</div>

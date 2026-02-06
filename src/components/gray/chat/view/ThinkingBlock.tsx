@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Atom } from "lucide-react";
+import { Atom, ChevronDown } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import styles from "@/components/gray/chat/ChatStyles.module.css";
@@ -24,6 +24,7 @@ export const ThinkingBlock = ({
   isStreamingMessage?: boolean;
 }) => {
   const { t } = useI18n();
+  const [isExpanded, setIsExpanded] = useState(false);
   const [liveSeconds, setLiveSeconds] = useState(0);
 
   // Live timer effect - updates every 100ms while actively thinking
@@ -69,21 +70,35 @@ export const ThinkingBlock = ({
 
   return (
     <div className={styles.chatThinkingInline}>
-      <div className={styles.chatThinkingInlineMeta}>
-        <Atom size={14} className={styles.chatThinkingIcon} />
-        <span className={styles.chatThinkingLabel}>{timeLabel || t("Thinking")}</span>
-      </div>
-      <blockquote className={styles.chatThinkingQuote}>
-        <div className={styles.chatThinkingContent}>
-          <ReactMarkdown
-            components={markdownComponents}
-            remarkPlugins={MARKDOWN_PLUGINS}
-            rehypePlugins={[[rehypeKatex, { strict: false }]]}
-          >
-            {content}
-          </ReactMarkdown>
+      <button
+        type="button"
+        className={styles.chatThinkingInlineToggle}
+        onClick={() => setIsExpanded((prev) => !prev)}
+        aria-expanded={isExpanded}
+        aria-label={isExpanded ? t("Collapse reasoning") : t("Expand reasoning")}
+      >
+        <div className={styles.chatThinkingInlineMeta}>
+          <Atom size={14} className={styles.chatThinkingIcon} />
+          <span className={styles.chatThinkingLabel}>{timeLabel || t("Thinking")}</span>
         </div>
-      </blockquote>
+        <ChevronDown
+          size={14}
+          className={`${styles.chatThinkingChevron} ${isExpanded ? styles.chatThinkingChevronExpanded : ""}`}
+        />
+      </button>
+      {isExpanded ? (
+        <blockquote className={styles.chatThinkingQuote}>
+          <div className={styles.chatThinkingContent}>
+            <ReactMarkdown
+              components={markdownComponents}
+              remarkPlugins={MARKDOWN_PLUGINS}
+              rehypePlugins={[[rehypeKatex, { strict: false }]]}
+            >
+              {content}
+            </ReactMarkdown>
+          </div>
+        </blockquote>
+      ) : null}
     </div>
   );
 };
