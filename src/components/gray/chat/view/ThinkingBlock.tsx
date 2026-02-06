@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Brain, ChevronDown } from "lucide-react";
+import { Atom } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import styles from "@/components/gray/chat/ChatStyles.module.css";
@@ -24,7 +24,6 @@ export const ThinkingBlock = ({
   isStreamingMessage?: boolean;
 }) => {
   const { t } = useI18n();
-  const [isExpanded, setIsExpanded] = useState(false);
   const [liveSeconds, setLiveSeconds] = useState(0);
 
   // Live timer effect - updates every 100ms while actively thinking
@@ -69,25 +68,12 @@ export const ThinkingBlock = ({
   }, [isActivelyThinking, thinkingStartTime, liveSeconds, reasoningSeconds, isStreamingMessage, t, formatTime]);
 
   return (
-    <div className={styles.chatThinkingBlock} data-expanded={isExpanded ? "true" : "false"}>
-      <button
-        type="button"
-        className={styles.chatThinkingHeader}
-        onClick={() => setIsExpanded(!isExpanded)}
-        aria-expanded={isExpanded}
-        aria-label={isExpanded ? t("Collapse reasoning") : t("Expand reasoning")}
-      >
-        <Brain size={14} className={styles.chatThinkingIcon} />
+    <div className={styles.chatThinkingInline}>
+      <div className={styles.chatThinkingInlineMeta}>
+        <Atom size={14} className={styles.chatThinkingIcon} />
         <span className={styles.chatThinkingLabel}>{timeLabel || t("Thinking")}</span>
-        <ChevronDown
-          size={14}
-          className={`${styles.chatThinkingChevron} ${isExpanded ? styles.chatThinkingChevronExpanded : ""}`}
-        />
-      </button>
-      <div
-        className={`${styles.chatThinkingBody} ${isExpanded ? styles.chatThinkingBodyExpanded : ""}`}
-        aria-hidden={!isExpanded}
-      >
+      </div>
+      <blockquote className={styles.chatThinkingQuote}>
         <div className={styles.chatThinkingContent}>
           <ReactMarkdown
             components={markdownComponents}
@@ -97,7 +83,7 @@ export const ThinkingBlock = ({
             {content}
           </ReactMarkdown>
         </div>
-      </div>
+      </blockquote>
     </div>
   );
 };

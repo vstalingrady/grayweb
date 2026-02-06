@@ -186,13 +186,20 @@ export const ChatMessagesList = memo(
           const toolStatusFromStream = message.toolStatus?.name ? resolveToolStatusInfo(message.toolStatus.name, t) : null;
           const parsedToolStatus = extractCurrentToolStatus(rawContent, t);
           const toolStatusInfo = toolStatusFromStream ?? parsedToolStatus;
-          const spinnerLabel = toolStatusInfo?.label ?? searchStatusLabel ?? null;
           const spinnerVariant = toolStatusInfo?.variant ?? (searchStatusLabel ? "search" : "default");
           const spinnerSearchQuery =
             typeof message.toolStatus?.query === "string" && message.toolStatus.query.trim().length > 0
               ? message.toolStatus.query.trim()
               : null;
-          const shouldShowInlineToolStatus = isStreamingAssistantMessage && Boolean(toolStatusInfo) && !isAwaitingStreamContent;
+          const isCompletedSearchStatus = Boolean(
+            !isStreamingAssistantMessage &&
+              message.toolStatus?.status === "end" &&
+              spinnerVariant === "search" &&
+              spinnerSearchQuery
+          );
+          const spinnerLabel = isCompletedSearchStatus ? t("Searched") : toolStatusInfo?.label ?? searchStatusLabel ?? null;
+          const shouldShowInlineToolStatus =
+            (isStreamingAssistantMessage && Boolean(toolStatusInfo) && !isAwaitingStreamContent) || isCompletedSearchStatus;
           const messageTimestampIso =
             typeof message.createdAt === "number" && Number.isFinite(message.createdAt)
               ? new Date(message.createdAt).toISOString()
@@ -304,7 +311,7 @@ export const ChatMessagesList = memo(
                     {isAssistant && message.groundingMetadata ? (
                       <ChatMessageGroundingPanel
                         metadata={message.groundingMetadata}
-                        messageId={message.id}
+                        _messageId={message.id}
                         previousUserMessageLowercase={(() => {
                           for (let index = messageIndex - 1; index >= 0; index -= 1) {
                             const prior = messages[index];

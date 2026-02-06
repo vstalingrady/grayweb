@@ -5,6 +5,7 @@ and provides a unified execution interface.
 """
 from __future__ import annotations
 
+import inspect
 from typing import Any, Dict, Optional, TYPE_CHECKING
 from fastapi import HTTPException
 
@@ -31,6 +32,43 @@ def _get_onboarding_handler():
 def _get_supermemory_handlers():
     from backend.core import supermemory_handlers
     return supermemory_handlers
+
+
+def _extract_search_query_from_args(args: Any) -> str:
+    if not isinstance(args, dict):
+        return ""
+    for key in ("query", "q", "search", "search_query", "searchQuery"):
+        value = args.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    queries = args.get("queries")
+    if isinstance(queries, list):
+        for item in queries:
+            if isinstance(item, str) and item.strip():
+                return item.strip()
+    return ""
+
+
+def _make_web_search_no_results_handler(source: str):
+    async def _handler(_u: int, args: Dict[str, Any], _d: Any, _pt: Optional[str] = None) -> Dict[str, Any]:
+        return {
+            "query": _extract_search_query_from_args(args),
+            "results": [],
+            "status": "no_results",
+            "source": source,
+        }
+
+    return _handler
+
+
+def _build_unsupported_web_search_payload(function_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "query": _extract_search_query_from_args(args),
+        "results": [],
+        "status": "no_results",
+        "source": function_name,
+    }
+
 
 def get_tool_handlers(
     user_timezone: Optional[str] = None,
@@ -70,26 +108,11 @@ def get_tool_handlers(
         "supermemory_search": lambda u, a, d, pt=None: supermemory.supermemory_search_tool(u, a, d, plan_tier=pt),
         "supermemory_forget": lambda u, a, d, pt=None: supermemory.supermemory_forget_tool(u, a, d, plan_tier=pt),
         "supermemory_profile": lambda u, a, d, pt=None: supermemory.supermemory_profile_tool(u, a, d, plan_tier=pt),
-        # OpenRouter web search tool calls (when plugins are enabled).
-        # Return a neutral payload to avoid 501s if the provider emits these tool names.
-        "default_web_search": lambda _u, a, _d, _pt=None: {
-            "query": (a.get("query") or a.get("q") or a.get("search") or ""),
-            "results": [],
-            "status": "no_results",
-            "source": "default_web_search",
-        },
-        "web_search": lambda _u, a, _d, _pt=None: {
-            "query": (a.get("query") or a.get("q") or a.get("search") or ""),
-            "results": [],
-            "status": "no_results",
-            "source": "web_search",
-        },
-        "tavily_search": lambda _u, a, _d, _pt=None: {
-            "query": (a.get("query") or a.get("q") or a.get("search") or ""),
-            "results": [],
-            "status": "no_results",
-            "source": "tavily_search",
-        },
+        # OpenRouter/provider web-search tool names (plugin compatibility shims).
+        "default_web_search": _make_web_search_no_results_handler("default_web_search"),
+        "web_search": _make_web_search_no_results_handler("web_search"),
+        "tavily_search": _make_web_search_no_results_handler("tavily_search"),
+        "mshtools-web_search": _make_web_search_no_results_handler("mshtools-web_search"),
     }
 
 
@@ -102,10 +125,16 @@ async def execute_function_call(
     plan_tier: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Execute a single function call from the AI."""
+    args = function_call.args or {}
+    normalized_name = (function_call.name or "").strip().lower()
     handlers = get_tool_handlers(user_timezone, proactivity_scheduler)
     handler = handlers.get(function_call.name)
     if not handler:
+        if normalized_name and ("search" in normalized_name or "web" in normalized_name):
+            return _build_unsupported_web_search_payload(function_call.name, args)
         raise HTTPException(status_code=501, detail=f"Unsupported function: {function_call.name}")
 
-    args = function_call.args or {}
-    return await handler(user_id, args, db, plan_tier)
+    result = handler(user_id, args, db, plan_tier)
+    if inspect.isawaitable(result):
+        return await result
+    return result

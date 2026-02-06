@@ -912,85 +912,46 @@
   min-width: 0;
 }
 
-.chatThinkingBlock {
+.chatThinkingInline {
   display: flex;
   flex-direction: column;
-  margin: 8px 0 16px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  overflow: hidden;
-  transition: background 0.2s ease;
+  gap: 6px;
+  margin: 6px 0 14px;
 }
 
-.chatThinkingBlock:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.chatThinkingHeader {
-  display: flex;
+.chatThinkingInlineMeta {
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 14px;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.65);
-  cursor: pointer;
-  user-select: none;
-  border: none;
-  background: transparent;
-  width: 100%;
-  text-align: left;
-  transition: color 0.15s ease;
-}
-
-.chatThinkingHeader:hover {
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 255, 255, 0.58);
 }
 
 .chatThinkingIcon {
   flex-shrink: 0;
-  opacity: 0.7;
+  opacity: 0.6;
 }
 
 .chatThinkingLabel {
-  flex: 1;
+  flex: 0 1 auto;
   font-weight: 500;
   letter-spacing: 0.01em;
 }
 
-.chatThinkingChevron {
-  flex-shrink: 0;
-  opacity: 0.5;
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s ease;
-}
-
-.chatThinkingChevronExpanded {
-  transform: rotate(180deg);
-}
-
-.chatThinkingHeader:hover .chatThinkingChevron {
-  opacity: 0.8;
-}
-
-.chatThinkingBody {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s ease;
-  padding: 0 14px;
-}
-
-.chatThinkingBodyExpanded {
-  grid-template-rows: 1fr;
-  padding: 0 14px 14px;
+.chatThinkingQuote {
+  margin: 0;
+  padding: 0 0 0 10px;
+  border-left: 2px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
 }
 
 .chatThinkingContent {
-  overflow: hidden;
+  overflow: visible;
   font-size: 0.9rem;
   color: rgba(200, 200, 205, 0.85);
   line-height: 1.65;
-  padding-left: 2px;
+  padding-left: 0;
   margin-left: 0;
 }
 

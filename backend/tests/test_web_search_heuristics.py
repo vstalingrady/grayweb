@@ -52,3 +52,23 @@ def test_should_enable_search_not_for_plain_greeting():
 
 def test_should_enable_search_for_non_recency_factual_question():
     assert should_enable_search("Can you explain what RAG means in LLM systems?") is True
+
+
+def test_should_enable_search_ambiguous_follow_up_without_context():
+    assert should_enable_search("what about him gaming though") is False
+
+
+def test_should_enable_search_ambiguous_follow_up_with_search_context():
+    history = [
+        {"role": "user", "text": "What happened in the Epstein files release?"},
+        {"role": "model", "text": "I can summarize the key points."},
+    ]
+    assert should_enable_search("what about him gaming though", conversation_history=history) is True
+
+
+def test_should_enable_search_ambiguous_follow_up_with_small_talk_context():
+    history = [
+        {"role": "user", "text": "hi"},
+        {"role": "model", "text": "hey there"},
+    ]
+    assert should_enable_search("what about him gaming though", conversation_history=history) is False

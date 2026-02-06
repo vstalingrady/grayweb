@@ -161,10 +161,18 @@ export const useSendGeneralMessage = ({
       let streamedConversationId: string | null = requestConversationId ?? null;
       const includeWorkspaceContext = shouldAttachWorkspaceContextForSession(generalSession.id, trimmed);
       const contextPayload = includeWorkspaceContext ? workspaceContext ?? undefined : undefined;
+      const recentUserMessages = generalSession.messages
+        .filter(
+          (entry): entry is ChatMessage =>
+            entry.role === "user" && typeof entry.content === "string" && entry.content.trim().length > 0
+        )
+        .map((entry) => entry.content.trim())
+        .slice(-8);
       const { enabled: shouldUseWebSearch, mode: webSearchMode } = resolveWebSearchDecision({
         message: trimmed,
         autoEnabled: autoWebSearchEnabled,
         manualEnabled: webSearchEnabled,
+        recentUserMessages,
       });
 
       (async () => {
@@ -172,6 +180,20 @@ export const useSendGeneralMessage = ({
         let capturedReminders: unknown[] = [];
         let didReceiveToken = false;
         const streamingUserId = resolvedUser.id;
+        let shouldClearToolStatusOnNextToken = false;
+        let latestSearchQuery: string | null = null;
+        let latestSearchToolName: string | null = null;
+        let completedSearchToolStatus:
+          | {
+              name: string;
+              status: "end";
+              query?: string;
+            }
+          | undefined;
+        const isSearchToolName = (toolName: string): boolean => {
+          const normalized = toolName.trim().toLowerCase();
+          return normalized.includes("search") || normalized.includes("web");
+        };
 
         try {
           const effectiveTimeZone = resolvedUser.personalization_time_zone?.trim() || resolveClientTimezone();
@@ -233,12 +255,34 @@ export const useSendGeneralMessage = ({
           })) {
             if (event.type === "tool_status") {
               if (assistantMessageId) {
+                const normalizedQuery =
+                  typeof event.query === "string" && event.query.trim().length > 0 ? event.query.trim() : undefined;
+                const isSearchTool = isSearchToolName(event.name);
+                if (isSearchTool && normalizedQuery) {
+                  latestSearchQuery = normalizedQuery;
+                  latestSearchToolName = event.name;
+                }
                 if (event.status === "end") {
-                  updateMessage(generalSession.id, assistantMessageId, { toolStatus: undefined });
+                  if (isSearchTool) {
+                    const persistedQuery = latestSearchQuery ?? normalizedQuery;
+                    completedSearchToolStatus = {
+                      name: latestSearchToolName ?? event.name,
+                      status: "end",
+                      ...(persistedQuery ? { query: persistedQuery } : {}),
+                    };
+                    updateMessage(generalSession.id, assistantMessageId, { toolStatus: completedSearchToolStatus });
+                    shouldClearToolStatusOnNextToken = false;
+                  } else {
+                    shouldClearToolStatusOnNextToken = true;
+                  }
                 } else {
                   updateMessage(generalSession.id, assistantMessageId, {
-                    toolStatus: { name: event.name, status: event.status, query: event.query },
+                    toolStatus: { name: event.name, status: event.status, query: normalizedQuery },
                   });
+                  if (isSearchTool) {
+                    completedSearchToolStatus = undefined;
+                  }
+                  shouldClearToolStatusOnNextToken = false;
                 }
               }
               continue;
@@ -246,6 +290,10 @@ export const useSendGeneralMessage = ({
 
             if (event.type === "token") {
               const delta = event.delta;
+              if (assistantMessageId && shouldClearToolStatusOnNextToken) {
+                updateMessage(generalSession.id, assistantMessageId, { toolStatus: undefined });
+                shouldClearToolStatusOnNextToken = false;
+              }
               accumulated = accumulated && delta.startsWith(accumulated) ? delta : accumulated + delta;
               const extraction = extractGrayRemindersFromText(accumulated);
               if (assistantMessageId) {
@@ -281,7 +329,7 @@ export const useSendGeneralMessage = ({
                 content: reminderResult.content,
                 groundingMetadata: metadata,
                 reminders: reminderResult.reminders,
-                toolStatus: undefined,
+                toolStatus: completedSearchToolStatus,
                 ...(timingUpdate ?? {}),
               };
 
@@ -316,7 +364,10 @@ export const useSendGeneralMessage = ({
 
           const finalFallback = normalizeAssistantContent(accumulated, trimmed);
           if (assistantMessageId) {
-            updateMessage(generalSession.id, assistantMessageId, { content: finalFallback, toolStatus: undefined });
+            updateMessage(generalSession.id, assistantMessageId, {
+              content: finalFallback,
+              toolStatus: completedSearchToolStatus,
+            });
           } else {
             const assistantMessage = appendMessage(generalSession.id, "assistant", finalFallback);
             assistantMessageId = (assistantMessage as ChatMessage | null)?.id ?? null;
@@ -331,7 +382,10 @@ export const useSendGeneralMessage = ({
           console.error("Failed to send general message:", error);
           const fallback = buildAssistantErrorReply(error);
           if (assistantMessageId) {
-            updateMessage(generalSession.id, assistantMessageId, { content: fallback, toolStatus: undefined });
+            updateMessage(generalSession.id, assistantMessageId, {
+              content: fallback,
+              toolStatus: completedSearchToolStatus,
+            });
           } else {
             appendMessage(generalSession.id, "assistant", fallback);
           }

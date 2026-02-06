@@ -110,6 +110,52 @@ const normalizeSearchEntryHost = (value?: string | null): string | null => {
   return normalized ? normalized.toLowerCase() : null;
 };
 
+const YOUTUBE_HOSTS = new Set(["youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"]);
+
+const extractYouTubeVideoId = (url: URL): string | null => {
+  const host = url.hostname.toLowerCase();
+  if (host === "youtu.be") {
+    const id = url.pathname.split("/").filter(Boolean)[0];
+    return id || null;
+  }
+  if (YOUTUBE_HOSTS.has(host)) {
+    const v = url.searchParams.get("v");
+    if (v) {
+      return v;
+    }
+    const parts = url.pathname.split("/").filter(Boolean);
+    const embedIndex = parts.findIndex((segment) => segment === "embed" || segment === "shorts");
+    if (embedIndex !== -1 && parts[embedIndex + 1]) {
+      return parts[embedIndex + 1];
+    }
+  }
+  return null;
+};
+
+const buildWebsiteThumbnailFromHref = (href?: string): string | undefined => {
+  if (!href) {
+    return undefined;
+  }
+  try {
+    const parsed = new URL(href);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return undefined;
+    }
+    const videoId = extractYouTubeVideoId(parsed);
+    if (videoId) {
+      return `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`;
+    }
+    const host = parsed.hostname.toLowerCase();
+    if (!host) {
+      return undefined;
+    }
+    // Best-effort domain logo when result snippets don't include a real thumbnail.
+    return `https://logo.clearbit.com/${host}`;
+  } catch {
+    return undefined;
+  }
+};
+
 const buildSearchEntryThumbnailIndex = (results: SearchEntryResult[]) => {
   const byHref = new Map<string, string>();
   const byHost = new Map<string, string>();
@@ -171,11 +217,14 @@ const resolveThumbnailForSource = (
 const handleGroundingImageError = (event: SyntheticEvent<HTMLImageElement>) => {
   const target = event.currentTarget;
   const fallback = target.dataset.fallback;
+  const fallbackKind = target.dataset.fallbackKind;
   target.parentElement?.removeAttribute("data-image-loaded");
   if (fallback) {
     target.dataset.fallback = "";
-    target.dataset.kind = "thumbnail";
-    target.parentElement?.setAttribute("data-kind", "thumbnail");
+    if (fallbackKind) {
+      target.dataset.kind = fallbackKind;
+      target.parentElement?.setAttribute("data-kind", fallbackKind);
+    }
     target.src = fallback;
     return;
   }
@@ -237,14 +286,14 @@ const extractSearchEntryResults = (rawHtml: string): SearchEntryResult[] => {
 
 export type ChatMessageGroundingPanelProps = {
   metadata: GroundingMetadata;
-  messageId: string;
+  _messageId: string;
   previousUserMessageLowercase: string | null;
   t: (message: string, vars?: Record<string, string | number>) => string;
 };
 
 export function ChatMessageGroundingPanel({
   metadata,
-  messageId,
+  _messageId,
   previousUserMessageLowercase,
   t,
 }: ChatMessageGroundingPanelProps) {
@@ -296,8 +345,8 @@ export function ChatMessageGroundingPanel({
                 siteLabel: result.siteLabel,
               });
               const thumbnailUrl = result.thumbnailUrl;
-              const imageUrl = faviconUrl ?? thumbnailUrl;
-              const imageKind = faviconUrl ? "favicon" : "thumbnail";
+              const imageUrl = thumbnailUrl ?? faviconUrl;
+              const imageKind = thumbnailUrl ? "thumbnail" : "favicon";
               const initials = buildGroundingSourceInitials(result.siteLabel ?? result.title);
 
               return (
@@ -318,7 +367,8 @@ export function ChatMessageGroundingPanel({
                         referrerPolicy="no-referrer"
                         className={styles.chatGroundingSearchResultImage}
                         data-kind={imageKind}
-                        data-fallback={faviconUrl && thumbnailUrl ? thumbnailUrl : undefined}
+                        data-fallback={thumbnailUrl && faviconUrl ? faviconUrl : undefined}
+                        data-fallback-kind={thumbnailUrl && faviconUrl ? "favicon" : undefined}
                         onLoad={(event) => {
                           event.currentTarget.style.opacity = "1";
                           event.currentTarget.parentElement?.setAttribute("data-image-loaded", "true");
@@ -360,9 +410,11 @@ export function ChatMessageGroundingPanel({
           <div className={styles.chatGroundingSourceCards}>
             {sourceCards.map((source) => {
               const faviconUrl = buildGroundingSourceFaviconUrl(source);
-              const thumbnailUrl = resolveThumbnailForSource(source, thumbnailIndex);
-              const imageUrl = faviconUrl ?? thumbnailUrl;
-              const imageKind = faviconUrl ? "favicon" : "thumbnail";
+              const extractedThumbnailUrl = resolveThumbnailForSource(source, thumbnailIndex);
+              const inferredThumbnailUrl = buildWebsiteThumbnailFromHref(source.href);
+              const thumbnailUrl = extractedThumbnailUrl ?? inferredThumbnailUrl;
+              const imageUrl = thumbnailUrl ?? faviconUrl;
+              const imageKind = thumbnailUrl ? "thumbnail" : "favicon";
               const initials = buildGroundingSourceInitials(source.siteLabel ?? source.title);
 
               const cardContent = (
@@ -377,7 +429,8 @@ export function ChatMessageGroundingPanel({
                         referrerPolicy="no-referrer"
                         className={styles.chatGroundingSourceCardImage}
                         data-kind={imageKind}
-                        data-fallback={faviconUrl && thumbnailUrl ? thumbnailUrl : undefined}
+                        data-fallback={thumbnailUrl && faviconUrl ? faviconUrl : undefined}
+                        data-fallback-kind={thumbnailUrl && faviconUrl ? "favicon" : undefined}
                         onLoad={(event) => {
                           event.currentTarget.style.opacity = "1";
                           event.currentTarget.parentElement?.setAttribute("data-image-loaded", "true");

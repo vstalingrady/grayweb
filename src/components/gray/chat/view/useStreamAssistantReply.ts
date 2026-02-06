@@ -185,10 +185,19 @@ export const useStreamAssistantReply = ({
       const streamingUserId = resolvedUser.id;
       const abortController = new AbortController();
       streamAbortControllerRef.current = abortController;
+      const recentUserMessages =
+        session?.messages
+          .filter(
+            (entry): entry is ChatMessage =>
+              entry.role === "user" && typeof entry.content === "string" && entry.content.trim().length > 0
+          )
+          .map((entry) => entry.content.trim())
+          .slice(-8) ?? [];
       const { enabled: shouldUseWebSearch, mode: webSearchMode } = resolveWebSearchDecision({
         message: prompt,
         autoEnabled: autoWebSearchEnabled,
         manualEnabled: webSearchEnabled,
+        recentUserMessages,
       });
       const resolveConversationIdUpdate = (candidate?: string | null) => {
         if (!candidate) {
@@ -217,6 +226,20 @@ export const useStreamAssistantReply = ({
       try {
         let localThinkingStartTime: number | null = null;
         let didSetReasoningSeconds = false;
+        let shouldClearToolStatusOnNextToken = false;
+        let latestSearchQuery: string | null = null;
+        let latestSearchToolName: string | null = null;
+        let completedSearchToolStatus:
+          | {
+              name: string;
+              status: "end";
+              query?: string;
+            }
+          | undefined;
+        const isSearchToolName = (toolName: string): boolean => {
+          const normalized = toolName.trim().toLowerCase();
+          return normalized.includes("search") || normalized.includes("web");
+        };
         const finalizeReasoningSeconds = (elapsed: number) => {
           if (didSetReasoningSeconds) {
             return;
@@ -258,12 +281,36 @@ export const useStreamAssistantReply = ({
         )) {
           if (event.type === "tool_status") {
             if (assistantMessageId) {
+              const normalizedQuery =
+                typeof event.query === "string" && event.query.trim().length > 0 ? event.query.trim() : undefined;
+              const isSearchTool = isSearchToolName(event.name);
+              if (isSearchTool && normalizedQuery) {
+                latestSearchQuery = normalizedQuery;
+                latestSearchToolName = event.name;
+              }
               if (event.status === "end") {
-                updateMessage(targetSessionId, assistantMessageId, { toolStatus: undefined });
+                if (isSearchTool) {
+                  const persistedQuery = latestSearchQuery ?? normalizedQuery;
+                  completedSearchToolStatus = {
+                    name: latestSearchToolName ?? event.name,
+                    status: "end",
+                    ...(persistedQuery ? { query: persistedQuery } : {}),
+                  };
+                  updateMessage(targetSessionId, assistantMessageId, {
+                    toolStatus: completedSearchToolStatus,
+                  });
+                  shouldClearToolStatusOnNextToken = false;
+                } else {
+                  shouldClearToolStatusOnNextToken = true;
+                }
               } else {
+                if (isSearchTool) {
+                  completedSearchToolStatus = undefined;
+                }
                 updateMessage(targetSessionId, assistantMessageId, {
-                  toolStatus: { name: event.name, status: event.status, query: event.query },
+                  toolStatus: { name: event.name, status: event.status, query: normalizedQuery },
                 });
+                shouldClearToolStatusOnNextToken = false;
               }
             }
             continue;
@@ -271,6 +318,10 @@ export const useStreamAssistantReply = ({
 
           if (event.type === "token") {
             const delta = event.delta;
+            if (assistantMessageId && shouldClearToolStatusOnNextToken) {
+              updateMessage(targetSessionId, assistantMessageId, { toolStatus: undefined });
+              shouldClearToolStatusOnNextToken = false;
+            }
             const prevAccumulated = accumulated;
             accumulated = accumulated + delta;
 
@@ -351,7 +402,7 @@ export const useStreamAssistantReply = ({
                 reminders: finalReminders,
                 variants: nextVariants,
                 activeVariantIndex: nextActiveIndex,
-                toolStatus: undefined,
+                toolStatus: completedSearchToolStatus,
               });
             }
             const nextConversationId = resolveConversationIdUpdate(streamedConversationId);
@@ -382,7 +433,7 @@ export const useStreamAssistantReply = ({
             content: accumulated,
             variants: nextVariants,
             activeVariantIndex: nextActiveIndex,
-            toolStatus: undefined,
+            toolStatus: completedSearchToolStatus,
           });
         }
         const nextConversationId = resolveConversationIdUpdate(streamedConversationId);
@@ -398,7 +449,7 @@ export const useStreamAssistantReply = ({
         if (abortController.signal.aborted) {
           applyFallbackTitle();
           if (assistantMessageId) {
-            updateMessage(targetSessionId, assistantMessageId, { toolStatus: undefined });
+            updateMessage(targetSessionId, assistantMessageId, { toolStatus: completedSearchToolStatus });
           }
           updateSession(targetSessionId, {
             isResponding: false,
@@ -454,7 +505,7 @@ export const useStreamAssistantReply = ({
               groundingMetadata: fallbackMetadata,
               variants: nextVariants,
               activeVariantIndex: nextActiveIndex,
-              toolStatus: undefined,
+              toolStatus: completedSearchToolStatus,
               id: fallbackResponse.message_id ? String(fallbackResponse.message_id) : undefined,
             });
           } else {
@@ -464,7 +515,7 @@ export const useStreamAssistantReply = ({
               updateMessage(targetSessionId, assistantMessageId, {
                 variants: nextVariants,
                 activeVariantIndex: nextActiveIndex,
-                toolStatus: undefined,
+                toolStatus: completedSearchToolStatus,
               });
             }
           }
@@ -491,7 +542,7 @@ export const useStreamAssistantReply = ({
               content: fallback,
               variants: nextVariants,
               activeVariantIndex: nextActiveIndex,
-              toolStatus: undefined,
+              toolStatus: completedSearchToolStatus,
             });
           } else {
             const assistantMessage = appendMessage(targetSessionId, "assistant", fallback);
@@ -500,7 +551,7 @@ export const useStreamAssistantReply = ({
               updateMessage(targetSessionId, assistantMessageId, {
                 variants: nextVariants,
                 activeVariantIndex: nextActiveIndex,
-                toolStatus: undefined,
+                toolStatus: completedSearchToolStatus,
               });
             }
           }

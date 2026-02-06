@@ -48,6 +48,34 @@ const stripFinalWrapper = (value: string): string => {
   return output;
 };
 
+const REASONING_TAG_NAMES = ["thinking", "analysis", "reasoning", "chainofthought", "chain_of_thought"] as const;
+const REASONING_TAG_GROUP = REASONING_TAG_NAMES.join("|");
+const REASONING_INLINE_BLOCK_REGEX = new RegExp(`<(${REASONING_TAG_GROUP})>[\\s\\S]*?<\\/\\1>`, "gi");
+const REASONING_OPEN_TAIL_REGEX = new RegExp(`<(${REASONING_TAG_GROUP})>[\\s\\S]*$`, "gi");
+const REASONING_TAG_TOKEN_REGEX = new RegExp(`</?(?:${REASONING_TAG_GROUP})>`, "gi");
+const REASONING_OPEN_TOKEN_REGEX = new RegExp(`<(?:${REASONING_TAG_GROUP})>`, "i");
+const REASONING_CLOSE_TOKEN_REGEX = new RegExp(`</(?:${REASONING_TAG_GROUP})>`, "i");
+
+const stripResidualReasoningTags = (value: string): string => {
+  if (!value) {
+    return "";
+  }
+  let output = value;
+  const firstOpen = output.search(REASONING_OPEN_TOKEN_REGEX);
+  const firstClose = output.search(REASONING_CLOSE_TOKEN_REGEX);
+  if (firstClose !== -1 && (firstOpen === -1 || firstClose < firstOpen)) {
+    const closeMatch = output.slice(firstClose).match(REASONING_CLOSE_TOKEN_REGEX);
+    if (closeMatch?.[0]) {
+      output = output.slice(firstClose + closeMatch[0].length);
+    }
+  }
+  output = output.replace(REASONING_INLINE_BLOCK_REGEX, " ");
+  output = output.replace(REASONING_OPEN_TAIL_REGEX, " ");
+  output = output.replace(REASONING_TAG_TOKEN_REGEX, " ");
+  output = output.replace(/\n{3,}/g, "\n\n");
+  return output.trim();
+};
+
 export const stripToolUseBlocks = (text: string): string => {
   if (!text) {
     return "";
@@ -178,17 +206,21 @@ export const parseStructuredAssistantMessage = (content?: string | null): Assist
       // Tags found in the message (some allow any position to support streaming with prefix content)
       const thinkingContentStart = openIndex + candidate.open.length;
       const closeIndex = findIndex(candidate.close, thinkingContentStart);
+      const prefix = normalized.slice(0, openIndex).trim();
 
       if (closeIndex !== -1) {
         base.thinking = normalized.slice(thinkingContentStart, closeIndex).trim() || null;
         const afterTagIndex = closeIndex + candidate.close.length;
-        base.ai = stripFinalWrapper(normalized.slice(afterTagIndex).trim());
+        const suffix = normalized.slice(afterTagIndex).trim();
+        const aiCandidate = [prefix, suffix].filter(Boolean).join("\n\n").trim();
+        base.ai = stripFinalWrapper(aiCandidate);
       } else {
         // Tag opened but not closed (streaming)
         base.thinking = normalized.slice(thinkingContentStart).trim() || null;
-        base.ai = "";
+        base.ai = stripFinalWrapper(prefix);
       }
 
+      base.ai = stripResidualReasoningTags(base.ai);
       base.isStructured = true;
       // Cache and return early
       parseCache.set(cacheKey, base);
@@ -258,6 +290,7 @@ export const parseStructuredAssistantMessage = (content?: string | null): Assist
   } else if (afterThinkingIndex !== -1 && afterThinkingIndex < normalized.length) {
     base.ai = stripFinalWrapper(normalized.slice(afterThinkingIndex).trim());
   }
+  base.ai = stripResidualReasoningTags(base.ai);
 
   // Cache the result with LRU eviction
   parseCache.set(cacheKey, base);

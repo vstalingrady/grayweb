@@ -1,4 +1,5 @@
 import asyncio
+import re
 import time
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -73,6 +74,7 @@ api_logger = create_logger("api.chat")
 router = APIRouter(tags=["chat"])
 
 CUSTOM_INSTRUCTIONS_HEADER = "CUSTOM INSTRUCTIONS FROM USER (SOURCE OF TRUTH)"
+FOLLOW_UP_PRONOUN_PATTERN = re.compile(r"\b(him|her|them|that|this|it)\b", re.IGNORECASE)
 
 def _resolve_conversation_memory_enabled(
     user_record: Optional[Dict[str, Any]],
@@ -86,7 +88,10 @@ def _resolve_conversation_memory_enabled(
     return True
 
 
-def _resolve_web_search_enabled(chat_request: ChatRequest) -> bool:
+def _resolve_web_search_enabled(
+    chat_request: ChatRequest,
+    conversation_history: Optional[List[Dict[str, Any]]] = None,
+) -> bool:
     mode = getattr(chat_request, "web_search_mode", None)
     if mode == "on":
         return True
@@ -97,9 +102,42 @@ def _resolve_web_search_enabled(chat_request: ChatRequest) -> bool:
         # - frontend hint can proactively enable search
         # - backend heuristics can still enable it even when the frontend hint is false
         client_hint = bool(getattr(chat_request, "web_search_enabled", False))
-        server_decision = should_enable_search(chat_request.message)
+        server_decision = should_enable_search(chat_request.message, conversation_history=conversation_history)
         return client_hint or server_decision
     return bool(chat_request.web_search_enabled)
+
+
+def _build_effective_web_search_prompt(
+    chat_request: ChatRequest,
+    conversation_history: Optional[List[Dict[str, Any]]] = None,
+) -> Optional[str]:
+    base_prompt = (chat_request.web_search_prompt or "").strip()
+    guidance = (
+        "Use concise, user-focused web search queries. "
+        "For follow-up prompts with pronouns (him/her/them/that/it), resolve the referent from recent user context "
+        "before searching. If the referent is ambiguous, ask one clarifying question instead of broad generic searches."
+    )
+    if not conversation_history:
+        return f"{base_prompt}\n\n{guidance}" if base_prompt else guidance
+
+    recent_user_context: Optional[str] = None
+    for entry in reversed(conversation_history[-8:]):
+        if not isinstance(entry, dict):
+            continue
+        if (entry.get("role") or "").strip().lower() != "user":
+            continue
+        text = (entry.get("text") or "").strip()
+        if text and text != (chat_request.message or "").strip():
+            recent_user_context = text
+            break
+
+    prompt_parts: List[str] = []
+    if base_prompt:
+        prompt_parts.append(base_prompt)
+    prompt_parts.append(guidance)
+    if recent_user_context and FOLLOW_UP_PRONOUN_PATTERN.search(chat_request.message or ""):
+        prompt_parts.append(f"Recent user context to anchor follow-up search: {recent_user_context[:220]}")
+    return "\n\n".join(prompt_parts)
 
 def _append_custom_instructions(
     system_prompt: Optional[str],
@@ -547,7 +585,11 @@ async def chat_route(
                 message_id=assistant_message_id,
             )
 
-        search_enabled = _resolve_web_search_enabled(chat_request)
+        search_enabled = _resolve_web_search_enabled(chat_request, conversation_history=conversation_history)
+        effective_web_search_prompt = _build_effective_web_search_prompt(
+            chat_request,
+            conversation_history=conversation_history,
+        ) if search_enabled else None
 
         # Generate AI response
         ai_response, grounding_metadata = await _generate_ai_response(
@@ -567,7 +609,7 @@ async def chat_route(
             search_enabled=search_enabled,
             web_search_engine=chat_request.web_search_engine,
             web_search_max_results=chat_request.web_search_max_results,
-            web_search_prompt=chat_request.web_search_prompt,
+            web_search_prompt=effective_web_search_prompt,
             web_search_context_size=chat_request.web_search_context_size,
             should_generate_title=chat_request.should_generate_title,
             reasoning_mode=effective_reasoning_mode,
@@ -972,7 +1014,11 @@ async def chat_stream_route(
             clear_request_context()
             return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)
 
-        search_enabled = _resolve_web_search_enabled(chat_request)
+        search_enabled = _resolve_web_search_enabled(chat_request, conversation_history=conversation_history)
+        effective_web_search_prompt = _build_effective_web_search_prompt(
+            chat_request,
+            conversation_history=conversation_history,
+        ) if search_enabled else None
 
         async def event_stream() -> AsyncGenerator[str, None]:
             nonlocal session_title
@@ -1001,7 +1047,7 @@ async def chat_stream_route(
                     search_enabled=search_enabled,
                     web_search_engine=chat_request.web_search_engine,
                     web_search_max_results=chat_request.web_search_max_results,
-                    web_search_prompt=chat_request.web_search_prompt,
+                    web_search_prompt=effective_web_search_prompt,
                     web_search_context_size=chat_request.web_search_context_size,
                     should_generate_title=chat_request.should_generate_title,
                     reasoning_mode=effective_reasoning_mode,

@@ -1,9 +1,9 @@
 .chatGroundingPanel {
   margin-top: 0.5rem;
-  padding: 0.45rem 0.6rem;
-  border-radius: 0.6rem;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .chatGroundingSourceDeck {
@@ -55,19 +55,20 @@
 }
 
 .chatGroundingSourceCard {
-  padding: 0.5rem 0.6rem;
+  padding: 0.5rem;
   border-radius: 0.5rem;
   border: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(255, 255, 255, 0.02);
   text-decoration: none;
   color: inherit;
   display: flex;
-  align-items: center;
-  gap: 0.6rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
   transition: border 0.2s ease, background 0.2s ease;
   min-width: 0;
   flex: 0 0 auto;
-  width: 200px;
+  width: 188px;
   scroll-snap-align: start;
 }
 
@@ -81,11 +82,11 @@
 }
 
 .chatGroundingSourceCardAvatar {
-  width: 26px;
-  height: 26px;
-  border-radius: 999px;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 0.45rem;
   background: rgba(255, 255, 255, 0.08);
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
@@ -99,7 +100,7 @@
 }
 
 .chatGroundingSourceCardFallback {
-  font-size: 0.6rem;
+  font-size: 0.65rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -109,29 +110,31 @@
 }
 
 .chatGroundingSourceCardImage {
-  width: 16px;
-  height: 16px;
-  object-fit: contain;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 999px;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  position: absolute;
-}
-
-.chatGroundingSourceCardImage[data-kind="thumbnail"] {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 0.45rem;
   background: transparent;
+  border-radius: 0.45rem;
+  opacity: 0;
+  transition: opacity 0.2s ease;
   inset: 0;
+  position: absolute;
+}
+
+.chatGroundingSourceCardImage[data-kind="favicon"] {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  background: rgba(255, 255, 255, 0.94);
+  border-radius: 999px;
+  inset: auto;
+  position: static;
 }
 
 .chatGroundingSourceCardContent {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 0.12rem;
   min-width: 0;
   flex: 1;
 }
@@ -281,8 +284,8 @@
   flex-direction: column;
   gap: 0.25rem;
   margin-bottom: 0.6rem;
-  padding-bottom: 0.6rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
 .chatGroundingQueryChip {

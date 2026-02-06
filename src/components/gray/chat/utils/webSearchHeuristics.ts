@@ -100,15 +100,50 @@ const PERSONAL_RECENCY_PATTERNS = [
   /\b(today|right now|currently|this week|this month|this year)\b\s+(i|i'm|im|we|we're|our|my|me)\b/i,
 ];
 
+const FOLLOW_UP_PATTERNS = [
+  /\b(?:what|how)\s+about\b/i,
+  /\b(?:and|also)\s+(?:him|her|them|that|this|it)\b/i,
+  /\b(?:about|regarding)\s+(?:him|her|them|that|this|it)\b/i,
+  /\b(?:same|related|more\s+on\s+that)\b/i,
+];
+const FOLLOW_UP_PRONOUN_PATTERN = /\b(him|her|them|that|this|it)\b/i;
+
+const FOLLOW_UP_CONTEXT_KEYWORDS = [
+  "news",
+  "file",
+  "files",
+  "report",
+  "reports",
+  "document",
+  "documents",
+  "release",
+  "update",
+  "updates",
+  "investigation",
+  "case",
+  "price",
+  "weather",
+  "score",
+  "election",
+  "policy",
+  "court",
+];
+
 const isQuestionLike = (normalized: string): boolean =>
   normalized.includes("?") || QUESTION_PREFIXES.some((prefix) => normalized.startsWith(`${prefix} `));
+
+const isSmallTalk = (trimmed: string, wordCount: number): boolean =>
+  wordCount <= 8 && SMALL_TALK_PATTERNS.some((pattern) => pattern.test(trimmed));
+
+const isAmbiguousFollowUp = (normalized: string): boolean =>
+  FOLLOW_UP_PRONOUN_PATTERN.test(normalized) && FOLLOW_UP_PATTERNS.some((pattern) => pattern.test(normalized));
 
 export type WebSearchDecision = {
   enabled: boolean;
   mode: "on" | "auto" | "off";
 };
 
-export const shouldEnableWebSearch = (message: string): boolean => {
+export const shouldEnableWebSearch = (message: string, recentUserMessages?: string[]): boolean => {
   const trimmed = (message || "").trim();
   if (!trimmed) {
     return false;
@@ -154,11 +189,15 @@ export const shouldEnableWebSearch = (message: string): boolean => {
     return false;
   }
 
-  if (wordCount <= 8 && SMALL_TALK_PATTERNS.some((pattern) => pattern.test(trimmed))) {
+  if (isSmallTalk(trimmed, wordCount)) {
     return false;
   }
 
   if (slangGuardTerms.has(normalized)) {
+    return false;
+  }
+
+  if (isAmbiguousFollowUp(normalized)) {
     return false;
   }
 
@@ -188,6 +227,33 @@ export const shouldEnableWebSearch = (message: string): boolean => {
     return true;
   }
 
+  if (FOLLOW_UP_PATTERNS.some((pattern) => pattern.test(normalized)) && Array.isArray(recentUserMessages)) {
+    for (let index = recentUserMessages.length - 1; index >= 0; index -= 1) {
+      const prior = (recentUserMessages[index] || "").trim();
+      if (!prior) {
+        continue;
+      }
+      const priorNormalized = prior.toLowerCase();
+      const priorWordCount = priorNormalized.split(/\s+/).filter(Boolean).length;
+      if (priorNormalized === normalized) {
+        continue;
+      }
+      if (isSmallTalk(prior, priorWordCount) || slangGuardTerms.has(priorNormalized)) {
+        continue;
+      }
+      if (shouldEnableWebSearch(prior)) {
+        return true;
+      }
+      if (FOLLOW_UP_CONTEXT_KEYWORDS.some((keyword) => priorNormalized.includes(keyword))) {
+        return true;
+      }
+      if (isQuestionLike(priorNormalized) && priorWordCount >= 4) {
+        return true;
+      }
+      break;
+    }
+  }
+
   return false;
 };
 
@@ -195,10 +261,12 @@ export const resolveWebSearchDecision = ({
   message,
   autoEnabled,
   manualEnabled,
+  recentUserMessages,
 }: {
   message: string;
   autoEnabled: boolean;
   manualEnabled: boolean;
+  recentUserMessages?: string[];
 }): WebSearchDecision => {
   const trimmed = (message || "").trim();
   if (!trimmed) {
@@ -213,6 +281,6 @@ export const resolveWebSearchDecision = ({
     return { enabled: false, mode: "off" };
   }
 
-  const shouldUse = shouldEnableWebSearch(trimmed);
+  const shouldUse = shouldEnableWebSearch(trimmed, recentUserMessages);
   return { enabled: shouldUse, mode: "auto" };
 };

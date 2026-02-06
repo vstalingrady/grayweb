@@ -105,6 +105,116 @@ FACT_LOOKUP_PATTERNS = (
     re.compile(r"\b(?:vs|versus)\b", re.IGNORECASE),
 )
 
+FOLLOW_UP_PATTERNS = (
+    re.compile(r"\b(?:what|how)\s+about\b", re.IGNORECASE),
+    re.compile(r"\b(?:and|also)\s+(?:him|her|them|that|this|it)\b", re.IGNORECASE),
+    re.compile(r"\b(?:about|regarding)\s+(?:him|her|them|that|this|it)\b", re.IGNORECASE),
+    re.compile(r"\b(?:same|related|more\s+on\s+that)\b", re.IGNORECASE),
+)
+FOLLOW_UP_PRONOUN_PATTERN = re.compile(r"\b(him|her|them|that|this|it)\b", re.IGNORECASE)
+
+FOLLOW_UP_CONTEXT_KEYWORDS = (
+    "news",
+    "file",
+    "files",
+    "report",
+    "reports",
+    "document",
+    "documents",
+    "release",
+    "update",
+    "updates",
+    "investigation",
+    "case",
+    "price",
+    "weather",
+    "score",
+    "election",
+    "policy",
+    "court",
+)
+
+SLANG_GUARD_TERMS = {
+    "wtf", "idk", "omg", "lol", "lmfao", "rofl", "ngl", "tbh", "brb", "gtg",
+    "what is wtf", "what does wtf mean",
+}
+
+def _is_small_talk(trimmed: str, word_count: int) -> bool:
+    return word_count <= 8 and any(pattern.search(trimmed) for pattern in SMALL_TALK_PATTERNS)
+
+
+def _is_slang_guard(normalized: str) -> bool:
+    return normalized in SLANG_GUARD_TERMS
+
+
+def _is_question_like(normalized: str) -> bool:
+    return "?" in normalized or any(normalized.startswith(f"{prefix} ") for prefix in QUESTION_PREFIXES)
+
+
+def _is_ambiguous_follow_up(normalized: str) -> bool:
+    return bool(
+        FOLLOW_UP_PRONOUN_PATTERN.search(normalized)
+        and any(pattern.search(normalized) for pattern in FOLLOW_UP_PATTERNS)
+    )
+
+
+def _extract_recent_user_messages(conversation_history: Optional[list]) -> list[str]:
+    if not conversation_history:
+        return []
+    messages: list[str] = []
+    for entry in conversation_history[-8:]:
+        if not isinstance(entry, dict):
+            continue
+        role = (entry.get("role") or "").strip().lower()
+        if role != "user":
+            continue
+        text = (entry.get("text") or "").strip()
+        if text:
+            messages.append(text)
+    return messages
+
+
+def _should_enable_search_base(message: str) -> bool:
+    trimmed = (message or "").strip()
+    if not trimmed:
+        return False
+    normalized = trimmed.lower()
+    words = normalized.split()
+    word_count = len(words)
+
+    explicit_patterns = [
+        r"\bsearch\b",
+        r"\bgoogle\b",
+        r"\bweb\s*search\b",
+        r"\blook\s*up\b",
+        r"\blookup\b",
+        r"\bfind\s+on\s+the\s+web\b",
+    ]
+    if any(re.search(pattern, normalized) for pattern in explicit_patterns):
+        return True
+
+    if should_use_web_search(message, model=None):
+        return True
+
+    if _is_small_talk(trimmed, word_count):
+        return False
+
+    if _is_slang_guard(normalized):
+        return False
+
+    # Don't auto-search ambiguous follow-ups without conversation anchor.
+    # The contextual pass in should_enable_search handles these.
+    if _is_ambiguous_follow_up(normalized):
+        return False
+
+    if any(pattern.search(normalized) for pattern in FACT_LOOKUP_PATTERNS):
+        return True
+
+    if _is_question_like(normalized) and word_count >= 5:
+        return True
+
+    return False
+
 
 # ==============================================================================
 # Detection Functions
@@ -194,56 +304,45 @@ def should_use_web_search(message: str, model: Optional[str] = None) -> bool:
     return False
 
 
-def should_enable_search(message: str) -> bool:
+def should_enable_search(message: str, conversation_history: Optional[list] = None) -> bool:
     """Check if message implies a need for web search.
     
     Uses explicit and heuristic signals. In auto mode we intentionally err on the
     side of enabling search for factual questions, while keeping small-talk local.
     """
+    if _should_enable_search_base(message):
+        return True
+
     trimmed = (message or "").strip()
     if not trimmed:
         return False
     normalized = trimmed.lower()
     words = normalized.split()
     word_count = len(words)
-
-    # Explicit request cues; keep conservative because enabling search can incur cost.
-    explicit_patterns = [
-        r"\bsearch\b",
-        r"\bgoogle\b",
-        r"\bweb\s*search\b",
-        r"\blook\s*up\b",
-        r"\blookup\b",
-        r"\bfind\s+on\s+the\s+web\b",
-    ]
-    if any(re.search(pattern, normalized) for pattern in explicit_patterns):
-        return True
-
-    # Live/recency-oriented queries.
-    if should_use_web_search(message, model=None):
-        return True
-
-    # Avoid wasting search on casual social turns.
-    if word_count <= 8 and any(pattern.search(trimmed) for pattern in SMALL_TALK_PATTERNS):
+    if _is_small_talk(trimmed, word_count) or _is_slang_guard(normalized):
         return False
 
-    # Explicit slang guard: avoid web lookups for very short slang-only asks.
-    slang_guard_terms = {
-        "wtf", "idk", "omg", "lol", "lmfao", "rofl", "ngl", "tbh", "brb", "gtg",
-        "what is wtf", "what does wtf mean",
-    }
-    if normalized in slang_guard_terms:
-        return False
-
-    # Broader factual lookup signals (not just recency words).
-    if any(pattern.search(normalized) for pattern in FACT_LOOKUP_PATTERNS):
-        return True
-
-    is_question_like = "?" in normalized or any(
-        normalized.startswith(f"{prefix} ") for prefix in QUESTION_PREFIXES
-    )
-    if is_question_like and word_count >= 5:
-        return True
+    # Follow-up prompts ("what about him", "how about that") should inherit context
+    # from recent user turns when those turns were likely search-worthy.
+    if any(pattern.search(normalized) for pattern in FOLLOW_UP_PATTERNS):
+        recent_user_messages = _extract_recent_user_messages(conversation_history)
+        for prior in reversed(recent_user_messages):
+            prior_trimmed = prior.strip()
+            if not prior_trimmed:
+                continue
+            prior_normalized = prior_trimmed.lower()
+            if prior_normalized == normalized:
+                continue
+            prior_word_count = len(prior_normalized.split())
+            if _is_small_talk(prior_trimmed, prior_word_count) or _is_slang_guard(prior_normalized):
+                continue
+            if _should_enable_search_base(prior_trimmed):
+                return True
+            if any(keyword in prior_normalized for keyword in FOLLOW_UP_CONTEXT_KEYWORDS):
+                return True
+            if _is_question_like(prior_normalized) and prior_word_count >= 4:
+                return True
+            break
 
     return False
 
