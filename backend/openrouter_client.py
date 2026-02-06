@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import logging
+import asyncio
 import httpx
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
@@ -461,7 +462,7 @@ class OpenRouterService:
 
     def _can_cache_history(self, model: Optional[str]) -> bool:
         model_lower = (model or "").strip().lower()
-        return model_lower.startswith("anthropic/")
+        return model_lower.startswith(("anthropic/", "google/"))
 
     def _build_messages(
         self,
@@ -478,11 +479,13 @@ class OpenRouterService:
         history = conversation_history or []
         if history_token_budget is not None and history_token_budget > 0:
             recent_history = trim_history_by_token_budget(history, history_token_budget)
+            history_trimmed = len(recent_history) < len(history)
         else:
             recent_history = history[-history_limit:] if history_limit > 0 else history
+            history_trimmed = history_limit > 0 and len(recent_history) < len(history)
         payload: List[Dict[str, Any]] = []
         applied_history_cache = False
-        should_cache_history = self._can_cache_history(cache_model)
+        should_cache_history = self._can_cache_history(cache_model) and not history_trimmed
         
         for entry in recent_history:
             role = entry.get("role")
@@ -524,6 +527,7 @@ class OpenRouterService:
                 payload.append({"role": openrouter_role, "content": text})
         
         trimmed_message = _trim(message)
+        current_user_turn_added = False
         
         # If we have attachments, we need to construct a multipart message
         if attachments:
@@ -586,21 +590,28 @@ class OpenRouterService:
 
             if content_parts:
                 payload.append({"role": "user", "content": content_parts})
+                current_user_turn_added = True
             elif trimmed_message:  # Fallback if no valid attachments processed
                 payload.append({"role": "user", "content": trimmed_message})
+                current_user_turn_added = True
 
         elif trimmed_message:
             payload.append({"role": "user", "content": trimmed_message})
+            current_user_turn_added = True
         
-        # Insert runtime context (time) BEFORE the user message but AFTER history.
-        # This is critical for caching: the cache prefix includes system prompt + history.
-        # If time context came before history, it would break the cache prefix every request.
+        # Append runtime context to the current user turn so volatile context
+        # (time/calendar/memory) does not destabilize cacheable prompt prefixes.
         runtime_text = _trim(runtime_context)
         if runtime_text:
-            # Find the position to insert - right before the last user message
-            # The user message was just appended above, so insert at -1 position
-            if payload:
-                payload.insert(len(payload) - 1, {"role": "system", "content": runtime_text})
+            runtime_block = f"[Runtime context]\n{runtime_text}"
+            if current_user_turn_added and payload and payload[-1].get("role") == "user":
+                content = payload[-1].get("content")
+                if isinstance(content, str):
+                    payload[-1]["content"] = "\n\n".join(filter(None, [content, runtime_block]))
+                elif isinstance(content, list):
+                    content.append({"type": "text", "text": runtime_block})
+                else:
+                    payload.append({"role": "user", "content": runtime_block})
             else:
                 payload.append({"role": "system", "content": runtime_text})
 

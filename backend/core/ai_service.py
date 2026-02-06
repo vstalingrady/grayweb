@@ -254,8 +254,8 @@ def _build_web_search_plugin(
     if not search_enabled:
         return None
     plugin: Dict[str, Any] = {"id": "web"}
-    if engine:
-        plugin["engine"] = engine
+    resolved_engine = (engine or "").strip().lower() or "google"
+    plugin["engine"] = resolved_engine
     if isinstance(max_results, int) and max_results > 0:
         plugin["max_results"] = min(max_results, 10)
     if search_prompt:
@@ -572,6 +572,7 @@ async def generate_ai_response(
     db: Optional[Any] = None,
     user_timezone: Optional[str] = None,
     conversation_id: Optional[str] = None,
+    context_cache_id: Optional[int] = None,
     *,
     search_enabled: bool = True,
     web_search_engine: Optional[str] = None,
@@ -629,6 +630,19 @@ async def generate_ai_response(
         needs_structured_tools=needs_structured_tools,
         is_onboarding_tool=is_onboarding_tool,
     )
+    history_token_budget = deps["tier_conversation_token_limit"](plan_tier, model)
+
+    workspace_with_cache = workspace_context
+    if context_cache_id and user_id is not None and db is not None:
+        try:
+            cache_record = await deps["_load_context_cache"](context_cache_id, user_id, db)
+            cache_text = deps["_row_get"](cache_record, "content")
+            if isinstance(cache_text, str) and cache_text.strip():
+                workspace_with_cache = "\n\n".join(
+                    filter(None, [workspace_context, f"Context cache:\n{cache_text.strip()}"])
+                )
+        except Exception as cache_error:
+            api_logger.debug("Failed to load context cache: %s", cache_error)
 
     memory_context: Optional[str] = None
     if (
@@ -694,7 +708,7 @@ async def generate_ai_response(
         result = await deps["OPENROUTER_SERVICE"].generate(
             message,
             conversation_history,
-            workspace_context,
+            workspace_with_cache,
             system_prompt,
             time_context,
             model,
@@ -704,6 +718,7 @@ async def generate_ai_response(
             provider_routing=provider_routing,
             web_search_options=web_search_options,
             return_metadata=True,
+            history_token_budget=history_token_budget,
             user=openrouter_user,
             extra_headers=extra_headers,
         )
