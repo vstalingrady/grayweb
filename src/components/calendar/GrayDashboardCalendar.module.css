@@ -933,6 +933,10 @@
   grid-row: 1 / -1;
 }
 
+.calendarBodyScrollWithStickyHeader {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
 .calendarBodyScroll::-webkit-scrollbar {
   width: 6px;
 }
@@ -961,16 +965,11 @@
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   box-sizing: border-box;
   width: var(--calendar-timeline-width, 56px);
-  /* The timeline must start after the sticky headers */
-  /* We can't easily change the grid track start here without more complex CSS.
-     Instead, let's keep it in the same grid but ensure it pushes down or is offset correctly.
-     Actually, since we are moving headers INSIDE .calendarBodyScroll, they will just flow before this.
-     But .calendarBodyScroll is a grid. We need to make sure the headers span across.
-  */
+}
+
+.calendarBodyScrollWithStickyHeader .calendarTimesColumn,
+.calendarBodyScrollWithStickyHeader .calendarWeekColumns {
   grid-row: 2;
-  /* Assuming headers are in a wrapper that is grid-row: 1? No, we didn't wrap them in a single grid cell...
-     Wait, in the TSX I wrapped them in .stickyHeaderGroup.
-  */
 }
 
 .stickyHeaderGroup {

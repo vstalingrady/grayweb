@@ -135,7 +135,7 @@ export const PIONEER_FEATURES: FeatureItem[] = [
         id: "top_tier_models",
         label: "Top-tier models",
         icon: Crown,
-        subtext: "Claude Opus 4.5, GPT 5.2 Pro",
+        subtext: "Claude Opus 4.6, GPT 5.2 Pro",
     },
     {
         id: "more_messages",

@@ -70,6 +70,26 @@ def get_tool_handlers(
         "supermemory_search": lambda u, a, d, pt=None: supermemory.supermemory_search_tool(u, a, d, plan_tier=pt),
         "supermemory_forget": lambda u, a, d, pt=None: supermemory.supermemory_forget_tool(u, a, d, plan_tier=pt),
         "supermemory_profile": lambda u, a, d, pt=None: supermemory.supermemory_profile_tool(u, a, d, plan_tier=pt),
+        # OpenRouter web search tool calls (when plugins are enabled).
+        # Return a neutral payload to avoid 501s if the provider emits these tool names.
+        "default_web_search": lambda _u, a, _d, _pt=None: {
+            "query": (a.get("query") or a.get("q") or a.get("search") or ""),
+            "results": [],
+            "status": "no_results",
+            "source": "default_web_search",
+        },
+        "web_search": lambda _u, a, _d, _pt=None: {
+            "query": (a.get("query") or a.get("q") or a.get("search") or ""),
+            "results": [],
+            "status": "no_results",
+            "source": "web_search",
+        },
+        "tavily_search": lambda _u, a, _d, _pt=None: {
+            "query": (a.get("query") or a.get("q") or a.get("search") or ""),
+            "results": [],
+            "status": "no_results",
+            "source": "tavily_search",
+        },
     }
 
 

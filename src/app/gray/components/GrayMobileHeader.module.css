@@ -65,7 +65,7 @@
 }
 
 .mobileStreakIcon {
-  color: #f97316;
+  color: rgba(255, 255, 255, 0.95);
   flex-shrink: 0;
 }
 

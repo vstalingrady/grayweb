@@ -231,6 +231,19 @@ export const useSendGeneralMessage = ({
             reminders_enabled: remindersEnabled,
             model: selectedModelId ?? modelTier,
           })) {
+            if (event.type === "tool_status") {
+              if (assistantMessageId) {
+                if (event.status === "end") {
+                  updateMessage(generalSession.id, assistantMessageId, { toolStatus: undefined });
+                } else {
+                  updateMessage(generalSession.id, assistantMessageId, {
+                    toolStatus: { name: event.name, status: event.status, query: event.query },
+                  });
+                }
+              }
+              continue;
+            }
+
             if (event.type === "token") {
               const delta = event.delta;
               accumulated = accumulated && delta.startsWith(accumulated) ? delta : accumulated + delta;
@@ -268,6 +281,7 @@ export const useSendGeneralMessage = ({
                 content: reminderResult.content,
                 groundingMetadata: metadata,
                 reminders: reminderResult.reminders,
+                toolStatus: undefined,
                 ...(timingUpdate ?? {}),
               };
 
@@ -302,7 +316,7 @@ export const useSendGeneralMessage = ({
 
           const finalFallback = normalizeAssistantContent(accumulated, trimmed);
           if (assistantMessageId) {
-            updateMessage(generalSession.id, assistantMessageId, { content: finalFallback });
+            updateMessage(generalSession.id, assistantMessageId, { content: finalFallback, toolStatus: undefined });
           } else {
             const assistantMessage = appendMessage(generalSession.id, "assistant", finalFallback);
             assistantMessageId = (assistantMessage as ChatMessage | null)?.id ?? null;
@@ -317,7 +331,7 @@ export const useSendGeneralMessage = ({
           console.error("Failed to send general message:", error);
           const fallback = buildAssistantErrorReply(error);
           if (assistantMessageId) {
-            updateMessage(generalSession.id, assistantMessageId, { content: fallback });
+            updateMessage(generalSession.id, assistantMessageId, { content: fallback, toolStatus: undefined });
           } else {
             appendMessage(generalSession.id, "assistant", fallback);
           }

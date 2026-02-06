@@ -162,6 +162,16 @@ export function GrayDashboardCalendar({
     useDashboardCalendarSelection();
 
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const shouldIgnoreSwipeTarget = (target: EventTarget | null) => {
+    if (!(target instanceof HTMLElement)) {
+      return false;
+    }
+    return Boolean(
+      target.closest(
+        "button, a, input, textarea, select, [role='button'], [data-no-calendar-swipe='true']"
+      )
+    );
+  };
 
   const { calendars, events, updateCalendars, updateEvents } = useControlledCalendarData({
     calendars: externalCalendars,
@@ -317,6 +327,10 @@ export function GrayDashboardCalendar({
     });
 
   const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1 || shouldIgnoreSwipeTarget(e.target)) {
+      touchStartRef.current = null;
+      return;
+    }
     touchStartRef.current = {
       x: e.touches[0].clientX,
       y: e.touches[0].clientY,
@@ -324,7 +338,10 @@ export function GrayDashboardCalendar({
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!touchStartRef.current) return;
+    if (!touchStartRef.current || e.changedTouches.length !== 1) {
+      touchStartRef.current = null;
+      return;
+    }
 
     const touchEnd = {
       x: e.changedTouches[0].clientX,
@@ -334,8 +351,8 @@ export function GrayDashboardCalendar({
     const diffX = touchStartRef.current.x - touchEnd.x;
     const diffY = touchStartRef.current.y - touchEnd.y;
 
-    // Determine if swipe is horizontal (X diff > Y diff) and significant enough
-    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
+    // Use a stricter swipe check to avoid flipping dates during vertical scroll.
+    if (Math.abs(diffX) >= 64 && Math.abs(diffY) <= 48) {
       if (diffX > 0) {
         // Swiped left -> Next
         handleNavigateRange(1);
@@ -345,6 +362,10 @@ export function GrayDashboardCalendar({
       }
     }
 
+    touchStartRef.current = null;
+  };
+
+  const handleTouchCancel = () => {
     touchStartRef.current = null;
   };
 
@@ -464,6 +485,7 @@ export function GrayDashboardCalendar({
         className={styles.calendarBoard}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchCancel}
       >
         {viewMode === "week" ? (
           <GrayDashboardCalendarWeekView

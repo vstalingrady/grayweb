@@ -81,7 +81,7 @@ export function GrayDashboardCalendarWeekView({
   return (
     <div className={styles.calendarGrid} style={calendarGridStyle}>
       <div className={styles.calendarBody}>
-        <div className={styles.calendarBodyScroll} ref={weekScrollRef}>
+        <div className={`${styles.calendarBodyScroll} ${styles.calendarBodyScrollWithStickyHeader}`} ref={weekScrollRef}>
           <div className={styles.stickyHeaderGroup}>
             <div className={styles.calendarMonthRow}>
               <div className={styles.calendarMonthTitleGroup}>

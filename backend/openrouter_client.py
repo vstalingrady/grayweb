@@ -189,7 +189,8 @@ class OpenRouterService:
         "claude-4": "anthropic/claude-sonnet-4",
         "claude-sonnet-4": "anthropic/claude-sonnet-4",
         "claude-sonnet-4.5": "anthropic/claude-sonnet-4.5",
-        "claude-opus-4.5": "anthropic/claude-opus-4.5",
+        "claude-opus-4.5": "anthropic/claude-opus-4.6",
+        "claude-opus-4.6": "anthropic/claude-opus-4.6",
         "claude-haiku-4.5": "anthropic/claude-haiku-4.5",
         "claude-3.5": "anthropic/claude-3.5-sonnet",
         "claude-3.5-sonnet": "anthropic/claude-3.5-sonnet",
@@ -268,7 +269,8 @@ class OpenRouterService:
         # Anthropic Claude models
         "anthropic/claude-sonnet-4": 200_000,
         "anthropic/claude-sonnet-4.5": 1_000_000,  # 1M context
-        "anthropic/claude-opus-4.5": 200_000,
+        "anthropic/claude-opus-4.6": 1_000_000,  # 1M context
+        "anthropic/claude-opus-4.5": 1_000_000,  # legacy alias support
         "anthropic/claude-haiku-4.5": 200_000,
         "anthropic/claude-3.5-sonnet": 200_000,
         # OpenAI models

@@ -93,12 +93,12 @@ def _resolve_web_search_enabled(chat_request: ChatRequest) -> bool:
     if mode == "off":
         return False
     if mode == "auto":
-        # If the client already resolved the decision, honor it to keep
-        # frontend/back-end heuristics aligned. Fall back to server heuristics
-        # only when the client did not supply a boolean.
-        if isinstance(getattr(chat_request, "web_search_enabled", None), bool):
-            return bool(chat_request.web_search_enabled)
-        return should_enable_search(chat_request.message)
+        # In auto mode, allow either side to opt-in:
+        # - frontend hint can proactively enable search
+        # - backend heuristics can still enable it even when the frontend hint is false
+        client_hint = bool(getattr(chat_request, "web_search_enabled", False))
+        server_decision = should_enable_search(chat_request.message)
+        return client_hint or server_decision
     return bool(chat_request.web_search_enabled)
 
 def _append_custom_instructions(
@@ -1021,6 +1021,8 @@ async def chat_stream_route(
                             first_token_time = time.perf_counter()
                         accumulated_chunks.append(payload)
                         yield _sse_event("token", {"delta": payload})
+                    elif kind == "tool_status":
+                        yield _sse_event("tool_status", payload)
                     elif kind == "tool_card":
                         yield _sse_event("tool_card", payload)
                     elif kind == "reminders":

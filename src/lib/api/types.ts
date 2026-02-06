@@ -487,6 +487,13 @@ export type ChatStreamTokenEvent = {
   delta: string;
 };
 
+export type ChatStreamToolStatusEvent = {
+  type: 'tool_status';
+  name: string;
+  status?: 'start' | 'end';
+  query?: string;
+};
+
 export type ChatStreamTiming = {
   totalMs: number;
   firstTokenMs?: number;
@@ -521,7 +528,13 @@ export type ChatStreamUsageEvent = {
   };
 };
 
-export type ChatStreamEvent = ChatStreamTokenEvent | ChatStreamEndEvent | ChatStreamErrorEvent | ChatStreamRemindersEvent | ChatStreamUsageEvent;
+export type ChatStreamEvent =
+  | ChatStreamTokenEvent
+  | ChatStreamToolStatusEvent
+  | ChatStreamEndEvent
+  | ChatStreamErrorEvent
+  | ChatStreamRemindersEvent
+  | ChatStreamUsageEvent;
 
 export interface GoogleAuthResponse {
   authorization_url: string;

@@ -306,33 +306,51 @@ async def update_calendar_event(
     should_resolve_reminder = any(
         key in update_data for key in ("reminder_at", "reminder_minutes_before", "start_time")
     )
+    should_refresh_reminder_copy = any(
+        key in update_data for key in ("title", "description", "color")
+    )
 
-    if should_resolve_reminder:
+    if should_resolve_reminder or should_refresh_reminder_copy:
         recent = await db.fetch_one(calendar_events.select().where(calendar_events.c.id == event_id))
+        if recent is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
         rec_dict = dict(recent)
-        effective_start_time = update_data.get("start_time", rec_dict.get("start_time"))
-        effective_minutes = update_data.get("reminder_minutes_before", rec_dict.get("reminder_minutes_before"))
-        resolved_reminder_at = _resolve_event_reminder_at(
-            effective_start_time,
-            update_data.get("reminder_at"),
-            effective_minutes,
-        )
-        await _upsert_entity_reminder(
+
+        pending_reminder_map = await _get_pending_entity_reminder_map(
             user_id=user_id,
             entity_type="event",
-            entity_id=event_id,
-            label=rec_dict.get("title", ""),
-            description=rec_dict.get("description"),
-            remind_at=resolved_reminder_at,
-            metadata=None,
-            color=rec_dict.get("color"),
+            entity_ids=[event_id],
             db=db,
         )
-        if resolved_reminder_at is not None or "reminder_at" in update_data or "reminder_minutes_before" in update_data:
+        resolved_reminder_at = pending_reminder_map.get(event_id)
+
+        if should_resolve_reminder:
+            # Resolve from the persisted row to avoid clearing existing absolute reminders
+            # when only start_time changes.
+            resolved_reminder_at = _resolve_event_reminder_at(
+                rec_dict.get("start_time"),
+                rec_dict.get("reminder_at"),
+                rec_dict.get("reminder_minutes_before"),
+            )
             await db.execute(
                 calendar_events.update()
                 .where((calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id))
                 .values(reminder_at=resolved_reminder_at)
+            )
+
+        # Keep reminder payload (label/description/color) in sync on event edits
+        # whenever an active reminder exists or reminder timing changed.
+        if resolved_reminder_at is not None or should_resolve_reminder:
+            await _upsert_entity_reminder(
+                user_id=user_id,
+                entity_type="event",
+                entity_id=event_id,
+                label=rec_dict.get("title", ""),
+                description=rec_dict.get("description"),
+                remind_at=resolved_reminder_at,
+                metadata=None,
+                color=rec_dict.get("color"),
+                db=db,
             )
 
     query = calendar_events.select().where(calendar_events.c.id == event_id)

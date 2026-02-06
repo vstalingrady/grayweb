@@ -257,6 +257,27 @@ export async function* sendChatMessageStream(
       return null;
     }
 
+    if (eventType === "tool_status") {
+      const nameCandidate = payload.name ?? payload.tool ?? payload.tool_name ?? payload.toolName;
+      if (typeof nameCandidate !== "string" || !nameCandidate.trim()) {
+        return null;
+      }
+      const statusCandidate = payload.status ?? payload.state ?? payload.phase;
+      const normalizedStatus =
+        typeof statusCandidate === "string" && statusCandidate.toLowerCase() === "end" ? "end" : "start";
+      const queryCandidate =
+        payload.query ??
+        payload.search_query ??
+        payload.searchQuery ??
+        payload.q;
+      return {
+        type: "tool_status",
+        name: nameCandidate.trim(),
+        status: normalizedStatus,
+        query: typeof queryCandidate === "string" ? queryCandidate.trim() || undefined : undefined,
+      };
+    }
+
     if (eventType === "usage") {
       const usage = coerceUsagePayload(payload.usage);
       return usage ? { type: "usage", usage } : null;

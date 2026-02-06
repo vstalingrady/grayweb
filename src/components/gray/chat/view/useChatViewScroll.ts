@@ -44,6 +44,7 @@ export const useChatViewScroll = ({
   const [composerHeight, setComposerHeight] = useState(0);
   const prevMessageCountRef = useRef(0);
   const prevSessionKeyRef = useRef<string | null>(null);
+  const initialScrollDoneRef = useRef(false);
 
   useEffect(() => {
     if (prevSessionKeyRef.current === sessionKey) {
@@ -52,6 +53,7 @@ export const useChatViewScroll = ({
     userScrolledAwayRef.current = false;
     isAtBottomRef.current = true;
     lastScrollTopRef.current = 0;
+    initialScrollDoneRef.current = false;
   }, [sessionKey]);
 
   useEffect(() => {
@@ -69,10 +71,24 @@ export const useChatViewScroll = ({
       return;
     }
     if (shouldScroll) {
-      const allowAutoScroll = isSessionChange || (!userScrolledAwayRef.current && isAtBottomRef.current);
-      if (allowAutoScroll) {
-        // Keep the newest message visible when the user hasn't scrolled away.
-        scrollAnchorRef.current.scrollIntoView({ behavior: "auto" });
+      if (isSessionChange && !initialScrollDoneRef.current) {
+        const viewport = chatViewportRef.current;
+        if (viewport) {
+          const maxScroll = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+          viewport.scrollTop = Math.round(maxScroll / 2);
+          isAtBottomRef.current = false;
+          userScrolledAwayRef.current = true;
+        } else if (scrollAnchorRef.current) {
+          scrollAnchorRef.current.scrollIntoView({ behavior: "auto" });
+          isAtBottomRef.current = true;
+          userScrolledAwayRef.current = false;
+        }
+        initialScrollDoneRef.current = true;
+      } else {
+        const allowAutoScroll = !userScrolledAwayRef.current && isAtBottomRef.current;
+        if (allowAutoScroll) {
+          scrollAnchorRef.current.scrollIntoView({ behavior: "auto" });
+        }
       }
     }
     prevMessageCountRef.current = messages.length;

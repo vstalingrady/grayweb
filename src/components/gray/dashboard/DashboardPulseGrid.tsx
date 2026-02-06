@@ -137,7 +137,7 @@ export function DashboardPulseGrid({
             <button
               type="button"
               className={styles.dashboardCardAction}
-              onClick={() => onAddEvent(currentDate)}
+              onClick={() => onAddEvent(selectedDate ?? currentDate)}
               aria-label={t("Add event")}
             >
               <Plus size={18} />

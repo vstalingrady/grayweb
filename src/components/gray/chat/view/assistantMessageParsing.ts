@@ -5,6 +5,11 @@ export type AssistantSections = {
   isStructured: boolean;
 };
 
+export type ToolStatusInfo = {
+  label: string;
+  variant: "default" | "search";
+};
+
 type TagCandidate = {
   open: string;
   close: string;
@@ -62,10 +67,42 @@ export const stripToolUseBlocks = (text: string): string => {
   return result;
 };
 
+export const resolveToolStatusInfo = (
+  toolName: string,
+  t: (message: string, vars?: Record<string, string | number>) => string
+): ToolStatusInfo | null => {
+  if (!toolName) {
+    return null;
+  }
+
+  const normalized = toolName.toLowerCase();
+
+  if (normalized.includes("search") || normalized.includes("web")) {
+    return { label: t("Searching"), variant: "search" };
+  }
+  if (normalized.includes("image") || normalized.includes("painting")) {
+    return { label: t("Painting pixels..."), variant: "default" };
+  }
+  if (normalized.includes("plan") || normalized.includes("habit") || normalized.includes("calendar")) {
+    return { label: t("Checking schedule..."), variant: "default" };
+  }
+  if (normalized.includes("memory") || normalized.includes("remember")) {
+    return { label: t("Accessing memory..."), variant: "default" };
+  }
+
+  // Clean up snake_case or camelCase to Sentence case
+  const readable = toolName
+    .replace(/_/g, " ")
+    .replace(/([A-Z])/g, " $1")
+    .trim();
+
+  return { label: t("Using {tool}...", { tool: readable.toLowerCase() }), variant: "default" };
+};
+
 export const extractCurrentToolStatus = (
   text: string,
   t: (message: string, vars?: Record<string, string | number>) => string
-): string | null => {
+): ToolStatusInfo | null => {
   if (!text) return null;
 
   // Look for the last tool_use block
@@ -92,28 +129,7 @@ export const extractCurrentToolStatus = (
 
   if (!toolName) return null;
 
-  const normalized = toolName.toLowerCase();
-
-  if (normalized.includes("search") || normalized.includes("web")) {
-    return t("Searching");
-  }
-  if (normalized.includes("image") || normalized.includes("painting")) {
-    return t("Painting pixels...");
-  }
-  if (normalized.includes("plan") || normalized.includes("habit") || normalized.includes("calendar")) {
-    return t("Checking schedule...");
-  }
-  if (normalized.includes("memory") || normalized.includes("remember")) {
-    return t("Accessing memory...");
-  }
-
-  // Clean up snake_case or camelCase to Sentence case
-  const readable = toolName
-    .replace(/_/g, " ")
-    .replace(/([A-Z])/g, " $1")
-    .trim();
-
-  return t("Using {tool}...", { tool: readable.toLowerCase() });
+  return resolveToolStatusInfo(toolName, t);
 };
 
 export const parseStructuredAssistantMessage = (content?: string | null): AssistantSections => {

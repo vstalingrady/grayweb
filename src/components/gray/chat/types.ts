@@ -12,6 +12,11 @@ export type ChatMessage = {
     role: ChatRole;
     content: string;
     createdAt: number;
+    toolStatus?: {
+        name: string;
+        status?: "start" | "end";
+        query?: string;
+    };
     reminders?: GrayReminderCreatedPayload[];
     groundingMetadata?: GroundingMetadata;
     attachments?: MediaUpload[];

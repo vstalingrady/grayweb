@@ -66,6 +66,45 @@ RECENCY_TOKENS = [
     "latest", "recent", "up to date", "up-to-date",
 ]
 
+QUESTION_PREFIXES = (
+    "what",
+    "whats",
+    "what's",
+    "who",
+    "whos",
+    "who's",
+    "when",
+    "where",
+    "why",
+    "how",
+    "is",
+    "are",
+    "was",
+    "were",
+    "do",
+    "does",
+    "did",
+    "can",
+    "could",
+    "should",
+    "will",
+    "would",
+)
+
+SMALL_TALK_PATTERNS = (
+    re.compile(r"^\s*(?:hi|hello|hey|yo|sup)\b", re.IGNORECASE),
+    re.compile(r"^\s*(?:thanks|thank you|thx)\b", re.IGNORECASE),
+    re.compile(r"^\s*(?:how are you|how's it going|whats up|what's up)\b", re.IGNORECASE),
+    re.compile(r"^\s*(?:good morning|good afternoon|good evening)\b", re.IGNORECASE),
+)
+
+FACT_LOOKUP_PATTERNS = (
+    re.compile(r"\b(?:who|what|when|where)\s+(?:is|are|was|were)\b", re.IGNORECASE),
+    re.compile(r"\b(?:tell me about|explain|overview of|background on|give me details on)\b", re.IGNORECASE),
+    re.compile(r"\b(?:compare|difference between)\b", re.IGNORECASE),
+    re.compile(r"\b(?:vs|versus)\b", re.IGNORECASE),
+)
+
 
 # ==============================================================================
 # Detection Functions
@@ -158,11 +197,15 @@ def should_use_web_search(message: str, model: Optional[str] = None) -> bool:
 def should_enable_search(message: str) -> bool:
     """Check if message implies a need for web search.
     
-    Uses word boundary matching for specific keywords to avoid over-triggering.
+    Uses explicit and heuristic signals. In auto mode we intentionally err on the
+    side of enabling search for factual questions, while keeping small-talk local.
     """
-    normalized = (message or "").lower()
-    if not normalized:
+    trimmed = (message or "").strip()
+    if not trimmed:
         return False
+    normalized = trimmed.lower()
+    words = normalized.split()
+    word_count = len(words)
 
     # Explicit request cues; keep conservative because enabling search can incur cost.
     explicit_patterns = [
@@ -177,7 +220,32 @@ def should_enable_search(message: str) -> bool:
         return True
 
     # Live/recency-oriented queries.
-    return should_use_web_search(message, model=None)
+    if should_use_web_search(message, model=None):
+        return True
+
+    # Avoid wasting search on casual social turns.
+    if word_count <= 8 and any(pattern.search(trimmed) for pattern in SMALL_TALK_PATTERNS):
+        return False
+
+    # Explicit slang guard: avoid web lookups for very short slang-only asks.
+    slang_guard_terms = {
+        "wtf", "idk", "omg", "lol", "lmfao", "rofl", "ngl", "tbh", "brb", "gtg",
+        "what is wtf", "what does wtf mean",
+    }
+    if normalized in slang_guard_terms:
+        return False
+
+    # Broader factual lookup signals (not just recency words).
+    if any(pattern.search(normalized) for pattern in FACT_LOOKUP_PATTERNS):
+        return True
+
+    is_question_like = "?" in normalized or any(
+        normalized.startswith(f"{prefix} ") for prefix in QUESTION_PREFIXES
+    )
+    if is_question_like and word_count >= 5:
+        return True
+
+    return False
 
 
 def extract_urls_from_message(message: str, max_urls: int = 20) -> list:

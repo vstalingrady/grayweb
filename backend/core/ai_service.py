@@ -65,8 +65,8 @@ DEFAULT_CHAT_TOOLS = get_default_chat_tools()
 SEARCH_TOOL = None
 
 DEFAULT_HISTORY_TAIL_TURNS = 8
-DEFAULT_RECALL_EVERY_N = 3
-DEFAULT_RECALL_MIN_PROMPT_CHARS = 40
+DEFAULT_RECALL_EVERY_N = 1
+DEFAULT_RECALL_MIN_PROMPT_CHARS = 0
 
 
 def _get_history_tail_turns() -> int:
@@ -116,15 +116,18 @@ def _should_request_supermemory_recall(
     message: str,
     history: Optional[List[Dict[str, Any]]],
 ) -> bool:
-    min_chars = max(0, _get_recall_min_prompt_chars())
     trimmed = (message or "").strip()
-    if min_chars <= 0 or len(trimmed) >= min_chars:
-        return True
-    every_n = _get_recall_every_n()
-    if every_n <= 0:
+    if not trimmed:
         return False
-    if every_n == 1:
+
+    min_chars = max(0, _get_recall_min_prompt_chars())
+    if min_chars > 0 and len(trimmed) < min_chars:
+        return False
+
+    every_n = _get_recall_every_n()
+    if every_n <= 1:
         return True
+
     turn_index = _count_user_turns(history) + 1
     return turn_index % every_n == 0
 

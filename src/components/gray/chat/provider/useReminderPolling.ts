@@ -28,11 +28,13 @@ export const useReminderPolling = ({
   appendMessage,
 }: UseReminderPollingOptions) => {
   const reminderDeliveryCacheRef = useRef<Set<number>>(new Set());
+  const reminderPresentationCacheRef = useRef<Set<number>>(new Set());
   const { notificationPreferences } = useNotificationPreferences();
 
   useEffect(() => {
     if (!userId || !generalSessionId) {
       reminderDeliveryCacheRef.current.clear();
+      reminderPresentationCacheRef.current.clear();
       return;
     }
 
@@ -83,13 +85,13 @@ export const useReminderPolling = ({
           if (reminderDeliveryCacheRef.current.has(reminder.id)) {
             continue;
           }
-          reminderDeliveryCacheRef.current.add(reminder.id);
 
           // Client-side stale check: If > 15 mins late, mark delivered but don't nag.
           // This protects against backend returning old pending items.
           const isStale = (now - remindAt) > (15 * 60 * 1000);
 
-          if (!isStale) {
+          const alreadyPresented = reminderPresentationCacheRef.current.has(reminder.id);
+          if (!isStale && !alreadyPresented) {
             appendMessage(generalSessionId, "assistant", buildReminderPingMessage(reminder));
             const deliveryMode = (reminder.delivery_mode || reminder.entity_type || "").toLowerCase();
             const isCalendarReminder = deliveryMode === "event";
@@ -101,12 +103,15 @@ export const useReminderPolling = ({
             ) {
               sendReminderNotification(reminder);
             }
+            reminderPresentationCacheRef.current.add(reminder.id);
           }
 
           try {
             await workspaceService.updateReminder(userId, reminder.id, { status: "delivered" });
+            reminderDeliveryCacheRef.current.add(reminder.id);
           } catch (updateError) {
             console.error("Failed to update reminder status:", updateError);
+            reminderDeliveryCacheRef.current.delete(reminder.id);
           }
         }
       } catch (error) {

@@ -256,6 +256,19 @@ export const useStreamAssistantReply = ({
           },
           { signal: abortController.signal }
         )) {
+          if (event.type === "tool_status") {
+            if (assistantMessageId) {
+              if (event.status === "end") {
+                updateMessage(targetSessionId, assistantMessageId, { toolStatus: undefined });
+              } else {
+                updateMessage(targetSessionId, assistantMessageId, {
+                  toolStatus: { name: event.name, status: event.status, query: event.query },
+                });
+              }
+            }
+            continue;
+          }
+
           if (event.type === "token") {
             const delta = event.delta;
             const prevAccumulated = accumulated;
@@ -338,6 +351,7 @@ export const useStreamAssistantReply = ({
                 reminders: finalReminders,
                 variants: nextVariants,
                 activeVariantIndex: nextActiveIndex,
+                toolStatus: undefined,
               });
             }
             const nextConversationId = resolveConversationIdUpdate(streamedConversationId);
@@ -368,6 +382,7 @@ export const useStreamAssistantReply = ({
             content: accumulated,
             variants: nextVariants,
             activeVariantIndex: nextActiveIndex,
+            toolStatus: undefined,
           });
         }
         const nextConversationId = resolveConversationIdUpdate(streamedConversationId);
@@ -382,6 +397,9 @@ export const useStreamAssistantReply = ({
       } catch (error) {
         if (abortController.signal.aborted) {
           applyFallbackTitle();
+          if (assistantMessageId) {
+            updateMessage(targetSessionId, assistantMessageId, { toolStatus: undefined });
+          }
           updateSession(targetSessionId, {
             isResponding: false,
             pendingAutoStream: false,
@@ -436,6 +454,7 @@ export const useStreamAssistantReply = ({
               groundingMetadata: fallbackMetadata,
               variants: nextVariants,
               activeVariantIndex: nextActiveIndex,
+              toolStatus: undefined,
               id: fallbackResponse.message_id ? String(fallbackResponse.message_id) : undefined,
             });
           } else {
@@ -445,6 +464,7 @@ export const useStreamAssistantReply = ({
               updateMessage(targetSessionId, assistantMessageId, {
                 variants: nextVariants,
                 activeVariantIndex: nextActiveIndex,
+                toolStatus: undefined,
               });
             }
           }
@@ -471,6 +491,7 @@ export const useStreamAssistantReply = ({
               content: fallback,
               variants: nextVariants,
               activeVariantIndex: nextActiveIndex,
+              toolStatus: undefined,
             });
           } else {
             const assistantMessage = appendMessage(targetSessionId, "assistant", fallback);
@@ -479,6 +500,7 @@ export const useStreamAssistantReply = ({
               updateMessage(targetSessionId, assistantMessageId, {
                 variants: nextVariants,
                 activeVariantIndex: nextActiveIndex,
+                toolStatus: undefined,
               });
             }
           }

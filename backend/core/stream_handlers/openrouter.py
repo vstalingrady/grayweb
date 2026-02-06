@@ -36,6 +36,72 @@ def _extract_usage_counts(usage: Dict[str, Any]) -> Tuple[int, int, int]:
     return prompt_tokens, completion_tokens, cached_tokens
 
 
+def _normalize_search_query(value: Any) -> Optional[str]:
+    if not isinstance(value, str):
+        return None
+    normalized = " ".join(value.strip().split())
+    if not normalized:
+        return None
+    if len(normalized) > 180:
+        return normalized[:177].rstrip() + "..."
+    return normalized
+
+
+def _extract_search_query(tool_name: str, tool_args: Any) -> Optional[str]:
+    """Best-effort extraction of user-visible search query text from tool args."""
+    normalized_name = (tool_name or "").strip().lower()
+    if not normalized_name:
+        return None
+    if "search" not in normalized_name and "web" not in normalized_name:
+        return None
+    if not isinstance(tool_args, dict):
+        return None
+
+    candidate_keys = (
+        "query",
+        "queries",
+        "q",
+        "search",
+        "search_query",
+        "searchQuery",
+        "query_text",
+        "queryText",
+        "keywords",
+        "keyword",
+        "text",
+        "prompt",
+    )
+
+    def _pull(value: Any) -> Optional[str]:
+        normalized = _normalize_search_query(value)
+        if normalized:
+            return normalized
+        if isinstance(value, list):
+            for item in value:
+                normalized_item = _normalize_search_query(item)
+                if normalized_item:
+                    return normalized_item
+                if isinstance(item, dict):
+                    nested = _pull(item)
+                    if nested:
+                        return nested
+        if isinstance(value, dict):
+            for key in candidate_keys:
+                if key in value:
+                    nested = _pull(value.get(key))
+                    if nested:
+                        return nested
+        return None
+
+    for key in candidate_keys:
+        if key in tool_args:
+            direct = _pull(tool_args.get(key))
+            if direct:
+                return direct
+
+    return _pull(tool_args)
+
+
 async def stream_openrouter_response(
     openrouter_service,
     message: str,
@@ -136,6 +202,7 @@ async def _stream_openrouter_response_impl(
     - "final": Final response with metadata
     - "reminders": Reminder/plan/habit cards
     - "usage": Usage statistics
+    - "tool_status": Tool execution lifecycle events
     - "error": Error message
     - "onboarding_complete": Signals that complete_onboarding was executed successfully
     """
@@ -404,6 +471,13 @@ async def _stream_openrouter_response_impl(
                 # Create a FunctionCall compatible object
                 tool_call = types.FunctionCall(name=tool_name, args=tool_args)
 
+                # Emit tool status so the client can show UI feedback while the tool runs.
+                tool_status_payload: Dict[str, Any] = {"name": tool_name, "status": "start"}
+                search_query = _extract_search_query(tool_name, tool_args)
+                if search_query:
+                    tool_status_payload["query"] = search_query
+                yield ("tool_status", tool_status_payload)
+
                 try:
                     tool_result = await execute_function_call_fn(
                         tool_call, user_id, db, user_timezone=user_timezone, plan_tier=plan_tier
@@ -441,6 +515,8 @@ async def _stream_openrouter_response_impl(
                         "tool_call_id": tool_call_id,
                         "content": json.dumps({"error": str(tool_error)}),
                     })
+                finally:
+                    yield ("tool_status", {"name": tool_name, "status": "end"})
 
             total_accumulated += accumulated
             current_message = ""

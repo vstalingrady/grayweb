@@ -33,7 +33,8 @@ FALLBACK_PRICING: Dict[str, Dict[str, float]] = {
     
     # Anthropic Claude (Pioneer models)
     "anthropic/claude-sonnet-4.5": {"prompt": 3e-06, "completion": 1.5e-05, "cached": 3e-07},
-    "anthropic/claude-opus-4.5": {"prompt": 5e-06, "completion": 2.5e-05, "cached": 5e-07},
+    "anthropic/claude-opus-4.6": {"prompt": 5e-06, "completion": 2.5e-05, "cached": 5e-07},
+    "anthropic/claude-opus-4.5": {"prompt": 5e-06, "completion": 2.5e-05, "cached": 5e-07},  # legacy alias
     
     # Google Gemini (Gray Pro + Pioneer)
     "google/gemini-3-pro-preview": {"prompt": 2e-06, "completion": 1.2e-05, "cached": 2e-07},

@@ -25,7 +25,7 @@ export const PIONEER_GROUPS: ModelGroup[] = [
     models: [
       { id: "anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5", cost: "$$", tierRequired: "pathfinder" },
       { id: "anthropic/claude-sonnet-4.5", label: "Claude Sonnet 4.5", cost: "$$$", tierRequired: "voyager" },
-      { id: "anthropic/claude-opus-4.5", label: "Claude Opus 4.5", cost: "$$$$", tierRequired: "pioneer" },
+      { id: "anthropic/claude-opus-4.6", label: "Claude Opus 4.6", cost: "$$$$", tierRequired: "pioneer" },
     ],
   },
   {

@@ -8,7 +8,7 @@ import { useI18n } from "@/contexts/I18nContext";
 import { REMINDER_CODE_BLOCK_REGEX } from "../constants";
 import { stripGrayTitleMarkers } from "../utils";
 import type { ChatMessage as ChatSessionMessage } from "../types";
-import { extractCurrentToolStatus, parseStructuredAssistantMessage } from "./assistantMessageParsing";
+import { extractCurrentToolStatus, parseStructuredAssistantMessage, resolveToolStatusInfo } from "./assistantMessageParsing";
 import { estimateTokenCount, formatBackendTimingLabel, formatMessageTimestamp } from "./formatting";
 import { ChatMessageAttachments } from "./ChatMessageAttachments";
 import { ChatMessageEditor } from "./ChatMessageEditor";
@@ -19,6 +19,40 @@ import { MARKDOWN_PLUGINS } from "./markdown/plugins";
 import { normalizeAssistantMath } from "./markdown/mathNormalization";
 import { ReminderCard } from "./ReminderCard";
 import { ThinkingBlock } from "./ThinkingBlock";
+
+const segmentStreamingTokens = (text: string): string[] => {
+  if (!text) {
+    return [];
+  }
+  return text.match(/\s+|[^\s]+/g) ?? [text];
+};
+
+type StreamingTextChunk = {
+  key: string;
+  text: string;
+};
+
+type AssistantDisplayContent = {
+  normalizedThinkingText: string | null;
+  visibleAssistantText: string;
+};
+
+const getAssistantDisplayContent = (rawContent: string, reasoningMode: boolean): AssistantDisplayContent => {
+  const assistantSections = parseStructuredAssistantMessage(rawContent);
+  const rawThinkingText = assistantSections?.thinking ?? null;
+  const aiText = assistantSections?.ai ?? rawContent;
+  const hasRawThinkingText = typeof rawThinkingText === "string" && rawThinkingText.trim().length > 0;
+  const shouldSurfaceThinking = hasRawThinkingText || Boolean(reasoningMode);
+  const useThinkingAsAnswer = !shouldSurfaceThinking && hasRawThinkingText && (!aiText || !aiText.trim());
+  const assistantTextCandidate = useThinkingAsAnswer ? rawThinkingText ?? "" : aiText;
+  const sanitizedAssistantTextCandidate = stripGrayTitleMarkers(assistantTextCandidate);
+  const assistantTextAfterRemovals = sanitizedAssistantTextCandidate.replace(REMINDER_CODE_BLOCK_REGEX, "").trim();
+
+  return {
+    normalizedThinkingText: normalizeAssistantMath(hasRawThinkingText ? rawThinkingText : null),
+    visibleAssistantText: normalizeAssistantMath(assistantTextAfterRemovals) ?? "",
+  };
+};
 
 export type ChatMessagesListProps = {
   messages: ChatSessionMessage[];
@@ -128,40 +162,37 @@ export const ChatMessagesList = memo(
 	          const isUser = message.role === "user";
 	          const isAssistant = !isUser;
 	          const rawContent = message.content ?? "";
-	          const assistantSections = isAssistant ? parseStructuredAssistantMessage(rawContent) : null;
-	          const rawThinkingText = isAssistant ? assistantSections?.thinking ?? null : null;
-	          const aiText = isAssistant ? assistantSections?.ai ?? rawContent : rawContent;
-          const hasRawThinkingText =
-            typeof rawThinkingText === "string" && rawThinkingText.trim().length > 0;
-          const shouldSurfaceThinking = hasRawThinkingText || Boolean(reasoningMode);
-          const useThinkingAsAnswer =
-            !shouldSurfaceThinking &&
-            typeof rawThinkingText === "string" &&
-            rawThinkingText.trim().length > 0 &&
-            (!aiText || !aiText.trim());
-	          const thinkingText = hasRawThinkingText ? rawThinkingText : null;
-          const assistantTextCandidate = isAssistant
-            ? useThinkingAsAnswer
-              ? rawThinkingText ?? ""
-              : aiText
-            : rawContent;
-          const sanitizedAssistantTextCandidate = stripGrayTitleMarkers(assistantTextCandidate);
-          const assistantTextAfterRemovals = isAssistant
-            ? sanitizedAssistantTextCandidate.replace(REMINDER_CODE_BLOCK_REGEX, "").trim()
-            : sanitizedAssistantTextCandidate;
-          const visibleAssistantText = isAssistant ? normalizeAssistantMath(assistantTextAfterRemovals) ?? "" : assistantTextAfterRemovals;
-          const normalizedThinkingText = isAssistant ? normalizeAssistantMath(thinkingText) : thinkingText;
+	          const assistantDisplayContent = isAssistant ? getAssistantDisplayContent(rawContent, reasoningMode) : null;
+          const visibleAssistantText = isAssistant ? assistantDisplayContent?.visibleAssistantText ?? "" : rawContent;
+          const normalizedThinkingText = isAssistant ? assistantDisplayContent?.normalizedThinkingText ?? null : null;
           const fullText = isAssistant ? visibleAssistantText : rawContent;
           const hasThinkingContent = typeof normalizedThinkingText === "string" && normalizedThinkingText.trim().length > 0;
-	          const isStreamingMessage = isAssistant && message.id === activeStreamingMessageId;
-	          const hasTextContent = Boolean(visibleAssistantText.trim());
-	          const assistantReminders = isAssistant && Array.isArray(message.reminders) ? message.reminders : [];
-	          const showAssistantMarkdown = isAssistant && hasTextContent;
-	          const hasVisibleContent = hasThinkingContent || showAssistantMarkdown || assistantReminders.length > 0;
-	          const isStreamingAssistantMessage = isAssistant && isStreamingMessage;
-	          const isAwaitingStreamContent = isStreamingAssistantMessage && !hasVisibleContent;
-	          const showStreamingIndicator = isStreamingAssistantMessage;
+          const isStreamingMessage = isAssistant && message.id === activeStreamingMessageId;
+          const hasTextContent = Boolean(visibleAssistantText.trim());
+          const streamingTextChunks: StreamingTextChunk[] =
+            isStreamingMessage && hasTextContent
+              ? segmentStreamingTokens(visibleAssistantText).map((text, tokenIndex) => ({
+                  key: `${tokenIndex}-${text}`,
+                  text,
+                }))
+              : [];
+          const assistantReminders = isAssistant && Array.isArray(message.reminders) ? message.reminders : [];
+          const showAssistantMarkdown = isAssistant && hasTextContent;
+          const hasVisibleContent = hasThinkingContent || showAssistantMarkdown || assistantReminders.length > 0;
+          const isStreamingAssistantMessage = isAssistant && isStreamingMessage;
+          const isAwaitingStreamContent = isStreamingAssistantMessage && !hasVisibleContent;
+          const showStreamingIndicator = isStreamingAssistantMessage;
           const shouldHideEmptyAssistantMessage = isAssistant && !hasVisibleContent && !isAwaitingStreamContent;
+          const toolStatusFromStream = message.toolStatus?.name ? resolveToolStatusInfo(message.toolStatus.name, t) : null;
+          const parsedToolStatus = extractCurrentToolStatus(rawContent, t);
+          const toolStatusInfo = toolStatusFromStream ?? parsedToolStatus;
+          const spinnerLabel = toolStatusInfo?.label ?? searchStatusLabel ?? null;
+          const spinnerVariant = toolStatusInfo?.variant ?? (searchStatusLabel ? "search" : "default");
+          const spinnerSearchQuery =
+            typeof message.toolStatus?.query === "string" && message.toolStatus.query.trim().length > 0
+              ? message.toolStatus.query.trim()
+              : null;
+          const shouldShowInlineToolStatus = isStreamingAssistantMessage && Boolean(toolStatusInfo) && !isAwaitingStreamContent;
           const messageTimestampIso =
             typeof message.createdAt === "number" && Number.isFinite(message.createdAt)
               ? new Date(message.createdAt).toISOString()
@@ -219,17 +250,13 @@ export const ChatMessagesList = memo(
                   />
                 ) : (
                   <>
-                    {isAwaitingStreamContent && (() => {
-                      const toolStatus = extractCurrentToolStatus(rawContent, t);
-                      const effectiveLabel = toolStatus ?? searchStatusLabel ?? null;
-                      const isSearchVariant = Boolean(searchStatusLabel && (!toolStatus || toolStatus === searchStatusLabel));
-                      return (
-                        <GrayStreamingSpinner
-                          toolLabel={effectiveLabel}
-                          variant={isSearchVariant ? "search" : "default"}
-                        />
-                      );
-                    })()}
+                    {(isAwaitingStreamContent || shouldShowInlineToolStatus) && (
+                      <GrayStreamingSpinner
+                        toolLabel={spinnerLabel}
+                        variant={spinnerVariant}
+                        searchQuery={spinnerSearchQuery}
+                      />
+                    )}
 
                     {assistantReminders.length > 0 ? (
                       <div className={styles.reminderCardList}>
@@ -251,17 +278,29 @@ export const ChatMessagesList = memo(
                         isStreamingMessage={isStreamingMessage}
                       />
                     )}
-                    {hasTextContent && (
-                      <div className={styles.chatMarkdown}>
-                        <ReactMarkdown
-                          components={markdownComponents}
-                          remarkPlugins={MARKDOWN_PLUGINS}
-                          rehypePlugins={[[rehypeKatex, { strict: false }]]}
-                        >
-                          {visibleAssistantText}
-                        </ReactMarkdown>
-                      </div>
-                    )}
+                    {hasTextContent &&
+                      (isStreamingMessage ? (
+                        <div className={styles.chatMarkdownStreaming} aria-live="polite">
+                          {streamingTextChunks.map((chunk) => (
+                            <span
+                              key={`${message.id}-stream-token-${chunk.key}`}
+                              className={styles.chatStreamingToken}
+                            >
+                              {chunk.text}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className={styles.chatMarkdown}>
+                          <ReactMarkdown
+                            components={markdownComponents}
+                            remarkPlugins={MARKDOWN_PLUGINS}
+                            rehypePlugins={[[rehypeKatex, { strict: false }]]}
+                          >
+                            {visibleAssistantText}
+                          </ReactMarkdown>
+                        </div>
+                      ))}
                     {isAssistant && message.groundingMetadata ? (
                       <ChatMessageGroundingPanel
                         metadata={message.groundingMetadata}
@@ -310,17 +349,29 @@ export const ChatMessagesList = memo(
           <div className={styles.chatMessage} data-role="assistant">
             <div className={styles.chatAssistantBlock}>
               {(() => {
-                const fallbackToolStatus =
+                const lastAssistantMessage =
                   messages.length > 0 && messages[messages.length - 1].role === "assistant"
-                    ? extractCurrentToolStatus(messages[messages.length - 1].content, t)
+                    ? messages[messages.length - 1]
                     : null;
-                const effectiveLabel = searchStatusLabel ?? fallbackToolStatus;
-                const isSearchVariant = Boolean(searchStatusLabel && (!fallbackToolStatus || fallbackToolStatus === searchStatusLabel));
+                const fallbackToolStatus =
+                  lastAssistantMessage?.toolStatus?.name
+                    ? resolveToolStatusInfo(lastAssistantMessage.toolStatus.name, t)
+                    : lastAssistantMessage
+                      ? extractCurrentToolStatus(lastAssistantMessage.content, t)
+                      : null;
+                const effectiveLabel = fallbackToolStatus?.label ?? searchStatusLabel;
+                const isSearchVariant = fallbackToolStatus?.variant === "search" || Boolean(searchStatusLabel && !fallbackToolStatus);
+                const fallbackSearchQuery =
+                  typeof lastAssistantMessage?.toolStatus?.query === "string" &&
+                  lastAssistantMessage.toolStatus.query.trim().length > 0
+                    ? lastAssistantMessage.toolStatus.query.trim()
+                    : null;
                 return (
                   <GrayStreamingSpinner
                     reasoningSeconds={reasoningSeconds}
                     toolLabel={effectiveLabel}
                     variant={isSearchVariant ? "search" : "default"}
+                    searchQuery={fallbackSearchQuery}
                   />
                 );
               })()}

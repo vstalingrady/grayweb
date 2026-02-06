@@ -82,6 +82,20 @@ const QUESTION_PREFIXES = [
   "would",
 ];
 
+const SMALL_TALK_PATTERNS = [
+  /^\s*(?:hi|hello|hey|yo|sup)\b/i,
+  /^\s*(?:thanks|thank you|thx)\b/i,
+  /^\s*(?:how are you|how's it going|whats up|what's up)\b/i,
+  /^\s*(?:good morning|good afternoon|good evening)\b/i,
+];
+
+const FACT_LOOKUP_PATTERNS = [
+  /\b(?:who|what|when|where)\s+(?:is|are|was|were)\b/i,
+  /\b(?:tell me about|explain|overview of|background on|give me details on)\b/i,
+  /\b(?:compare|difference between)\b/i,
+  /\b(?:vs|versus)\b/i,
+];
+
 const PERSONAL_RECENCY_PATTERNS = [
   /\b(today|right now|currently|this week|this month|this year)\b\s+(i|i'm|im|we|we're|our|my|me)\b/i,
 ];
@@ -102,6 +116,20 @@ export const shouldEnableWebSearch = (message: string): boolean => {
 
   const normalized = trimmed.toLowerCase();
   const wordCount = normalized.split(/\s+/).filter(Boolean).length;
+  const slangGuardTerms = new Set([
+    "wtf",
+    "idk",
+    "omg",
+    "lol",
+    "lmfao",
+    "rofl",
+    "ngl",
+    "tbh",
+    "brb",
+    "gtg",
+    "what is wtf",
+    "what does wtf mean",
+  ]);
 
   if (EXPLICIT_PATTERNS.some((pattern) => pattern.test(normalized))) {
     return true;
@@ -126,6 +154,18 @@ export const shouldEnableWebSearch = (message: string): boolean => {
     return false;
   }
 
+  if (wordCount <= 8 && SMALL_TALK_PATTERNS.some((pattern) => pattern.test(trimmed))) {
+    return false;
+  }
+
+  if (slangGuardTerms.has(normalized)) {
+    return false;
+  }
+
+  if (FACT_LOOKUP_PATTERNS.some((pattern) => pattern.test(normalized))) {
+    return true;
+  }
+
   if ((hasSoftRecency || hasHardRecency) && isQuestionLike(normalized)) {
     return true;
   }
@@ -142,6 +182,10 @@ export const shouldEnableWebSearch = (message: string): boolean => {
     if (["news", "update", "updates", "trending"].some((phrase) => normalized.includes(phrase))) {
       return true;
     }
+  }
+
+  if (isQuestionLike(normalized) && wordCount >= 5) {
+    return true;
   }
 
   return false;
@@ -170,5 +214,5 @@ export const resolveWebSearchDecision = ({
   }
 
   const shouldUse = shouldEnableWebSearch(trimmed);
-  return { enabled: shouldUse, mode: shouldUse ? "auto" : "off" };
+  return { enabled: shouldUse, mode: "auto" };
 };

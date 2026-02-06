@@ -16,6 +16,8 @@ TIER_LEVELS = {
 # Backward-compatible model ID aliases.
 MODEL_ALIASES = {
     "z-ai/glm-4.7-2025": "z-ai/glm-4.7",
+    # Backward compatibility for older stored selections.
+    "anthropic/claude-opus-4.5": "anthropic/claude-opus-4.6",
 }
 
 # Keep this list in sync with `src/components/gray/modelCatalog.ts`.
@@ -46,7 +48,7 @@ VOYAGER_MODEL_IDS = PATHFINDER_MODEL_IDS | {
 
 # Pioneer-only: Top-tier models
 PIONEER_ONLY_MODEL_IDS = {
-    "anthropic/claude-opus-4.5",
+    "anthropic/claude-opus-4.6",
     "openai/gpt-5.2-pro",
 }
 
@@ -59,7 +61,7 @@ DEFAULT_PIONEER_MODEL = "anthropic/claude-sonnet-4.5"
 # Downgrade fallbacks when user requests model above their tier
 DOWNGRADE_FALLBACKS = {
     # Pioneer → Voyager
-    "anthropic/claude-opus-4.5": "anthropic/claude-sonnet-4.5",
+    "anthropic/claude-opus-4.6": "anthropic/claude-sonnet-4.5",
     "openai/gpt-5.2-pro": "openai/gpt-5.2-chat",
     # Voyager → Pathfinder
     "anthropic/claude-sonnet-4.5": "anthropic/claude-haiku-4.5",
