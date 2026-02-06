@@ -221,6 +221,7 @@ function GrayPageClientInner({
   }, [nowDateKey]);
   const [mobilePulseActive, setMobilePulseActive] = useState(() => {
     return (
+      variant === "dashboard" ||
       pathname === "/pulse" ||
       pathname?.startsWith("/cal") ||
       pathname?.startsWith("/gray/dashboard")
@@ -251,14 +252,15 @@ function GrayPageClientInner({
 
   useEffect(() => {
     const shouldAutoActivate =
+      variant === "dashboard" ||
       pathname === "/pulse" ||
       pathname?.startsWith("/cal") ||
       pathname?.startsWith("/gray/dashboard");
 
-    if (isMobileViewport && shouldAutoActivate && !mobilePulseActive) {
+    if (shouldAutoActivate && !mobilePulseActive) {
       setMobilePulseActive(true);
     }
-  }, [isMobileViewport, mobilePulseActive, pathname]);
+  }, [mobilePulseActive, pathname, variant]);
 
   const {
     proactivity,
