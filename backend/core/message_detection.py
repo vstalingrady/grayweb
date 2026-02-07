@@ -58,6 +58,7 @@ LIVE_KEYWORDS = [
     "traffic", "flight status", "train status",
     "nba score", "nfl score", "soccer score", "game score",
     "release date", "new version", "new update", "patch notes",
+    "new files", "brand new files", "just dropped", "just released", "conspiracy",
 ]
 
 RECENCY_TOKENS = [
@@ -108,7 +109,7 @@ STABLE_KNOWLEDGE_PATTERNS = (
 
 VERIFICATION_PATTERNS = (
     re.compile(r"\b(?:is it true|is this true|is that true)\b", re.IGNORECASE),
-    re.compile(r"\b(?:rumor|rumour|hoax|myth|debunk|fact[\s-]?check|verify|verification|credible evidence)\b", re.IGNORECASE),
+    re.compile(r"\b(?:rumor|rumour|hoax|myth|debunk|fact[\s-]?check|verify|verification|credible evidence|conspiracy)\b", re.IGNORECASE),
     re.compile(
         r"\b(?:did|does|do|is|are|was|were|has|have|had)\b[\s\S]{0,140}\b(?:actually|really|true|real|legit|confirmed|evidence)\b",
         re.IGNORECASE,
@@ -215,7 +216,7 @@ def _should_enable_search_base(message: str) -> bool:
     if any(pattern.search(normalized) for pattern in STABLE_KNOWLEDGE_PATTERNS):
         return False
 
-    if _is_question_like(normalized) and any(pattern.search(normalized) for pattern in VERIFICATION_PATTERNS):
+    if any(pattern.search(normalized) for pattern in VERIFICATION_PATTERNS):
         return True
 
     # Don't auto-search ambiguous follow-ups without conversation anchor.

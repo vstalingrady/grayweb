@@ -30,6 +30,11 @@ const LIVE_KEYWORDS = [
   "new version",
   "new update",
   "patch notes",
+  "new files",
+  "brand new files",
+  "just dropped",
+  "just released",
+  "conspiracy",
 ];
 
 const SOFT_RECENCY_PATTERNS = [
@@ -99,7 +104,7 @@ const STABLE_KNOWLEDGE_PATTERNS = [
 
 const VERIFICATION_PATTERNS = [
   /\b(?:is it true|is this true|is that true)\b/i,
-  /\b(?:rumor|rumour|hoax|myth|debunk|fact[\s-]?check|verify|verification|credible evidence)\b/i,
+  /\b(?:rumor|rumour|hoax|myth|debunk|fact[\s-]?check|verify|verification|credible evidence|conspiracy)\b/i,
   /\b(?:did|does|do|is|are|was|were|has|have|had)\b[\s\S]{0,140}\b(?:actually|really|true|real|legit|confirmed|evidence)\b/i,
 ];
 
@@ -204,7 +209,7 @@ export const shouldEnableWebSearch = (message: string, recentUserMessages?: stri
     return false;
   }
 
-  if (isQuestionLike(normalized) && VERIFICATION_PATTERNS.some((pattern) => pattern.test(normalized))) {
+  if (VERIFICATION_PATTERNS.some((pattern) => pattern.test(normalized))) {
     return true;
   }
 

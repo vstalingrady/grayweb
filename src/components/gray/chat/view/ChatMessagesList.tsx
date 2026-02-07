@@ -294,6 +294,21 @@ export const ChatMessagesList = memo(
       return nearest;
     }, [messages]);
 
+    const latestUserQuery = useMemo(() => {
+      for (let index = messages.length - 1; index >= 0; index -= 1) {
+        const entry = messages[index];
+        if (entry.role !== "user") {
+          continue;
+        }
+        const text = typeof entry.content === "string" ? entry.content.trim() : "";
+        if (!text) {
+          continue;
+        }
+        return text.length > 180 ? `${text.slice(0, 177).trimEnd()}...` : text;
+      }
+      return null;
+    }, [messages]);
+
     const shouldAnchorMessages = !isLoadingHistory;
 
     return (
@@ -422,6 +437,7 @@ export const ChatMessagesList = memo(
                         toolLabel={spinnerLabel}
                         variant={spinnerVariant}
                         searchQuery={spinnerSearchQuery}
+                        searchState={isCompletedSearchStatus ? "completed" : "active"}
                       />
                     )}
 
@@ -522,13 +538,14 @@ export const ChatMessagesList = memo(
                   typeof lastAssistantMessage?.toolStatus?.query === "string" &&
                   lastAssistantMessage.toolStatus.query.trim().length > 0
                     ? lastAssistantMessage.toolStatus.query.trim()
-                    : null;
+                    : latestUserQuery;
                 return (
                   <GrayStreamingSpinner
                     reasoningSeconds={reasoningSeconds}
                     toolLabel={effectiveLabel}
                     variant={isSearchVariant ? "search" : "default"}
                     searchQuery={fallbackSearchQuery}
+                    searchState="active"
                   />
                 );
               })()}
