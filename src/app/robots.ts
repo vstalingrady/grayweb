@@ -18,6 +18,7 @@ const MARKETING_DISALLOWS = [
   "/admin",
   "/threads",
   "/pulse",
+  "/p",
   "/grove",
   "/cal",
   "/reference",

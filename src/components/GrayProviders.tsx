@@ -126,6 +126,7 @@ export function GrayProviders({ viewerEmail, children }: GrayProvidersProps) {
     "/c",
     "/threads",
     "/pulse",
+    "/p",
     "/cal",
     "/reference",
     "/payment",

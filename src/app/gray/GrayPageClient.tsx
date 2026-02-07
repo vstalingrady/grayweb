@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "@/contexts/UserContext";
 import { workspaceService } from "@/lib/api";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
@@ -103,6 +103,53 @@ const HistoryOverlay = dynamic(
   () => import("@/components/gray/HistoryOverlay").then((mod) => mod.HistoryOverlay),
   { loading: () => null }
 );
+
+type SpeechRecognitionAlternativeLike = {
+  transcript?: string;
+};
+
+type SpeechRecognitionResultLike = {
+  isFinal?: boolean;
+  0?: SpeechRecognitionAlternativeLike;
+  item?: (index: number) => SpeechRecognitionAlternativeLike | null;
+};
+
+type SpeechRecognitionResultListLike = ArrayLike<SpeechRecognitionResultLike>;
+
+type SpeechRecognitionEventLike = {
+  resultIndex: number;
+  results: SpeechRecognitionResultListLike;
+};
+
+type SpeechRecognitionErrorEventLike = {
+  error?: string;
+};
+
+type BrowserSpeechRecognition = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
+
+const extractRecognitionTranscript = (result: SpeechRecognitionResultLike): string => {
+  if (typeof result?.[0]?.transcript === "string") {
+    return result[0].transcript;
+  }
+  const fallback = result.item?.(0);
+  if (fallback && typeof fallback.transcript === "string") {
+    return fallback.transcript;
+  }
+  return "";
+};
+
+const MOBILE_LAST_CHAT_ROUTE_STORAGE_KEY = "gray:mobileLastChatRoute";
 
 // Helper functions and constants imported from extracted modules
 
@@ -289,6 +336,11 @@ function GrayPageClientInner({
   const derivedPlans = user ? plans : [];
 
   const [threadComposerDraft, setThreadComposerDraft] = useState("");
+  const [isVoiceInputSupported, setIsVoiceInputSupported] = useState(false);
+  const [isVoiceInputActive, setIsVoiceInputActive] = useState(false);
+  const speechRecognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const voiceDraftPrefixRef = useRef("");
+  const voiceFinalTranscriptRef = useRef("");
   const threadComposerControls = useMemo(
     () => ({
       clear: () => setThreadComposerDraft(""),
@@ -296,6 +348,98 @@ function GrayPageClientInner({
     }),
     []
   );
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const speechWindow = window as typeof window & {
+      SpeechRecognition?: BrowserSpeechRecognitionConstructor;
+      webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
+    };
+    const SpeechRecognitionCtor = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
+
+    if (!SpeechRecognitionCtor) {
+      setIsVoiceInputSupported(false);
+      speechRecognitionRef.current = null;
+      return;
+    }
+
+    const recognition = new SpeechRecognitionCtor();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = window.navigator.language || "en-US";
+    recognition.onresult = (event: SpeechRecognitionEventLike) => {
+      let interimText = "";
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        const transcript = extractRecognitionTranscript(result);
+        if (!transcript) {
+          continue;
+        }
+        if (result.isFinal) {
+          voiceFinalTranscriptRef.current += transcript;
+        } else {
+          interimText += transcript;
+        }
+      }
+
+      const nextDraft =
+        `${voiceDraftPrefixRef.current}${voiceFinalTranscriptRef.current}${interimText}`.trim();
+      setThreadComposerDraft(nextDraft);
+    };
+    recognition.onerror = () => {
+      setIsVoiceInputActive(false);
+    };
+    recognition.onend = () => {
+      setIsVoiceInputActive(false);
+    };
+
+    speechRecognitionRef.current = recognition;
+    setIsVoiceInputSupported(true);
+
+    return () => {
+      recognition.onresult = null;
+      recognition.onerror = null;
+      recognition.onend = null;
+      try {
+        recognition.stop();
+      } catch {
+        // Ignore stop failures during teardown.
+      }
+      if (speechRecognitionRef.current === recognition) {
+        speechRecognitionRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleToggleVoiceInput = useCallback(() => {
+    const recognition = speechRecognitionRef.current;
+    if (!recognition) {
+      return;
+    }
+
+    if (isVoiceInputActive) {
+      try {
+        recognition.stop();
+      } catch {
+        // Ignore stop errors from browsers that auto-stop.
+      }
+      setIsVoiceInputActive(false);
+      return;
+    }
+
+    const trimmed = threadComposerDraft.trim();
+    voiceDraftPrefixRef.current = trimmed.length > 0 ? `${trimmed} ` : "";
+    voiceFinalTranscriptRef.current = "";
+    try {
+      recognition.start();
+      setIsVoiceInputActive(true);
+    } catch {
+      setIsVoiceInputActive(false);
+    }
+  }, [isVoiceInputActive, threadComposerDraft]);
 
   const handleCreatePlan = useCallback(async (payload: EventComposerPayload) => {
     if (!user?.id) return;
@@ -537,19 +681,58 @@ function GrayPageClientInner({
       : manualViewMode ??
         (activeNav === "history" ? "history" : baseViewMode);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const currentPath = window.location.pathname;
+    if (currentPath === "/" || currentPath === "/g" || currentPath.startsWith("/c/")) {
+      try {
+        window.sessionStorage.setItem(MOBILE_LAST_CHAT_ROUTE_STORAGE_KEY, currentPath);
+      } catch {
+        // Ignore storage failures.
+      }
+    }
+  }, [pathname]);
+
   const handleMobileHeaderSelectChat = useCallback(() => {
     setMobilePulseActive(false);
-    if (pathname !== "/") {
-      router.push("/");
+    let targetRoute = activeNav === "general" ? NAVIGATION_ROUTES.general ?? "/g" : NAVIGATION_ROUTES.threads ?? "/";
+    if (typeof window !== "undefined") {
+      try {
+        const storedRoute = window.sessionStorage.getItem(MOBILE_LAST_CHAT_ROUTE_STORAGE_KEY);
+        if (
+          storedRoute &&
+          (storedRoute === "/" || storedRoute === "/g" || storedRoute.startsWith("/c/"))
+        ) {
+          targetRoute = storedRoute;
+        }
+      } catch {
+        // Ignore storage failures.
+      }
+    }
+
+    if (pathname !== targetRoute) {
+      router.push(targetRoute);
     }
     if (isMobileViewport) {
       collapseAllSidebars();
     }
-  }, [collapseAllSidebars, isMobileViewport, pathname, router]);
+  }, [activeNav, collapseAllSidebars, isMobileViewport, pathname, router]);
 
   const handleMobileHeaderSelectPulse = useCallback(() => {
     setMobilePulseActive(true);
     setDashboardTab("pulse");
+    if (typeof window !== "undefined") {
+      try {
+        const currentPath = window.location.pathname;
+        if (currentPath === "/" || currentPath === "/g" || currentPath.startsWith("/c/")) {
+          window.sessionStorage.setItem(MOBILE_LAST_CHAT_ROUTE_STORAGE_KEY, currentPath);
+        }
+      } catch {
+        // Ignore storage failures.
+      }
+    }
     if (pathname !== "/pulse") {
       router.push("/pulse");
     }
@@ -1248,7 +1431,7 @@ function GrayPageClientInner({
   );
 
   const handleThreadComposerSubmit = useCallback(
-    (event: React.FormEvent<HTMLFormElement>) => {
+    (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       if (isUsageLimitReached) {
         return;
@@ -1572,6 +1755,9 @@ function GrayPageClientInner({
                     showUnderline={false}
                     onAddAttachment={openAttachmentPicker}
                     onPasteFiles={handleAttachmentPaste}
+                    onToggleVoiceInput={handleToggleVoiceInput}
+                    isVoiceInputSupported={isVoiceInputSupported}
+                    isVoiceInputActive={isVoiceInputActive}
                     isInputDisabled={isUsageLimitReached}
                     {...(isUsageLimitReached ? { isSubmitDisabled: true } : {})}
                   />

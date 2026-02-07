@@ -29,6 +29,7 @@ export function middleware(request: NextRequest) {
         "/admin",
         "/threads",
         "/pulse",
+        "/p",
         "/grove",
         "/cal",
         "/reference",

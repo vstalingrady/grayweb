@@ -1771,7 +1771,7 @@
   padding-bottom: calc(var(--gray-chat-bar-clearance, 0px));
   scroll-padding-bottom: calc(var(--gray-chat-bar-clearance, 0px));
   overscroll-behavior-y: contain;
-  scroll-behavior: smooth;
+  scroll-behavior: auto;
   z-index: 0;
 }
 

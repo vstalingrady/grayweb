@@ -24,7 +24,6 @@ import {
   Brain,
   CreditCard,
   LogOut,
-  Pencil,
 } from "lucide-react";
 import styles from "./SettingsStyles.module.css";
 import { useI18n } from "@/contexts/I18nContext";
@@ -608,20 +607,21 @@ export function SettingsModal({
                 ) : (
                   <UserCircle size={48} />
                 )}
-                <button
-                  className={styles.mobileProfileEditButton}
-                  onClick={() => {
-                    setActiveSection("account");
-                    setMobileView("detail");
-                  }}
-                >
-                  <Pencil size={14} />
-                </button>
               </div>
               <h3 className={styles.mobileProfileName}>{user?.full_name || "Gray User"}</h3>
               {user?.email ? (
                 <span className={styles.mobileProfileEmail}>{user.email}</span>
               ) : null}
+              <button
+                type="button"
+                className={styles.mobileProfileManageName}
+                onClick={() => {
+                  setActiveSection("personalization");
+                  setMobileView("detail");
+                }}
+              >
+                {t("Change username")}
+              </button>
             </div>
 
             <div className={styles.mobileGroup}>

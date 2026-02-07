@@ -45,6 +45,32 @@ export const useChatViewScroll = ({
   const prevMessageCountRef = useRef(0);
   const prevSessionKeyRef = useRef<string | null>(null);
   const initialScrollDoneRef = useRef(false);
+  const initialSyncTimersRef = useRef<number[]>([]);
+
+  const clearInitialSyncTimers = useCallback(() => {
+    if (typeof window === "undefined") {
+      initialSyncTimersRef.current = [];
+      return;
+    }
+    for (const timeoutId of initialSyncTimersRef.current) {
+      window.clearTimeout(timeoutId);
+    }
+    initialSyncTimersRef.current = [];
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    const viewport = chatViewportRef.current;
+    if (viewport) {
+      const maxScroll = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+      viewport.scrollTop = maxScroll;
+      isAtBottomRef.current = true;
+      return;
+    }
+    if (scrollAnchorRef.current) {
+      scrollAnchorRef.current.scrollIntoView({ behavior: "auto" });
+      isAtBottomRef.current = true;
+    }
+  }, []);
 
   useEffect(() => {
     if (prevSessionKeyRef.current === sessionKey) {
@@ -54,7 +80,8 @@ export const useChatViewScroll = ({
     isAtBottomRef.current = true;
     lastScrollTopRef.current = 0;
     initialScrollDoneRef.current = false;
-  }, [sessionKey]);
+    clearInitialSyncTimers();
+  }, [clearInitialSyncTimers, sessionKey]);
 
   useEffect(() => {
     const isSessionChange = prevSessionKeyRef.current !== sessionKey;
@@ -72,40 +99,38 @@ export const useChatViewScroll = ({
     }
     if (shouldScroll) {
       if (isSessionChange && !initialScrollDoneRef.current) {
-        const viewport = chatViewportRef.current;
-        if (viewport) {
-          const maxScroll = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
-          viewport.scrollTop = maxScroll;
-          isAtBottomRef.current = true;
-          userScrolledAwayRef.current = false;
-          requestAnimationFrame(() => {
-            if (userScrolledAwayRef.current) {
-              return;
-            }
-            const nextViewport = chatViewportRef.current;
-            if (!nextViewport) {
-              return;
-            }
-            const nextMaxScroll = Math.max(0, nextViewport.scrollHeight - nextViewport.clientHeight);
-            nextViewport.scrollTop = nextMaxScroll;
-            isAtBottomRef.current = true;
+        userScrolledAwayRef.current = false;
+        scrollToBottom();
+        clearInitialSyncTimers();
+        if (typeof window !== "undefined") {
+          const stabilizationDelays = [0, 16, 32, 64, 120, 220, 360, 520];
+          stabilizationDelays.forEach((delay, index) => {
+            const timeoutId = window.setTimeout(() => {
+              if (userScrolledAwayRef.current) {
+                return;
+              }
+              scrollToBottom();
+              if (index === stabilizationDelays.length - 1) {
+                initialScrollDoneRef.current = true;
+              }
+            }, delay);
+            initialSyncTimersRef.current.push(timeoutId);
           });
-        } else if (scrollAnchorRef.current) {
-          scrollAnchorRef.current.scrollIntoView({ behavior: "auto" });
-          isAtBottomRef.current = true;
-          userScrolledAwayRef.current = false;
+        } else {
+          initialScrollDoneRef.current = true;
         }
-        initialScrollDoneRef.current = true;
       } else {
         const allowAutoScroll = !userScrolledAwayRef.current && isAtBottomRef.current;
         if (allowAutoScroll) {
-          scrollAnchorRef.current.scrollIntoView({ behavior: "auto" });
+          scrollToBottom();
         }
       }
     }
     prevMessageCountRef.current = messages.length;
     prevSessionKeyRef.current = sessionKey;
-  }, [hasHydrated, messages.length, sessionKey, suppressAutoScroll]);
+  }, [clearInitialSyncTimers, hasHydrated, messages.length, scrollToBottom, sessionKey, suppressAutoScroll]);
+
+  useEffect(() => () => clearInitialSyncTimers(), [clearInitialSyncTimers]);
 
   const streamingTargetId = useMemo(() => {
     if (activeStreamingMessageId) {
@@ -184,6 +209,32 @@ export const useChatViewScroll = ({
     }
     scrollAnchorRef.current.scrollIntoView({ behavior: "instant" });
   }, [streamingContentSignature]);
+
+  useEffect(() => {
+    if (!hasHydrated || suppressAutoScroll) {
+      return;
+    }
+    const viewport = chatViewportRef.current;
+    const anchor = scrollAnchorRef.current;
+    if (!viewport || !anchor || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observedNode = anchor.parentElement ?? viewport;
+    const observer = new ResizeObserver(() => {
+      if (userScrolledAwayRef.current) {
+        return;
+      }
+      const nearBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 160;
+      if (!nearBottom && initialScrollDoneRef.current) {
+        return;
+      }
+      scrollToBottom();
+    });
+
+    observer.observe(observedNode);
+    return () => observer.disconnect();
+  }, [hasHydrated, scrollToBottom, sessionKey, suppressAutoScroll]);
 
   useLayoutEffect(() => {
     const composer = composerDockRef.current;
