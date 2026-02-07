@@ -54,6 +54,14 @@ def test_should_enable_search_for_non_recency_factual_question():
     assert should_enable_search("Can you explain what RAG means in LLM systems?") is False
 
 
+def test_should_enable_search_for_low_confidence_verification_query():
+    assert should_enable_search("did jeffrey epstein actually have a minecraft channel") is True
+
+
+def test_should_enable_search_for_debunk_style_query():
+    assert should_enable_search("is this true or just a rumor?") is True
+
+
 def test_should_enable_search_ambiguous_follow_up_without_context():
     assert should_enable_search("what about him gaming though") is False
 

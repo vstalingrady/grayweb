@@ -97,6 +97,12 @@ const STABLE_KNOWLEDGE_PATTERNS = [
   /\b(?:define|definition of)\b/i,
 ];
 
+const VERIFICATION_PATTERNS = [
+  /\b(?:is it true|is this true|is that true)\b/i,
+  /\b(?:rumor|rumour|hoax|myth|debunk|fact[\s-]?check|verify|verification|credible evidence)\b/i,
+  /\b(?:did|does|do|is|are|was|were|has|have|had)\b[\s\S]{0,140}\b(?:actually|really|true|real|legit|confirmed|evidence)\b/i,
+];
+
 const PERSONAL_RECENCY_PATTERNS = [
   /\b(today|right now|currently|this week|this month|this year)\b\s+(i|i'm|im|we|we're|our|my|me)\b/i,
 ];
@@ -196,6 +202,10 @@ export const shouldEnableWebSearch = (message: string, recentUserMessages?: stri
 
   if (STABLE_KNOWLEDGE_PATTERNS.some((pattern) => pattern.test(normalized))) {
     return false;
+  }
+
+  if (isQuestionLike(normalized) && VERIFICATION_PATTERNS.some((pattern) => pattern.test(normalized))) {
+    return true;
   }
 
   if (isAmbiguousFollowUp(normalized)) {

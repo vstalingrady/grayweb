@@ -163,6 +163,7 @@ def _build_effective_web_search_prompt(
         "before searching. Rewrite follow-up queries with the resolved entity/topic explicitly included. "
         "Never run standalone generic queries such as 'other half', 'the rest', or 'what about him'. "
         "Keep the user domain intact; do not reinterpret ambiguous words into unrelated domains. "
+        "For factual claims or rumor/verification style questions, if confidence is not high, run one targeted web search before concluding. "
         "If the referent is still ambiguous, ask one clarifying question instead of broad generic searches."
     )
     if not conversation_history:
