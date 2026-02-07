@@ -26,7 +26,6 @@ import {
   LogOut,
   Pencil,
 } from "lucide-react";
-import railNavStyles from "../sidebar/RailNav.module.css";
 import styles from "./SettingsStyles.module.css";
 import { useI18n } from "@/contexts/I18nContext";
 import { useUser } from "@/contexts/UserContext";
@@ -619,21 +618,10 @@ export function SettingsModal({
                   <Pencil size={14} />
                 </button>
               </div>
+              <h3 className={styles.mobileProfileName}>{user?.full_name || "Gray User"}</h3>
               {user?.email ? (
                 <span className={styles.mobileProfileEmail}>{user.email}</span>
-              ) : (
-                <h3 className={styles.mobileProfileName}>{user?.full_name || "Gray User"}</h3>
-              )}
-              <button
-                className={railNavStyles.railNav}
-                style={{ width: "auto", height: 32, padding: "0 16px", borderRadius: 16, background: "#1c1c1e", fontSize: "0.9rem", color: "#fff" }}
-                onClick={() => {
-                  setActiveSection("account");
-                  setMobileView("detail");
-                }}
-              >
-                {t("Edit profile")}
-              </button>
+              ) : null}
             </div>
 
             <div className={styles.mobileGroup}>
