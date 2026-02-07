@@ -38,7 +38,7 @@ class ChatRequest(BaseModel):
     context_cache_id: Optional[int] = None
     web_search_enabled: bool = False  # Disabled by default - adds ~7s latency to OpenRouter
     web_search_mode: Optional[str] = None
-    web_search_engine: Optional[str] = "native"
+    web_search_engine: Optional[str] = None
     web_search_max_results: Optional[int] = None
     web_search_prompt: Optional[str] = None
     web_search_context_size: Optional[str] = None
