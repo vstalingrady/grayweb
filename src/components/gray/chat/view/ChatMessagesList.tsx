@@ -354,8 +354,10 @@ export const ChatMessagesList = memo(
               spinnerSearchQuery
           );
           const spinnerLabel = isCompletedSearchStatus ? t("Searched") : toolStatusInfo?.label ?? searchStatusLabel ?? null;
+          const shouldShowCompletedSearchInline = isCompletedSearchStatus && !message.groundingMetadata;
           const shouldShowInlineToolStatus =
-            (isStreamingAssistantMessage && Boolean(toolStatusInfo) && !isAwaitingStreamContent) || isCompletedSearchStatus;
+            (isStreamingAssistantMessage && Boolean(toolStatusInfo) && !isAwaitingStreamContent) ||
+            shouldShowCompletedSearchInline;
           const messageTimestampIso =
             typeof message.createdAt === "number" && Number.isFinite(message.createdAt)
               ? new Date(message.createdAt).toISOString()

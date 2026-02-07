@@ -45,7 +45,7 @@ export const GrayStreamingSpinner = ({
         {resolvedLabel && <span className={styles.chatToolStatus}>{resolvedLabel}</span>}
       </div>
       {hasSearchQuery ? (
-        <div className={styles.chatSearchQueryBar}>
+        <div className={styles.chatSearchQueryBar} data-search-state={searchState}>
           <span className={styles.chatSearchQueryText}>{searchQuery}</span>
         </div>
       ) : null}

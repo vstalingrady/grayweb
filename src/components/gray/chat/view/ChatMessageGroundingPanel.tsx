@@ -1,6 +1,7 @@
 "use client";
 
-import type { SyntheticEvent } from "react";
+import { useState, type CSSProperties, type SyntheticEvent } from "react";
+import { ChevronDown } from "lucide-react";
 import styles from "./ChatMessageGroundingPanel.module.css";
 import type { GroundingMetadata } from "@/lib/api";
 import {
@@ -31,7 +32,21 @@ type SearchEntryResult = {
   title: string;
   href: string;
   siteLabel?: string;
+  snippet?: string;
   thumbnailUrl?: string;
+};
+
+type GroundingPanelCard = {
+  id: string;
+  title: string;
+  href?: string;
+  siteLabel?: string;
+  snippet?: string;
+  faviconUrl?: string;
+  previewImageUrl?: string;
+  previewFallbackQueue?: string;
+  initials: string;
+  fallbackSeed: string;
 };
 
 const normalizeSearchEntryImageUrl = (raw: string | null): string | null => {
@@ -93,6 +108,118 @@ const normalizeSearchEntryHost = (value?: string | null): string | null => {
   }
   const normalized = value.trim().replace(/^www\./i, "");
   return normalized ? normalized.toLowerCase() : null;
+};
+
+const collapseWhitespace = (value: string): string => value.replace(/\s+/g, " ").trim();
+
+const truncatePreviewText = (value: string, maxLength = 220): string =>
+  value.length <= maxLength ? value : `${value.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
+
+const extractSourceSnippet = (value?: string): string | undefined => {
+  if (!value) {
+    return undefined;
+  }
+  const normalized = collapseWhitespace(value);
+  if (!normalized || normalized.length < 24) {
+    return undefined;
+  }
+  return truncatePreviewText(normalized);
+};
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const cleanSearchEntrySnippetCandidate = (candidate: string, title: string, siteLabel?: string): string | null => {
+  let normalized = collapseWhitespace(candidate);
+  if (!normalized) {
+    return null;
+  }
+  const normalizedTitle = collapseWhitespace(title);
+  if (normalizedTitle) {
+    if (normalized.toLowerCase() === normalizedTitle.toLowerCase()) {
+      return null;
+    }
+    const escapedTitle = escapeRegExp(normalizedTitle);
+    normalized = normalized.replace(new RegExp(`^${escapedTitle}\\s*[|:·•\\-–—]+\\s*`, "i"), "");
+    if (normalized.toLowerCase().startsWith(normalizedTitle.toLowerCase())) {
+      normalized = normalized.slice(normalizedTitle.length).trim();
+    }
+  }
+  if (siteLabel) {
+    const normalizedSite = collapseWhitespace(siteLabel);
+    if (normalizedSite) {
+      const escapedSite = escapeRegExp(normalizedSite);
+      normalized = normalized.replace(new RegExp(`^${escapedSite}\\s*[|:·•\\-–—]+\\s*`, "i"), "");
+    }
+  }
+  normalized = normalized.replace(/^[|:·•\-\u2013\u2014]+\s*/, "");
+  normalized = collapseWhitespace(normalized);
+  if (!normalized || normalized.length < 28) {
+    return null;
+  }
+  return truncatePreviewText(normalized);
+};
+
+const extractSearchEntrySnippet = (anchor: HTMLAnchorElement, title: string, siteLabel?: string): string | undefined => {
+  const candidates: string[] = [];
+  const push = (value?: string | null) => {
+    if (!value) {
+      return;
+    }
+    const normalized = collapseWhitespace(value);
+    if (normalized) {
+      candidates.push(normalized);
+    }
+  };
+
+  push(anchor.getAttribute("aria-description"));
+  push(anchor.getAttribute("aria-label"));
+  push(anchor.getAttribute("title"));
+
+  const anchorText = collapseWhitespace(anchor.textContent ?? "");
+  const parent = anchor.parentElement;
+  if (parent) {
+    for (const child of Array.from(parent.children)) {
+      if (child === anchor || child.contains(anchor)) {
+        continue;
+      }
+      push(child.textContent);
+    }
+    if (anchorText) {
+      push((parent.textContent ?? "").replace(anchorText, " "));
+    }
+  }
+
+  const containers = [anchor.closest("article"), anchor.closest("li"), parent?.parentElement, parent?.parentElement?.parentElement];
+  for (const container of containers) {
+    if (!container) {
+      continue;
+    }
+    for (const child of Array.from(container.children)) {
+      if (child === anchor || child.contains(anchor)) {
+        continue;
+      }
+      push(child.textContent);
+      if (candidates.length >= 14) {
+        break;
+      }
+    }
+    if (candidates.length >= 14) {
+      break;
+    }
+  }
+
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    if (seen.has(candidate)) {
+      continue;
+    }
+    seen.add(candidate);
+    const snippet = cleanSearchEntrySnippetCandidate(candidate, title, siteLabel);
+    if (snippet) {
+      return snippet;
+    }
+  }
+  return undefined;
 };
 
 const YOUTUBE_HOSTS = new Set(["youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"]);
@@ -219,6 +346,28 @@ const resolveThumbnailForSource = (
   return undefined;
 };
 
+const hashSeed = (seed: string): number => {
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) | 0;
+  }
+  return Math.abs(hash);
+};
+
+const buildDomainFallbackStyle = (seed: string): CSSProperties => {
+  const normalizedSeed = normalizeSearchEntryHost(seed) ?? seed.trim().toLowerCase();
+  const hash = hashSeed(normalizedSeed || "gray");
+  const hueA = hash % 360;
+  const hueB = (hueA + 30 + (hash % 53)) % 360;
+  const saturationA = 54 + (hash % 17);
+  const saturationB = 48 + (hash % 15);
+  const lightnessA = 30 + (hash % 12);
+  const lightnessB = 20 + (hash % 10);
+  return {
+    background: `linear-gradient(140deg, hsl(${hueA} ${saturationA}% ${lightnessA + 10}%), hsl(${hueB} ${saturationB}% ${lightnessB + 8}%))`,
+  };
+};
+
 const handleGroundingImageError = (event: SyntheticEvent<HTMLImageElement>) => {
   const target = event.currentTarget;
   const fallbackQueue = String(target.dataset.fallbackQueue ?? "")
@@ -274,11 +423,13 @@ const extractSearchEntryResults = (rawHtml: string): SearchEntryResult[] => {
       seen.add(normalizedHref);
       const siteLabel = url.hostname.replace(/^www\./i, "");
       const thumbnailUrl = extractSearchEntryThumbnail(anchor);
+      const snippet = extractSearchEntrySnippet(anchor, title, siteLabel || undefined);
       results.push({
         id: `search-${results.length}`,
         title,
         href: normalizedHref,
         siteLabel: siteLabel || undefined,
+        snippet: snippet ?? undefined,
         thumbnailUrl: thumbnailUrl ?? undefined,
       });
     }
@@ -300,6 +451,7 @@ const handleGroundingImageLoad = (event: SyntheticEvent<HTMLImageElement>) => {
 };
 
 export function ChatMessageGroundingPanel({ metadata, t }: ChatMessageGroundingPanelProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const searchQueries =
     metadata?.web_search_queries ?? (metadata as { webSearchQueries?: string[] })?.webSearchQueries ?? [];
   const searchEntryPoint =
@@ -320,175 +472,201 @@ export function ChatMessageGroundingPanel({ metadata, t }: ChatMessageGroundingP
   );
 
   const sourceCards = buildGroundingSourceCards(metadata, t);
+  const cards: GroundingPanelCard[] = [];
+  const seenCardKeys = new Set<string>();
+
+  const addCard = (card: GroundingPanelCard) => {
+    const dedupeKey = card.href ? `href:${card.href}` : `${card.title}|${card.siteLabel ?? ""}`;
+    if (seenCardKeys.has(dedupeKey)) {
+      return;
+    }
+    seenCardKeys.add(dedupeKey);
+    cards.push(card);
+  };
+
+  for (const result of searchEntryResults) {
+    const faviconUrl = buildGroundingSourceFaviconUrl({
+      id: result.id,
+      title: result.title,
+      isReferenced: false,
+      href: result.href,
+      siteLabel: result.siteLabel,
+    });
+    const thumbnailResolution = resolveThumbnailWithFallbacks(result.thumbnailUrl, result.href);
+    addCard({
+      id: `search-${result.id}`,
+      title: result.title,
+      href: result.href,
+      siteLabel: result.siteLabel,
+      snippet: result.snippet,
+      faviconUrl,
+      previewImageUrl: thumbnailResolution.primary,
+      previewFallbackQueue: thumbnailResolution.fallbacks.join("|"),
+      initials: buildGroundingSourceInitials(result.siteLabel ?? result.title),
+      fallbackSeed: result.siteLabel ?? result.href ?? result.title,
+    });
+  }
+
+  for (const source of sourceCards) {
+    const faviconUrl = buildGroundingSourceFaviconUrl(source);
+    const extractedThumbnailUrl = resolveThumbnailForSource(source, thumbnailIndex);
+    const thumbnailResolution = resolveThumbnailWithFallbacks(extractedThumbnailUrl, source.href);
+    addCard({
+      id: `source-${source.id}`,
+      title: source.title ?? t("Referenced source"),
+      href: source.href,
+      siteLabel: source.siteLabel,
+      snippet: extractSourceSnippet(source.excerpt),
+      faviconUrl,
+      previewImageUrl: thumbnailResolution.primary,
+      previewFallbackQueue: thumbnailResolution.fallbacks.join("|"),
+      initials: buildGroundingSourceInitials(source.siteLabel ?? source.title),
+      fallbackSeed: source.siteLabel ?? source.href ?? source.title,
+    });
+  }
+
+  const selfTargetSearchEntryHtml = sanitizedSearchEntryHtml
+    ? sanitizedSearchEntryHtml
+        .replace(/\btarget=(["'])_blank\1/gi, 'target="_self"')
+        .replace(/\brel=(["'])noreferrer noopener\1/gi, 'rel="noreferrer"')
+    : null;
+  const hasExpandableContent = cards.length > 0 || Boolean(selfTargetSearchEntryHtml);
+  const summaryChipQueries = searchedQueries;
 
   if (
-    sourceCards.length === 0 &&
+    cards.length === 0 &&
     searchedQueries.length === 0 &&
-    !sanitizedSearchEntryHtml &&
-    searchEntryResults.length === 0
+    !selfTargetSearchEntryHtml
   ) {
     return null;
   }
 
+  const renderGroundingCard = (card: GroundingPanelCard) => {
+    const mediaStyle = card.previewImageUrl ? undefined : buildDomainFallbackStyle(card.fallbackSeed);
+    const cardContent = (
+      <>
+        <div className={styles.chatGroundingCardMedia} style={mediaStyle}>
+          {card.previewImageUrl ? (
+            <>
+              <span className={styles.chatGroundingCardMediaFallback}>{card.initials}</span>
+              {/* eslint-disable-next-line @next/next/no-img-element -- Remote search thumbnails require direct img usage and custom fallback handling. */}
+              <img
+                src={card.previewImageUrl}
+                alt=""
+                referrerPolicy="no-referrer"
+                className={styles.chatGroundingCardMediaImage}
+                data-fallback-queue={card.previewFallbackQueue || undefined}
+                onLoad={handleGroundingImageLoad}
+                onError={handleGroundingImageError}
+              />
+            </>
+          ) : (
+            <div className={styles.chatGroundingCardMediaFallbackShell}>
+              <div className={styles.chatGroundingCardMediaFallbackBadge}>
+                <span className={styles.chatGroundingCardMediaFallbackText}>{card.initials}</span>
+                {card.faviconUrl ? (
+                  /* eslint-disable-next-line @next/next/no-img-element -- Remote favicon endpoints require direct img usage and fallback handling. */
+                  <img
+                    src={card.faviconUrl}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    className={styles.chatGroundingCardMediaFallbackFavicon}
+                    onLoad={handleGroundingImageLoad}
+                    onError={handleGroundingFaviconError}
+                  />
+                ) : null}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className={styles.chatGroundingCardMeta}>
+          <div className={styles.chatGroundingCardFavicon}>
+            <span className={styles.chatGroundingCardFaviconFallback}>{card.initials}</span>
+            {card.faviconUrl ? (
+              /* eslint-disable-next-line @next/next/no-img-element -- Remote favicon endpoints require direct img usage and fallback handling. */
+              <img
+                src={card.faviconUrl}
+                alt=""
+                referrerPolicy="no-referrer"
+                className={styles.chatGroundingCardFaviconImage}
+                onLoad={handleGroundingImageLoad}
+                onError={handleGroundingFaviconError}
+              />
+            ) : null}
+          </div>
+          <div className={styles.chatGroundingCardContent}>
+            <div className={styles.chatGroundingCardTitle}>{card.title}</div>
+            {card.siteLabel ? <div className={styles.chatGroundingCardSite}>{card.siteLabel}</div> : null}
+            {card.snippet ? <div className={styles.chatGroundingCardSnippet}>{card.snippet}</div> : null}
+          </div>
+        </div>
+      </>
+    );
+
+    if (card.href) {
+      return (
+        <a key={card.id} href={card.href} target="_self" rel="noreferrer" className={styles.chatGroundingCard}>
+          {cardContent}
+        </a>
+      );
+    }
+
+    return (
+      <div key={card.id} className={styles.chatGroundingCard} data-clickable="false">
+        {cardContent}
+      </div>
+    );
+  };
+
   return (
     <div className={styles.chatGroundingPanel}>
-      {searchEntryResults.length > 0 ? (
-        <div className={styles.chatGroundingSearchEntryDeck}>
-          <div className={styles.chatGroundingSearchResults}>
-            {searchEntryResults.map((result) => {
-              const faviconUrl = buildGroundingSourceFaviconUrl({
-                id: result.id,
-                title: result.title,
-                isReferenced: false,
-                href: result.href,
-                siteLabel: result.siteLabel,
-              });
-              const thumbnailResolution = resolveThumbnailWithFallbacks(result.thumbnailUrl, result.href);
-              const previewImageUrl = thumbnailResolution.primary;
-              const previewFallbackQueue = thumbnailResolution.fallbacks.join("|");
-              const initials = buildGroundingSourceInitials(result.siteLabel ?? result.title);
-
-              return (
-                <a
-                  key={result.id}
-                  href={result.href}
-                  target="_self"
-                  rel="noreferrer"
-                  className={styles.chatGroundingSearchResult}
-                >
-                  <div className={styles.chatGroundingSearchResultIcon}>
-                    <span className={styles.chatGroundingSearchResultFallback}>{initials}</span>
-                    {previewImageUrl ? (
-                      /* eslint-disable-next-line @next/next/no-img-element -- Favicon URLs are arbitrary; prefer a plain img with graceful fallback. */
-                      <img
-                        src={previewImageUrl}
-                        alt=""
-                        referrerPolicy="no-referrer"
-                        className={styles.chatGroundingSearchResultImage}
-                        data-fallback-queue={previewFallbackQueue || undefined}
-                        onLoad={handleGroundingImageLoad}
-                        onError={handleGroundingImageError}
-                      />
-                    ) : null}
-                  </div>
-                  <div className={styles.chatGroundingSearchResultMeta}>
-                    <div className={styles.chatGroundingSearchResultFavicon}>
-                      <span className={styles.chatGroundingSearchResultFaviconFallback}>{initials}</span>
-                      {faviconUrl ? (
-                        /* eslint-disable-next-line @next/next/no-img-element -- Favicon URLs are arbitrary; prefer a plain img with graceful fallback. */
-                        <img
-                          src={faviconUrl}
-                          alt=""
-                          referrerPolicy="no-referrer"
-                          className={styles.chatGroundingSearchResultFaviconImage}
-                          onLoad={handleGroundingImageLoad}
-                          onError={handleGroundingFaviconError}
-                        />
-                      ) : null}
-                    </div>
-                    <div className={styles.chatGroundingSearchResultContent}>
-                      <div className={styles.chatGroundingSearchResultTitle}>{result.title}</div>
-                      {result.siteLabel ? (
-                        <div className={styles.chatGroundingSearchResultSite}>{result.siteLabel}</div>
-                      ) : null}
-                    </div>
-                  </div>
-                </a>
-              );
-            })}
-          </div>
-        </div>
-      ) : sanitizedSearchEntryHtml ? (
-        <div className={styles.chatGroundingSearchEntryDeck}>
-          <div
-            className={styles.chatGroundingSearchEntry}
-            dangerouslySetInnerHTML={{ __html: sanitizedSearchEntryHtml }}
-          />
-        </div>
-      ) : null}
-      {searchedQueries.length > 0 ? (
-        <div className={styles.chatGroundingQueries}>
-          {searchedQueries.map((query) => (
-            <div key={query} className={styles.chatGroundingQueryChip}>
-              <span className={styles.chatGroundingQueryChipLabel}>{t("Searched")}</span>
-              <span className={styles.chatGroundingQueryChipText}>{query}</span>
+      {hasExpandableContent ? (
+        <button
+          type="button"
+          className={styles.chatGroundingSummaryToggle}
+          aria-expanded={isExpanded}
+          onClick={() => setIsExpanded((prev) => !prev)}
+        >
+          <div className={styles.chatGroundingSummaryToggleMeta}>
+            <span className={styles.chatGroundingSummaryLabel}>{t("Searched")}</span>
+            <div className={styles.chatGroundingSummaryQueries}>
+              {summaryChipQueries.length > 0 ? (
+                summaryChipQueries.map((query) => (
+                  <span key={query} className={styles.chatGroundingSummaryQueryChip}>
+                    {query}
+                  </span>
+                ))
+              ) : (
+                <span className={styles.chatGroundingSummaryFallbackChip}>{t("Web results")}</span>
+              )}
             </div>
-          ))}
-        </div>
-      ) : null}
-      {sourceCards.length > 0 ? (
-        <div className={styles.chatGroundingSourceDeck}>
-          <div className={styles.chatGroundingSourceCards}>
-            {sourceCards.map((source) => {
-              const faviconUrl = buildGroundingSourceFaviconUrl(source);
-              const extractedThumbnailUrl = resolveThumbnailForSource(source, thumbnailIndex);
-              const thumbnailResolution = resolveThumbnailWithFallbacks(extractedThumbnailUrl, source.href);
-              const previewImageUrl = thumbnailResolution.primary;
-              const previewFallbackQueue = thumbnailResolution.fallbacks.join("|");
-              const initials = buildGroundingSourceInitials(source.siteLabel ?? source.title);
-
-              const cardContent = (
-                <>
-                  <div className={styles.chatGroundingSourceCardAvatar}>
-                    <span className={styles.chatGroundingSourceCardFallback}>{initials}</span>
-                    {previewImageUrl ? (
-                      /* eslint-disable-next-line @next/next/no-img-element -- Favicon URLs are arbitrary; prefer a plain img with graceful fallback. */
-                      <img
-                        src={previewImageUrl}
-                        alt=""
-                        referrerPolicy="no-referrer"
-                        className={styles.chatGroundingSourceCardImage}
-                        data-fallback-queue={previewFallbackQueue || undefined}
-                        onLoad={handleGroundingImageLoad}
-                        onError={handleGroundingImageError}
-                      />
-                    ) : null}
-                  </div>
-                  <div className={styles.chatGroundingSourceCardMeta}>
-                    <div className={styles.chatGroundingSourceCardFavicon}>
-                      <span className={styles.chatGroundingSourceCardFaviconFallback}>{initials}</span>
-                      {faviconUrl ? (
-                        /* eslint-disable-next-line @next/next/no-img-element -- Favicon URLs are arbitrary; prefer a plain img with graceful fallback. */
-                        <img
-                          src={faviconUrl}
-                          alt=""
-                          referrerPolicy="no-referrer"
-                          className={styles.chatGroundingSourceCardFaviconImage}
-                          onLoad={handleGroundingImageLoad}
-                          onError={handleGroundingFaviconError}
-                        />
-                      ) : null}
-                    </div>
-                    <div className={styles.chatGroundingSourceCardContent}>
-                      <div className={styles.chatGroundingSourceCardTitle}>{source.title ?? t("Referenced source")}</div>
-                      {source.siteLabel ? <div className={styles.chatGroundingSourceCardSite}>{source.siteLabel}</div> : null}
-                    </div>
-                  </div>
-                </>
-              );
-
-              if (source.href) {
-                return (
-                  <a
-                    key={source.id}
-                    href={source.href}
-                    target="_self"
-                    rel="noreferrer"
-                    className={styles.chatGroundingSourceCard}
-                  >
-                    {cardContent}
-                  </a>
-                );
-              }
-
-              return (
-                <div key={source.id} className={styles.chatGroundingSourceCard} data-clickable="false">
-                  {cardContent}
-                </div>
-              );
-            })}
+          </div>
+          <ChevronDown
+            size={15}
+            className={`${styles.chatGroundingSummaryChevron} ${isExpanded ? styles.chatGroundingSummaryChevronExpanded : ""}`}
+            aria-hidden="true"
+          />
+        </button>
+      ) : (
+        <div className={styles.chatGroundingSummaryStatic}>
+          <span className={styles.chatGroundingSummaryLabel}>{t("Searched")}</span>
+          <div className={styles.chatGroundingSummaryQueries}>
+            {summaryChipQueries.map((query) => (
+              <span key={query} className={styles.chatGroundingSummaryQueryChip}>
+                {query}
+              </span>
+            ))}
           </div>
         </div>
+      )}
+      {hasExpandableContent && isExpanded ? (
+        cards.length > 0 ? (
+          <div className={styles.chatGroundingCards}>{cards.map((card) => renderGroundingCard(card))}</div>
+        ) : selfTargetSearchEntryHtml ? (
+          <div className={styles.chatGroundingSearchEntryDeck}>
+            <div className={styles.chatGroundingSearchEntry} dangerouslySetInnerHTML={{ __html: selfTargetSearchEntryHtml }} />
+          </div>
+        ) : null
       ) : null}
     </div>
   );
