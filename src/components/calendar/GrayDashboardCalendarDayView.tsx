@@ -95,14 +95,14 @@ export function GrayDashboardCalendarDayView({
                 aria-label={t("Previous {range}", { range: rangeNavigationLabel })}
                 onClick={() => onNavigateRange(-1)}
               >
-                ‹
+                {"<"}
               </button>
               <button
                 type="button"
                 aria-label={t("Next {range}", { range: rangeNavigationLabel })}
                 onClick={() => onNavigateRange(1)}
               >
-                ›
+                {">"}
               </button>
             </div>
           </div>
