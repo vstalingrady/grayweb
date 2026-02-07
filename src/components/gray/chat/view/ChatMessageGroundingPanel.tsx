@@ -305,17 +305,15 @@ const extractSearchEntryResults = (rawHtml: string): SearchEntryResult[] => {
 
 export type ChatMessageGroundingPanelProps = {
   metadata: GroundingMetadata;
-  _messageId: string;
-  previousUserMessageLowercase: string | null;
   t: (message: string, vars?: Record<string, string | number>) => string;
 };
 
-export function ChatMessageGroundingPanel({
-  metadata,
-  _messageId,
-  previousUserMessageLowercase: _previousUserMessageLowercase,
-  t,
-}: ChatMessageGroundingPanelProps) {
+const handleGroundingImageLoad = (event: SyntheticEvent<HTMLImageElement>) => {
+  event.currentTarget.style.opacity = "1";
+  event.currentTarget.parentElement?.setAttribute("data-image-loaded", "true");
+};
+
+export function ChatMessageGroundingPanel({ metadata, t }: ChatMessageGroundingPanelProps) {
   const searchQueries =
     metadata?.web_search_queries ?? (metadata as { webSearchQueries?: string[] })?.webSearchQueries ?? [];
   const searchEntryPoint =
@@ -379,7 +377,7 @@ export function ChatMessageGroundingPanel({
                   rel="noreferrer"
                   className={styles.chatGroundingSearchResult}
                 >
-                  <div className={styles.chatGroundingSearchResultIcon} data-kind="thumbnail">
+                  <div className={styles.chatGroundingSearchResultIcon}>
                     <span className={styles.chatGroundingSearchResultFallback}>{initials}</span>
                     {previewImageUrl ? (
                       /* eslint-disable-next-line @next/next/no-img-element -- Favicon URLs are arbitrary; prefer a plain img with graceful fallback. */
@@ -388,12 +386,8 @@ export function ChatMessageGroundingPanel({
                         alt=""
                         referrerPolicy="no-referrer"
                         className={styles.chatGroundingSearchResultImage}
-                        data-kind="thumbnail"
                         data-fallback-queue={previewFallbackQueue || undefined}
-                        onLoad={(event) => {
-                          event.currentTarget.style.opacity = "1";
-                          event.currentTarget.parentElement?.setAttribute("data-image-loaded", "true");
-                        }}
+                        onLoad={handleGroundingImageLoad}
                         onError={handleGroundingImageError}
                       />
                     ) : null}
@@ -408,10 +402,7 @@ export function ChatMessageGroundingPanel({
                           alt=""
                           referrerPolicy="no-referrer"
                           className={styles.chatGroundingSearchResultFaviconImage}
-                          onLoad={(event) => {
-                            event.currentTarget.style.opacity = "1";
-                            event.currentTarget.parentElement?.setAttribute("data-image-loaded", "true");
-                          }}
+                          onLoad={handleGroundingImageLoad}
                           onError={handleGroundingFaviconError}
                         />
                       ) : null}
@@ -459,10 +450,7 @@ export function ChatMessageGroundingPanel({
                     alt=""
                     referrerPolicy="no-referrer"
                     className={styles.chatGroundingInlineSourceIconImage}
-                    onLoad={(event) => {
-                      event.currentTarget.style.opacity = "1";
-                      event.currentTarget.parentElement?.setAttribute("data-image-loaded", "true");
-                    }}
+                    onLoad={handleGroundingImageLoad}
                     onError={handleGroundingFaviconError}
                   />
                 ) : null}
@@ -494,7 +482,7 @@ export function ChatMessageGroundingPanel({
 
               const cardContent = (
                 <>
-                  <div className={styles.chatGroundingSourceCardAvatar} data-kind="thumbnail">
+                  <div className={styles.chatGroundingSourceCardAvatar}>
                     <span className={styles.chatGroundingSourceCardFallback}>{initials}</span>
                     {previewImageUrl ? (
                       /* eslint-disable-next-line @next/next/no-img-element -- Favicon URLs are arbitrary; prefer a plain img with graceful fallback. */
@@ -503,12 +491,8 @@ export function ChatMessageGroundingPanel({
                         alt=""
                         referrerPolicy="no-referrer"
                         className={styles.chatGroundingSourceCardImage}
-                        data-kind="thumbnail"
                         data-fallback-queue={previewFallbackQueue || undefined}
-                        onLoad={(event) => {
-                          event.currentTarget.style.opacity = "1";
-                          event.currentTarget.parentElement?.setAttribute("data-image-loaded", "true");
-                        }}
+                        onLoad={handleGroundingImageLoad}
                         onError={handleGroundingImageError}
                       />
                     ) : null}
@@ -523,10 +507,7 @@ export function ChatMessageGroundingPanel({
                           alt=""
                           referrerPolicy="no-referrer"
                           className={styles.chatGroundingSourceCardFaviconImage}
-                          onLoad={(event) => {
-                            event.currentTarget.style.opacity = "1";
-                            event.currentTarget.parentElement?.setAttribute("data-image-loaded", "true");
-                          }}
+                          onLoad={handleGroundingImageLoad}
                           onError={handleGroundingFaviconError}
                         />
                       ) : null}

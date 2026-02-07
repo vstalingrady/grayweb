@@ -1020,7 +1020,6 @@ export function GrayChatView({
             shouldShowPendingStreamIndicator={shouldShowPendingStreamIndicator}
             scrollAnchorRef={scrollAnchorRef}
             isWebSearchInFlight={isWebSearchInFlight}
-            reasoningMode={reasoningMode}
             reasoningSeconds={reasoningSeconds}
             isResponding={session?.isResponding}
             isActivelyThinking={isActivelyThinking}

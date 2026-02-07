@@ -96,10 +96,6 @@
   overflow: hidden;
 }
 
-.chatGroundingSourceCardAvatar[data-kind="thumbnail"] {
-  border-radius: 0.45rem;
-}
-
 .chatGroundingSourceCardFallback {
   font-size: 0.65rem;
   letter-spacing: 0.08em;
@@ -120,16 +116,6 @@
   transition: opacity 0.2s ease;
   inset: 0;
   position: absolute;
-}
-
-.chatGroundingSourceCardImage[data-kind="favicon"] {
-  width: 36px;
-  height: 36px;
-  object-fit: contain;
-  background: rgba(255, 255, 255, 0.94);
-  border-radius: 10px;
-  inset: auto;
-  position: static;
 }
 
 .chatGroundingSourceCardContent {
@@ -255,10 +241,6 @@
   color: rgba(255, 255, 255, 0.85);
 }
 
-.chatGroundingSearchResultIcon[data-kind="thumbnail"] {
-  border-radius: 0.5rem;
-}
-
 .chatGroundingSearchResultFallback {
   font-size: 0.62rem;
   letter-spacing: 0.08em;
@@ -270,23 +252,15 @@
 }
 
 .chatGroundingSearchResultImage {
-  width: 36px;
-  height: 36px;
-  object-fit: contain;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 10px;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  position: static;
-}
-
-.chatGroundingSearchResultImage[data-kind="thumbnail"] {
   width: 100%;
   height: 100%;
   object-fit: cover;
   border-radius: 0.5rem;
   background: transparent;
+  opacity: 0;
+  transition: opacity 0.2s ease;
   inset: 0;
+  position: absolute;
 }
 
 .chatGroundingSearchResultContent {

@@ -37,8 +37,7 @@ type AssistantDisplayContent = {
   visibleAssistantText: string;
 };
 
-const getAssistantDisplayContent = (rawContent: string, reasoningMode: boolean): AssistantDisplayContent => {
-  void reasoningMode;
+const getAssistantDisplayContent = (rawContent: string): AssistantDisplayContent => {
   const assistantSections = parseStructuredAssistantMessage(rawContent);
   const rawThinkingText = assistantSections?.thinking ?? null;
   const aiText = assistantSections?.ai ?? rawContent;
@@ -72,7 +71,6 @@ export type ChatMessagesListProps = {
   shouldShowPendingStreamIndicator: boolean;
   scrollAnchorRef: RefObject<HTMLDivElement | null>;
   isWebSearchInFlight?: boolean;
-  reasoningMode?: boolean;
   reasoningSeconds?: number | null;
   isResponding?: boolean;
   isActivelyThinking?: boolean;
@@ -99,7 +97,6 @@ export const ChatMessagesList = memo(
     shouldShowPendingStreamIndicator,
     scrollAnchorRef,
     isWebSearchInFlight = false,
-    reasoningMode = false,
     reasoningSeconds,
     isResponding,
     isActivelyThinking,
@@ -164,7 +161,7 @@ export const ChatMessagesList = memo(
 	          const isUser = message.role === "user";
 	          const isAssistant = !isUser;
 	          const rawContent = message.content ?? "";
-	          const assistantDisplayContent = isAssistant ? getAssistantDisplayContent(rawContent, reasoningMode) : null;
+	          const assistantDisplayContent = isAssistant ? getAssistantDisplayContent(rawContent) : null;
           const visibleAssistantText = isAssistant ? assistantDisplayContent?.visibleAssistantText ?? "" : rawContent;
           const normalizedThinkingText = isAssistant ? assistantDisplayContent?.normalizedThinkingText ?? null : null;
           const fullText = isAssistant ? visibleAssistantText : rawContent;
@@ -313,16 +310,6 @@ export const ChatMessagesList = memo(
                     {isAssistant && message.groundingMetadata ? (
                       <ChatMessageGroundingPanel
                         metadata={message.groundingMetadata}
-                        _messageId={message.id}
-                        previousUserMessageLowercase={(() => {
-                          for (let index = messageIndex - 1; index >= 0; index -= 1) {
-                            const prior = messages[index];
-                            if (prior && prior.role === "user" && typeof prior.content === "string") {
-                              return prior.content.trim().toLowerCase();
-                            }
-                          }
-                          return null;
-                        })()}
                         t={t}
                       />
                     ) : null}
