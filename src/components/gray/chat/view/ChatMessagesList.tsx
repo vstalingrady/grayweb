@@ -63,6 +63,21 @@ const extractGroundingSearchQueries = (metadata?: GroundingMetadata | null): str
     .filter((query) => query.length > 0);
 };
 
+const findNearestPreviousUserMessage = (messages: ChatSessionMessage[], assistantIndex: number): string | null => {
+  for (let index = assistantIndex - 1; index >= 0; index -= 1) {
+    const candidate = messages[index];
+    if (candidate.role !== "user") {
+      continue;
+    }
+    const text = typeof candidate.content === "string" ? candidate.content.trim() : "";
+    if (!text) {
+      continue;
+    }
+    return text.length > 180 ? `${text.slice(0, 177).trimEnd()}...` : text;
+  }
+  return null;
+};
+
 const deriveSourceLabel = (href: string): string => {
   try {
     return new URL(href).hostname.replace(/^www\./i, "").toLowerCase();
@@ -325,13 +340,14 @@ export const ChatMessagesList = memo(
           const groundingSearchQueries = extractGroundingSearchQueries(message.groundingMetadata);
           const latestGroundingQuery =
             groundingSearchQueries.length > 0 ? groundingSearchQueries[groundingSearchQueries.length - 1] : null;
+          const previousUserQuery = findNearestPreviousUserMessage(messages, messageIndex);
           const hasGroundingSearchQuery = Boolean(latestGroundingQuery);
           const spinnerVariant =
             toolStatusInfo?.variant ?? (searchStatusLabel || hasGroundingSearchQuery ? "search" : "default");
           const spinnerSearchQuery =
             typeof message.toolStatus?.query === "string" && message.toolStatus.query.trim().length > 0
               ? message.toolStatus.query.trim()
-              : latestGroundingQuery;
+              : latestGroundingQuery ?? previousUserQuery;
           const isCompletedSearchStatus = Boolean(
             !isStreamingAssistantMessage &&
               (message.toolStatus?.status === "end" || hasGroundingSearchQuery) &&
