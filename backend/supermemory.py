@@ -138,7 +138,7 @@ def _float_env(name: str, default: float) -> float:
 
 
 def supermemory_force_enabled() -> bool:
-    return _bool_env("GRAY_SUPERMEMORY_FORCE", True)
+    return _bool_env("GRAY_SUPERMEMORY_FORCE", False)
 
 
 def supermemory_force_plan_tier(plan_tier: Optional[str]) -> Optional[str]:
@@ -266,13 +266,15 @@ def _normalize_search_results(results: Any) -> List[Dict[str, Any]]:
         memory = item.get("memory")
         if not isinstance(memory, str) or not memory.strip():
             continue
-        normalized.append(
-            {
-                "memory": memory.strip(),
-                "similarity": item.get("similarity"),
-                "updatedAt": item.get("updatedAt"),
-            }
-        )
+        memory_id = item.get("id") or item.get("memoryId") or item.get("documentId")
+        payload: Dict[str, Any] = {
+            "memory": memory.strip(),
+            "similarity": item.get("similarity"),
+            "updatedAt": item.get("updatedAt"),
+        }
+        if isinstance(memory_id, str) and memory_id.strip():
+            payload["id"] = memory_id.strip()
+        normalized.append(payload)
     return normalized
 
 
@@ -449,9 +451,9 @@ class SupermemoryService:
 
         if normalized == "scout":
             return SupermemoryPolicy(
-                enabled=True,
-                auto_recall=self._auto_recall,
-                auto_capture=self._auto_capture,
+                enabled=False,
+                auto_recall=False,
+                auto_capture=False,
                 max_recall_results=min(base_max, 3),
                 profile_frequency=max(base_freq, 200),
                 min_query_chars=min_query,
@@ -745,11 +747,15 @@ class SupermemoryService:
         cleaned_query = (query or "").strip()
         if not cleaned_query:
             return []
+        try:
+            parsed_limit = int(limit)
+        except (TypeError, ValueError):
+            parsed_limit = 5
         container_tag = self._container_tag(user_id)
         payload: Dict[str, Any] = {
             "q": cleaned_query,
             "containerTag": container_tag,
-            "limit": max(1, min(int(limit or 5), 20)),
+            "limit": max(1, min(parsed_limit, 20)),
             "searchMode": "memories",
         }
         if policy.threshold is not None:
@@ -825,7 +831,7 @@ class SupermemoryService:
         if not results:
             return {"success": False, "message": "No matching memory found to forget."}
         target = results[0]
-        memory_id = target.get("id")
+        memory_id = target.get("id") or target.get("memoryId") or target.get("documentId")
         if memory_id:
             deleted = await self.delete_memory(
                 memory_id=memory_id,

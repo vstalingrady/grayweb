@@ -143,7 +143,9 @@ export function NotificationPreferencesProvider({ children }: { children: ReactN
       return;
     }
     lastPersistedRef.current = notificationPreferences;
-    void updateUser({ notification_preferences: notificationPreferences });
+    void updateUser({ notification_preferences: notificationPreferences }).catch((error) => {
+      console.error("Failed to persist notification preferences:", error);
+    });
   }, [arePreferencesEqual, notificationPreferences, updateUser, user, userId]);
 
   const value = useMemo(

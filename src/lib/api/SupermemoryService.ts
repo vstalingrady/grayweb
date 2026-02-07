@@ -30,9 +30,16 @@ export class SupermemoryService {
   }
 
   async forget(query?: string, memoryId?: string): Promise<SupermemoryForgetResponse> {
+    const payload: Record<string, string> = {};
+    if (typeof query === "string" && query.trim()) {
+      payload.query = query.trim();
+    }
+    if (typeof memoryId === "string" && memoryId.trim()) {
+      payload.memory_id = memoryId.trim();
+    }
     return apiFetch<SupermemoryForgetResponse>("/api/supermemory/forget", {
       method: "POST",
-      body: JSON.stringify({ query, memory_id: memoryId }),
+      body: JSON.stringify(payload),
     });
   }
 

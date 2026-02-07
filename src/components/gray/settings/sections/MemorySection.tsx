@@ -168,7 +168,8 @@ export function MemorySection({
       const response = await supermemoryService.profile(query);
       const staticFacts = response.static ?? [];
       const dynamicFacts = response.dynamic ?? [];
-      if (!staticFacts.length && !dynamicFacts.length) {
+      const searchResults = response.searchResults ?? [];
+      if (!staticFacts.length && !dynamicFacts.length && !searchResults.length) {
         setSupermemoryStatus(t("No profile information yet."));
         return;
       }
@@ -182,6 +183,16 @@ export function MemorySection({
         sections.push(
           `## ${t("Recent Context")}\n${dynamicFacts.map((fact) => `- ${fact}`).join("\n")}`
         );
+      }
+      if (searchResults.length) {
+        const lines = searchResults.map((result, index) => {
+          const score =
+            typeof result.similarity === "number"
+              ? ` (${Math.round(result.similarity * 100)}%)`
+              : "";
+          return `${index + 1}. ${result.memory}${score}`;
+        });
+        sections.push(`## ${t("Related Memories")}\n${lines.join("\n")}`);
       }
       setSupermemoryOutput(sections.join("\n\n"));
     } catch (error) {

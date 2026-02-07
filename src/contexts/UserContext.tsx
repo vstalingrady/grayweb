@@ -459,6 +459,11 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
       return;
     }
 
+    const previousUser = user;
+    // Optimistically apply known fields so downstream request builders (chat/memory)
+    // immediately see toggles without waiting for the API round trip.
+    setUser({ ...previousUser, ...payload } as User);
+
     try {
       const updatedUser = await userService.updateUser(user.id, payload);
 
@@ -468,7 +473,9 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update user';
       setError(errorMessage);
+      setUser(previousUser);
       console.error('Failed to update user:', err);
+      throw err instanceof Error ? err : new Error(errorMessage);
     }
   };
 

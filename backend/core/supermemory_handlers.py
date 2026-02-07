@@ -71,11 +71,15 @@ async def supermemory_search_tool(
     query = (args.get("query") or args.get("text") or "").strip()
     if not query:
         return {"error": "Missing query."}
-    limit = args.get("limit") or 5
+    raw_limit = args.get("limit", 5)
+    try:
+        limit = int(raw_limit)
+    except (TypeError, ValueError):
+        limit = 5
     results = await SUPERMEMORY_SERVICE.search_memories(
         user_id=user_id,
         query=query,
-        limit=int(limit),
+        limit=limit,
         plan_tier=plan_tier,
     )
     if not results:
@@ -107,13 +111,15 @@ async def supermemory_profile_tool(
         return {"status": "empty", "message": "No profile information available yet."}
     static_facts = profile.get("static") or []
     dynamic_facts = profile.get("dynamic") or []
-    if not static_facts and not dynamic_facts:
+    search_results = profile.get("searchResults") or []
+    if not static_facts and not dynamic_facts and not search_results:
         return {"status": "empty", "message": "No profile information available yet."}
     return {
         "status": "success",
         "profile": profile,
         "static_count": len(static_facts),
         "dynamic_count": len(dynamic_facts),
+        "search_count": len(search_results),
     }
 
 
