@@ -1166,10 +1166,15 @@ class OpenRouterService:
                                             "[OpenRouter] Dropped reasoning-only chunk because reasoning_mode is disabled"
                                         )
 
-                                # Only yield content if we didn't already yield reasoning from this delta.
-                                # This prevents DeepSeek v3.2 from doubling text when it sends both
-                                # reasoning_content AND content in the same chunk.
-                                if content and (not yielded_reasoning or not allow_reasoning):
+                                # DeepSeek can mirror text in both reasoning_content and content.
+                                # Other providers may include distinct visible content in the same delta,
+                                # so only suppress duplicated content for DeepSeek-family models.
+                                suppress_content_for_duplicate_reasoning = (
+                                    allow_reasoning
+                                    and yielded_reasoning
+                                    and "deepseek" in resolved_model.lower()
+                                )
+                                if content and not suppress_content_for_duplicate_reasoning:
                                     yield content
                                 elif allow_reasoning and reasoning_pieces and not yielded_reasoning:
                                     # Plaintext reasoning_details support

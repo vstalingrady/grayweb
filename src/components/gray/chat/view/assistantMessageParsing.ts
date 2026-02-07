@@ -92,6 +92,10 @@ export const stripToolUseBlocks = (text: string): string => {
   result = result.replace(/<parameter\s*=[\s\S]*?<\/parameter>/gi, "");
   // Strip any residual <tool_result> blocks if present.
   result = result.replace(/<tool_result[\s\S]*?<\/tool_result>/gi, "");
+  // Strip XML-like search planning traces that should never be shown to users.
+  result = result.replace(/<search[\s\S]*?<\/search>/gi, "");
+  result = result.replace(/<query[\s\S]*?<\/query>/gi, "");
+  result = result.replace(/<\/?(?:search|query)>/gi, "");
   return result;
 };
 

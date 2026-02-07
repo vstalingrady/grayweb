@@ -9,6 +9,7 @@ import re
 import time
 from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
+import httpx
 from google.genai import types
 
 api_logger = logging.getLogger("backend.api")
@@ -245,7 +246,8 @@ async def _stream_openrouter_response_impl(
         t0_first_token = time.perf_counter()
         got_first_token = False
         turn_usage: Optional[Dict[str, Any]] = None
-        
+        assistant_text_emitted = False
+
         # Native tool call accumulator
         pending_tool_calls: Dict[int, Dict[str, Any]] = {}
         reasoning_started = False
@@ -270,147 +272,202 @@ async def _stream_openrouter_response_impl(
             # Search guidance is injected into runtime context to keep the system prompt stable for caching.
         
         # Stream from OpenRouter
-        async for chunk in openrouter_service.stream(
-            current_message,
-            current_history,
-            workspace_context,
-            run_system_prompt,
-            time_context,
-            model,
-            include_usage=True,
-            response_format=response_format,
-            tools=tool_list,
-            tool_choice="auto",
-            plugins=web_search_plugin if search_enabled else None,
-            web_search_options=web_search_options if search_enabled else None,
-            reasoning_mode=reasoning_mode,
-            attachments=media_attachments,
-            history_token_budget=history_token_budget,
-            provider_routing=provider_routing,
-            user=user,
-            extra_headers=extra_headers,
-        ):
-            if isinstance(chunk, dict):
-                # Handle usage statistics
-                if "usage" in chunk:
-                    turn_usage = chunk["usage"]
-                    yield ("usage", chunk["usage"])
-                    continue
+        try:
+            async for chunk in openrouter_service.stream(
+                current_message,
+                current_history,
+                workspace_context,
+                run_system_prompt,
+                time_context,
+                model,
+                include_usage=True,
+                response_format=response_format,
+                tools=tool_list,
+                tool_choice="auto",
+                plugins=web_search_plugin if search_enabled else None,
+                web_search_options=web_search_options if search_enabled else None,
+                reasoning_mode=reasoning_mode,
+                attachments=media_attachments,
+                history_token_budget=history_token_budget,
+                provider_routing=provider_routing,
+                user=user,
+                extra_headers=extra_headers,
+            ):
+                if isinstance(chunk, dict):
+                    # Handle usage statistics
+                    if "usage" in chunk:
+                        turn_usage = chunk["usage"]
+                        yield ("usage", chunk["usage"])
+                        continue
 
-                if "annotations" in chunk and isinstance(chunk.get("annotations"), list):
-                    annotations_accumulated.extend(
-                        [a for a in chunk["annotations"] if isinstance(a, dict)]
-                    )
-                    continue
-                
-                # Handle native streaming tool calls
-                if "tool_calls" in chunk:
-                    for tc in chunk["tool_calls"]:
-                        idx = tc.get("index", 0)
-                        if idx not in pending_tool_calls:
-                            pending_tool_calls[idx] = {"name": "", "arguments": [], "id": ""}
-                        
-                        if tc.get("id"):
-                            pending_tool_calls[idx]["id"] = tc["id"]
-                        
-                        func = tc.get("function", {})
-                        if func.get("name"):
-                            pending_tool_calls[idx]["name"] = func["name"]
-                        if func.get("arguments"):
-                            pending_tool_calls[idx]["arguments"].append(func["arguments"])
-                
-                # Handle reasoning content
-                chunk_type = chunk.get("type")
-                if chunk_type == "reasoning":
-                    reasoning_content = chunk.get("content")
-                    if reasoning_content:
+                    if "annotations" in chunk and isinstance(chunk.get("annotations"), list):
+                        annotations_accumulated.extend(
+                            [a for a in chunk["annotations"] if isinstance(a, dict)]
+                        )
+                        continue
+                    
+                    # Handle native streaming tool calls
+                    if "tool_calls" in chunk:
+                        for tc in chunk["tool_calls"]:
+                            idx = tc.get("index", 0)
+                            if idx not in pending_tool_calls:
+                                pending_tool_calls[idx] = {"name": "", "arguments": [], "id": ""}
+                            
+                            if tc.get("id"):
+                                pending_tool_calls[idx]["id"] = tc["id"]
+                            
+                            func = tc.get("function", {})
+                            if func.get("name"):
+                                pending_tool_calls[idx]["name"] = func["name"]
+                            if func.get("arguments"):
+                                pending_tool_calls[idx]["arguments"].append(func["arguments"])
+                    
+                    # Handle reasoning content
+                    chunk_type = chunk.get("type")
+                    if chunk_type == "reasoning":
+                        reasoning_content = chunk.get("content")
+                        if reasoning_content:
+                            # Keep reasoning contiguous. If visible answer text has already started,
+                            # drop late reasoning fragments to avoid interleaved blocks.
+                            if assistant_text_emitted:
+                                continue
+                            if not reasoning_started:
+                                reasoning_started = True
+                                yield ("delta", "<thinking>")
+                            reasoning_buffer += reasoning_content
+                            yield ("delta", reasoning_content)
+                            continue
+                    
+                    # Handle encrypted reasoning indicator
+                    if chunk_type == "reasoning_active":
+                        if assistant_text_emitted:
+                            continue
                         if not reasoning_started:
                             reasoning_started = True
                             yield ("delta", "<thinking>")
-                        reasoning_buffer += reasoning_content
-                        yield ("delta", reasoning_content)
                         continue
-                
-                # Handle encrypted reasoning indicator
-                if chunk_type == "reasoning_active":
-                    if not reasoning_started:
-                        reasoning_started = True
-                        yield ("delta", "<thinking>")
-                    continue
-                
-                # Handle text content
-                if "text" in chunk:
-                    text = chunk["text"]
-                    if reasoning_started and not accumulated:
-                        yield ("delta", "</thinking>\n")
-                        reasoning_started = False
                     
-                    if text:
-                        # Legacy text-based tool detection for onboarding
-                        if is_onboarding_tool and not pending_tool_calls:
-                            tool_buffer += text
-                            
-                            if "```json" in tool_buffer or (tool_buffer.strip().startswith("{") and "tool" in tool_buffer):
-                                is_collecting_tool = True
-                            
-                            if is_collecting_tool:
-                                if "```" in tool_buffer.split("```json")[-1] or "}" in tool_buffer:
-                                    try:
-                                        json_match = re.search(r"```(?:javascript|json)?\s*({.*?})\s*```", tool_buffer, re.DOTALL)
-                                        if not json_match:
-                                            json_match = re.search(r"({.*\"tool\":\s*\"complete_onboarding\".*})", tool_buffer, re.DOTALL)
-                                        
-                                        if json_match:
-                                            json_str = json_match.group(1)
-                                            tool_data = json.loads(json_str)
+                    # Handle text content
+                    if "text" in chunk:
+                        text = chunk["text"]
+                        if reasoning_started and not accumulated:
+                            yield ("delta", "</thinking>\n")
+                            reasoning_started = False
+                        
+                        if text:
+                            # Legacy text-based tool detection for onboarding
+                            if is_onboarding_tool and not pending_tool_calls:
+                                tool_buffer += text
+                                
+                                if "```json" in tool_buffer or (tool_buffer.strip().startswith("{") and "tool" in tool_buffer):
+                                    is_collecting_tool = True
+                                
+                                if is_collecting_tool:
+                                    if "```" in tool_buffer.split("```json")[-1] or "}" in tool_buffer:
+                                        try:
+                                            json_match = re.search(r"```(?:javascript|json)?\s*({.*?})\s*```", tool_buffer, re.DOTALL)
+                                            if not json_match:
+                                                json_match = re.search(r"({.*\"tool\":\s*\"complete_onboarding\".*})", tool_buffer, re.DOTALL)
                                             
-                                            if tool_data.get("tool") == "complete_onboarding":
-                                                api_logger.info(f"Intercepted OpenRouter onboarding tool call (text-based) for user {user_id}")
-                                                tool_args = tool_data.get("params") or tool_data.get("arguments") or tool_data
-                                                pending_tool_calls[0] = {
-                                                    "name": "complete_onboarding",
-                                                    "arguments": [json.dumps(tool_args)],
-                                                    "id": "legacy_onboarding_call"
-                                                }
-                                                tool_buffer = ""
-                                                is_collecting_tool = False
-                                                intercepted_legacy_tool_call = True
-                                                break
-                                    except Exception as e:
-                                        api_logger.warning(f"Failed to parse intercepted tool JSON: {e}")
-                                        yield ("delta", tool_buffer)
-                                        yielded_any_tokens = True
-                                    
+                                            if json_match:
+                                                json_str = json_match.group(1)
+                                                tool_data = json.loads(json_str)
+                                                
+                                                if tool_data.get("tool") == "complete_onboarding":
+                                                    api_logger.info(f"Intercepted OpenRouter onboarding tool call (text-based) for user {user_id}")
+                                                    tool_args = tool_data.get("params") or tool_data.get("arguments") or tool_data
+                                                    pending_tool_calls[0] = {
+                                                        "name": "complete_onboarding",
+                                                        "arguments": [json.dumps(tool_args)],
+                                                        "id": "legacy_onboarding_call"
+                                                    }
+                                                    tool_buffer = ""
+                                                    is_collecting_tool = False
+                                                    intercepted_legacy_tool_call = True
+                                                    break
+                                        except Exception as e:
+                                            api_logger.warning(f"Failed to parse intercepted tool JSON: {e}")
+                                            yield ("delta", tool_buffer)
+                                            yielded_any_tokens = True
+                                            assistant_text_emitted = True
+                                        
+                                        accumulated += tool_buffer
+                                        tool_buffer = ""
+                                        is_collecting_tool = False
+                                        continue
+                                
+                                if len(tool_buffer) > 20 and not is_collecting_tool:
+                                    yield ("delta", tool_buffer)
+                                    yielded_any_tokens = True
+                                    assistant_text_emitted = True
                                     accumulated += tool_buffer
                                     tool_buffer = ""
-                                    is_collecting_tool = False
-                                    continue
-                            
-                            if len(tool_buffer) > 20 and not is_collecting_tool:
-                                yield ("delta", tool_buffer)
+                            else:
+                                # Normal streaming
+                                if not got_first_token:
+                                    got_first_token = True
+                                    ttft = (time.perf_counter() - t0_first_token) * 1000
+                                    if ttft > 200:
+                                        api_logger.info(f"[Timing] OpenRouter TTFT: {ttft:.0f}ms")
+                                accumulated += text
                                 yielded_any_tokens = True
-                                accumulated += tool_buffer
-                                tool_buffer = ""
-                        else:
-                            # Normal streaming
-                            if not got_first_token:
-                                got_first_token = True
-                                ttft = (time.perf_counter() - t0_first_token) * 1000
-                                if ttft > 200:
-                                    api_logger.info(f"[Timing] OpenRouter TTFT: {ttft:.0f}ms")
-                            accumulated += text
-                            yielded_any_tokens = True
-                            yield ("delta", text)
-            
-            elif isinstance(chunk, str):
-                if not got_first_token:
-                    got_first_token = True
-                    ttft = (time.perf_counter() - t0_first_token) * 1000
-                    if ttft > 200:
-                        api_logger.info(f"[Timing] OpenRouter TTFT: {ttft:.0f}ms")
-                accumulated += chunk
-                yielded_any_tokens = True
-                yield ("delta", chunk)
+                                assistant_text_emitted = True
+                                yield ("delta", text)
+                
+                elif isinstance(chunk, str):
+                    if not got_first_token:
+                        got_first_token = True
+                        ttft = (time.perf_counter() - t0_first_token) * 1000
+                        if ttft > 200:
+                            api_logger.info(f"[Timing] OpenRouter TTFT: {ttft:.0f}ms")
+                    accumulated += chunk
+                    yielded_any_tokens = True
+                    assistant_text_emitted = True
+                    yield ("delta", chunk)
+        except httpx.HTTPStatusError as stream_error:
+            status_code = getattr(getattr(stream_error, "response", None), "status_code", None)
+            # Recovery path for provider 5xx during follow-up tool turns.
+            if isinstance(status_code, int) and status_code >= 500 and turn > 0:
+                api_logger.warning(
+                    "OpenRouter follow-up stream failed; attempting non-stream recovery",
+                    extra={"status_code": status_code, "turn": turn, "user_id": user_id},
+                )
+                try:
+                    recovery = await openrouter_service.generate(
+                        current_message or "Continue.",
+                        current_history,
+                        workspace_context,
+                        run_system_prompt,
+                        time_context,
+                        model,
+                        attachments=media_attachments,
+                        include_usage=False,
+                        response_format=response_format,
+                        tools=tool_list,
+                        tool_choice="auto",
+                        plugins=None,
+                        provider_routing=provider_routing,
+                        web_search_options=None,
+                        return_metadata=False,
+                        history_token_budget=history_token_budget,
+                        user=user,
+                        extra_headers=extra_headers,
+                    )
+                except Exception:
+                    raise stream_error
+                recovered_text = recovery if isinstance(recovery, str) else ""
+                if recovered_text.strip():
+                    if reasoning_started:
+                        yield ("delta", "</thinking>\n")
+                        reasoning_started = False
+                    accumulated += recovered_text
+                    yielded_any_tokens = True
+                    assistant_text_emitted = True
+                    yield ("delta", recovered_text)
+                else:
+                    raise stream_error
+            else:
+                raise
 
         if turn_usage:
             prompt_tokens, completion_tokens, cached_tokens = _extract_usage_counts(turn_usage)
