@@ -264,6 +264,18 @@
   }
 }
 
+@keyframes chatStreamingTextFadeIn {
+  from {
+    opacity: 0.18;
+    filter: blur(0.8px);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
 @keyframes chatStreamingCaretBlink {
 
   0%,
@@ -1061,6 +1073,7 @@
 
 .chatMarkdownStreaming {
   position: relative;
+  display: block;
   white-space: pre-wrap;
   word-break: break-word;
   color: inherit;
@@ -1069,6 +1082,28 @@
 }
 
 .chatMarkdownStreaming::after {
+  content: none;
+}
+
+.chatMarkdownStreaming :global(p:last-child),
+.chatMarkdownStreaming :global(li:last-child),
+.chatMarkdownStreaming :global(h1:last-child),
+.chatMarkdownStreaming :global(h2:last-child),
+.chatMarkdownStreaming :global(h3:last-child),
+.chatMarkdownStreaming :global(h4:last-child),
+.chatMarkdownStreaming :global(h5:last-child),
+.chatMarkdownStreaming :global(h6:last-child) {
+  animation: chatStreamingTextFadeIn 0.2s ease-out;
+}
+
+.chatMarkdownStreaming :global(p:last-child)::after,
+.chatMarkdownStreaming :global(li:last-child)::after,
+.chatMarkdownStreaming :global(h1:last-child)::after,
+.chatMarkdownStreaming :global(h2:last-child)::after,
+.chatMarkdownStreaming :global(h3:last-child)::after,
+.chatMarkdownStreaming :global(h4:last-child)::after,
+.chatMarkdownStreaming :global(h5:last-child)::after,
+.chatMarkdownStreaming :global(h6:last-child)::after {
   content: "";
   display: inline-block;
   width: 2px;
@@ -1137,6 +1172,25 @@
   }
 
   .chatMarkdownStreaming::after {
+    animation: none;
+  }
+
+  .chatMarkdownStreaming :global(p:last-child),
+  .chatMarkdownStreaming :global(li:last-child),
+  .chatMarkdownStreaming :global(h1:last-child),
+  .chatMarkdownStreaming :global(h2:last-child),
+  .chatMarkdownStreaming :global(h3:last-child),
+  .chatMarkdownStreaming :global(h4:last-child),
+  .chatMarkdownStreaming :global(h5:last-child),
+  .chatMarkdownStreaming :global(h6:last-child),
+  .chatMarkdownStreaming :global(p:last-child)::after,
+  .chatMarkdownStreaming :global(li:last-child)::after,
+  .chatMarkdownStreaming :global(h1:last-child)::after,
+  .chatMarkdownStreaming :global(h2:last-child)::after,
+  .chatMarkdownStreaming :global(h3:last-child)::after,
+  .chatMarkdownStreaming :global(h4:last-child)::after,
+  .chatMarkdownStreaming :global(h5:last-child)::after,
+  .chatMarkdownStreaming :global(h6:last-child)::after {
     animation: none;
   }
 }

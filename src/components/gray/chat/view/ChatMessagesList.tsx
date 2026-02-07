@@ -448,6 +448,7 @@ export const ChatMessagesList = memo(
                       (isStreamingMessage ? (
                         <div className={`${styles.chatMarkdown} ${styles.chatMarkdownStreaming}`} aria-live="polite">
                           <ReactMarkdown
+                            key={`${message.id}-stream-${visibleAssistantText.length}`}
                             components={markdownComponents}
                             remarkPlugins={MARKDOWN_PLUGINS}
                             rehypePlugins={[[rehypeKatex, { strict: false }]]}

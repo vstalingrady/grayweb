@@ -8,7 +8,13 @@ from pydantic import BaseModel, Field
 
 from backend.auth import get_current_user
 from backend.compat_imports import row_get as _row_get
-from backend.supermemory import SUPERMEMORY_SERVICE, MEMORY_CATEGORIES, detect_memory_category
+from backend.supermemory import (
+    SUPERMEMORY_SERVICE,
+    MEMORY_CATEGORIES,
+    detect_memory_category,
+    supermemory_force_enabled,
+    supermemory_force_plan_tier,
+)
 from backend.tier_utils import normalize_plan_tier
 
 router = APIRouter(tags=["supermemory"])
@@ -48,9 +54,11 @@ def _normalized_tier(user: Dict[str, Any]) -> str:
 def _require_supermemory_access(user: Dict[str, Any]) -> str:
     if not SUPERMEMORY_SERVICE.available:
         raise HTTPException(status_code=503, detail="Long-term memory is not configured.")
-    if _row_get(user, "conversation_memory_enabled") is False:
+    force_enabled = supermemory_force_enabled()
+    if not force_enabled and _row_get(user, "conversation_memory_enabled") is False:
         raise HTTPException(status_code=403, detail="Conversation memory is disabled.")
-    plan_tier = _normalized_tier(user)
+    requested_tier = _normalized_tier(user)
+    plan_tier = supermemory_force_plan_tier(requested_tier)
     policy = SUPERMEMORY_SERVICE.policy_for_tier(plan_tier)
     if not policy.enabled:
         raise HTTPException(
