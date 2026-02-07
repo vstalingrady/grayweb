@@ -38,18 +38,20 @@ type AssistantDisplayContent = {
 };
 
 const getAssistantDisplayContent = (rawContent: string, reasoningMode: boolean): AssistantDisplayContent => {
+  void reasoningMode;
   const assistantSections = parseStructuredAssistantMessage(rawContent);
   const rawThinkingText = assistantSections?.thinking ?? null;
   const aiText = assistantSections?.ai ?? rawContent;
   const hasRawThinkingText = typeof rawThinkingText === "string" && rawThinkingText.trim().length > 0;
-  const shouldSurfaceThinking = hasRawThinkingText || Boolean(reasoningMode);
-  const useThinkingAsAnswer = !shouldSurfaceThinking && hasRawThinkingText && (!aiText || !aiText.trim());
+  const hasAiText = aiText.trim().length > 0;
+  const useThinkingAsAnswer = hasRawThinkingText && !hasAiText;
+  const shouldSurfaceThinking = hasRawThinkingText && !useThinkingAsAnswer;
   const assistantTextCandidate = useThinkingAsAnswer ? rawThinkingText ?? "" : aiText;
   const sanitizedAssistantTextCandidate = stripGrayTitleMarkers(assistantTextCandidate);
   const assistantTextAfterRemovals = sanitizedAssistantTextCandidate.replace(REMINDER_CODE_BLOCK_REGEX, "").trim();
 
   return {
-    normalizedThinkingText: normalizeAssistantMath(hasRawThinkingText ? rawThinkingText : null),
+    normalizedThinkingText: normalizeAssistantMath(shouldSurfaceThinking ? rawThinkingText : null),
     visibleAssistantText: normalizeAssistantMath(assistantTextAfterRemovals) ?? "",
   };
 };
