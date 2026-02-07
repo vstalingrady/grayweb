@@ -21,18 +21,6 @@ import { normalizeAssistantMath } from "./markdown/mathNormalization";
 import { ReminderCard } from "./ReminderCard";
 import { ThinkingBlock } from "./ThinkingBlock";
 
-const segmentStreamingTokens = (text: string): string[] => {
-  if (!text) {
-    return [];
-  }
-  return text.match(/\s+|[^\s]+/g) ?? [text];
-};
-
-type StreamingTextChunk = {
-  key: string;
-  text: string;
-};
-
 type AssistantDisplayContent = {
   normalizedThinkingText: string | null;
   visibleAssistantText: string;
@@ -338,13 +326,6 @@ export const ChatMessagesList = memo(
           const hasThinkingContent = typeof normalizedThinkingText === "string" && normalizedThinkingText.trim().length > 0;
           const isStreamingMessage = isAssistant && message.id === activeStreamingMessageId;
           const hasTextContent = Boolean(visibleAssistantText.trim());
-          const streamingTextChunks: StreamingTextChunk[] =
-            isStreamingMessage && hasTextContent
-              ? segmentStreamingTokens(visibleAssistantText).map((text, tokenIndex) => ({
-                  key: `${tokenIndex}-${text}`,
-                  text,
-                }))
-              : [];
           const assistantReminders = isAssistant && Array.isArray(message.reminders) ? message.reminders : [];
           const showAssistantMarkdown = isAssistant && hasTextContent;
           const hasVisibleContent = hasThinkingContent || showAssistantMarkdown || assistantReminders.length > 0;
@@ -463,15 +444,14 @@ export const ChatMessagesList = memo(
                     )}
                     {hasTextContent &&
                       (isStreamingMessage ? (
-                        <div className={styles.chatMarkdownStreaming} aria-live="polite">
-                          {streamingTextChunks.map((chunk) => (
-                            <span
-                              key={`${message.id}-stream-token-${chunk.key}`}
-                              className={styles.chatStreamingToken}
-                            >
-                              {chunk.text}
-                            </span>
-                          ))}
+                        <div className={`${styles.chatMarkdown} ${styles.chatMarkdownStreaming}`} aria-live="polite">
+                          <ReactMarkdown
+                            components={markdownComponents}
+                            remarkPlugins={MARKDOWN_PLUGINS}
+                            rehypePlugins={[[rehypeKatex, { strict: false }]]}
+                          >
+                            {visibleAssistantText}
+                          </ReactMarkdown>
                         </div>
                       ) : (
                         <div className={styles.chatMarkdown}>
