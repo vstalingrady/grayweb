@@ -70,18 +70,6 @@ const extractImgSrcCandidate = (img: HTMLImageElement): string | null => {
   return normalizeSearchEntryImageUrl(firstCandidate);
 };
 
-const isAllowedThumbnailUrl = (url: string): boolean => {
-  if (url.startsWith("data:")) {
-    return true;
-  }
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
-    return false;
-  }
-};
-
 const extractSearchEntryThumbnail = (anchor: HTMLAnchorElement): string | null => {
   const containers = [anchor, anchor.parentElement, anchor.parentElement?.parentElement];
   for (const container of containers) {
@@ -91,7 +79,7 @@ const extractSearchEntryThumbnail = (anchor: HTMLAnchorElement): string | null =
     const images = Array.from(container.querySelectorAll("img"));
     for (const img of images) {
       const candidate = extractImgSrcCandidate(img);
-      if (candidate && isAllowedThumbnailUrl(candidate)) {
+      if (candidate) {
         return candidate;
       }
     }
