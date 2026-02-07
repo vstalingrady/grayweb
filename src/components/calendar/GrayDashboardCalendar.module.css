@@ -2173,6 +2173,18 @@
     display: none;
   }
 
+  .calendarSurfaceBody[data-has-sidebar="true"][data-force-narrow-sidebar="true"] .calendarSidebarPanel {
+    display: block;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    margin: 0 0 10px;
+    padding: 0 0 10px;
+  }
+
+  .calendarSurfaceBody[data-has-sidebar="true"][data-force-narrow-sidebar="true"] .calendarSidebarIntegrated {
+    padding: 0 0 6px;
+  }
+
   .calendarHeaderRow {
     grid-template-columns: var(--calendar-timeline-width, 56px) repeat(var(--calendar-grid-columns, 7), minmax(0, 1fr));
   }
@@ -2188,6 +2200,14 @@
 }
 
 @media (max-width: 900px) {
+  .calendarInlineViewSelect {
+    display: none;
+  }
+
+  .calendarSurfaceHeaderRight .calendarViewToggle {
+    display: none;
+  }
+
   .calendarSurfaceHeader {
     flex-direction: column;
     align-items: flex-start;
@@ -2227,6 +2247,10 @@
 
   .calendarSidebarPanel {
     display: none;
+  }
+
+  .calendarSurfaceBody[data-has-sidebar="true"][data-force-narrow-sidebar="true"] .calendarSidebarPanel {
+    display: block;
   }
 
   .calendarSurface {

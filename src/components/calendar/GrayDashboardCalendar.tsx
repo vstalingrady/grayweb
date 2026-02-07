@@ -75,6 +75,7 @@ type GrayDashboardCalendarProps = {
   showCalendarList?: boolean;
   showHeaderDates?: boolean;
   compactSurface?: boolean;
+  forceSidebarOnNarrow?: boolean;
   className?: string;
   surfaceClassName?: string;
   showTodayButton?: boolean;
@@ -122,6 +123,7 @@ export function GrayDashboardCalendar({
   showCalendarList = true,
   showHeaderDates = true,
   compactSurface = false,
+  forceSidebarOnNarrow = false,
   className,
   surfaceClassName,
   onIntegrationAction,
@@ -472,6 +474,7 @@ export function GrayDashboardCalendar({
     <div
       className={bodyClassName}
       data-has-sidebar={showSidebar ? "true" : "false"}
+      data-force-narrow-sidebar={forceSidebarOnNarrow ? "true" : "false"}
       style={embedWithinParentSurface ? calendarStyle : undefined}
     >
       {showSidebar && (

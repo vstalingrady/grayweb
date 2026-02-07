@@ -3219,8 +3219,12 @@
 }
 
 .streakBadgeIcon {
-  color: rgba(255, 167, 38, 0.95);
+  color: rgba(255, 255, 255, 0.95);
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
 }
 
 .streakBadgeCount {

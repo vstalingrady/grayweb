@@ -30,7 +30,7 @@ const CALENDAR_PANEL_MAX_HEIGHT_WITH_CHAT =
   "clamp(360px, calc(100vh - (320px + var(--gray-chat-bar-clearance, 112px))), 660px)";
 const CALENDAR_PANEL_MAX_HEIGHT_NO_CHAT =
   "clamp(420px, calc(100vh - clamp(48px, 6vh, 120px)), calc(100vh - clamp(32px, 4vh, 96px)))";
-const CALENDAR_PANEL_HOUR_HEIGHT = 62;
+const CALENDAR_PANEL_HOUR_HEIGHT = 72;
 const CALENDAR_PANEL_MIN_HEIGHT_PX = 420;
 const CALENDAR_PANEL_HEIGHT_STORAGE_KEY = "gray.dashboard.calendarPanelHeightPx";
 
@@ -618,7 +618,8 @@ export function GrayDashboardView({
   const compactCalendarContent = (
     <GrayDashboardCalendar
       {...baseCalendarProps}
-      showSidebar={false}
+      showSidebar={true}
+      forceSidebarOnNarrow={true}
       showCalendarList={false}
     />
   );
