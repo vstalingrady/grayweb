@@ -71,9 +71,6 @@ REMINDER_FUNCTION_NAMES = (
     "create_plan",
     "update_plan",
     "delete_plan",
-    "create_habit",
-    "update_habit",
-    "delete_habit",
     "create_reminder",
     "add_reminder",
     "update_reminder",
@@ -180,7 +177,4 @@ SINGLE_CALL_PER_TURN_TOOLS = {
     "create_plan",
     "update_plan",
     "delete_plan",
-    "create_habit",
-    "update_habit",
-    "delete_habit",
 }

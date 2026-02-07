@@ -27,7 +27,6 @@ import {
   SHARED_CHAT_PLACEHOLDER_TITLE,
 } from "@/components/gray/chat/constants";
 import { EventComposerPayload } from "@/components/calendar/EventComposer";
-import { useI18n } from "@/contexts/I18nContext";
 import { useNotificationPreferences } from "@/contexts/NotificationPreferencesContext";
 import {
   normalizeConversationIdValue,
@@ -90,11 +89,6 @@ const AttachmentTray = dynamic(
   { loading: () => null }
 );
 
-const AddPlanHabitModal = dynamic(
-  () => import("@/components/gray/AddPlanHabitModal").then((mod) => mod.AddPlanHabitModal),
-  { loading: () => null }
-);
-
 const GrayDashboardView = dynamic(
   () => import("@/components/gray/DashboardView").then((mod) => mod.GrayDashboardView),
   { loading: () => null }
@@ -133,7 +127,6 @@ function GrayPageClientInner({
   sidebarPreferenceKey = "gray:sidebarExpanded",
   defaultSidebarExpandedDesktop = false,
 }: GrayPageClientProps) {
-  const { t } = useI18n();
   const { user, loading: userLoading } = useUser();
   const { notificationPreferences, setNotificationPreference } = useNotificationPreferences();
   const usageStatus = user?.usage_status;
@@ -241,8 +234,6 @@ function GrayPageClientInner({
   const {
     plans,
     setPlans,
-    habits,
-    setHabits,
     calendarCalendars,
     setCalendarCalendars,
     calendarEvents,
@@ -296,7 +287,6 @@ function GrayPageClientInner({
   const lastDeletedChatIdStorageKey = "gray:lastDeletedChatId";
 
   const derivedPlans = user ? plans : [];
-  const derivedHabits = user ? habits : [];
 
   const [threadComposerDraft, setThreadComposerDraft] = useState("");
   const threadComposerControls = useMemo(
@@ -330,18 +320,6 @@ function GrayPageClientInner({
     await refreshPlansAndHabits();
   }, [user?.id, refreshPlansAndHabits]);
 
-  const handleCreateHabit = useCallback(async (payload: EventComposerPayload) => {
-    if (!user?.id) return;
-
-    await workspaceService.createHabit(user.id, {
-      label: payload.title,
-      previous_label: t("No history yet"),
-      description: payload.description || null,
-    });
-
-    await refreshPlansAndHabits();
-  }, [user?.id, refreshPlansAndHabits, t]);
-
   const sendDashboardNotification = useCallback(async (title: string, body: string) => {
     if (typeof window === "undefined" || typeof Notification === "undefined") {
       return;
@@ -368,31 +346,20 @@ function GrayPageClientInner({
 
   const {
     pulseEntries,
-    setPulseEntries,
     setActivePulseId,
     activePulse,
     isActivePulseEditable
-  } = usePulse(userId, todayAnchor, nowDateKey, derivedPlans, derivedHabits, proactivity, sendDashboardNotification);
+  } = usePulse(userId, todayAnchor, nowDateKey, derivedPlans, [], proactivity, sendDashboardNotification);
   const {
-    habitEditorTarget,
-    setHabitEditorTarget,
     togglePlan,
     savePlan,
     deletePlan,
-    toggleHabit,
-    handleHabitModalSubmit,
-    editHabit,
-    deleteHabit,
   } = usePlanHabitActions({
     userId,
     isActivePulseEditable,
     pulseEntries,
-    activePulse,
-    setPulseEntries,
     plans,
     setPlans,
-    habits,
-    setHabits,
     sendDashboardNotification,
   });
 
@@ -583,8 +550,8 @@ function GrayPageClientInner({
   const handleMobileHeaderSelectPulse = useCallback(() => {
     setMobilePulseActive(true);
     setDashboardTab("pulse");
-    if (pathname !== "/") {
-      router.push("/");
+    if (pathname !== "/pulse") {
+      router.push("/pulse");
     }
     if (isMobileViewport) {
       collapseAllSidebars();
@@ -631,7 +598,6 @@ function GrayPageClientInner({
       currentPulse={activePulse}
       isCurrentPulseEditable={isActivePulseEditable}
       livePlans={derivedPlans}
-      liveHabits={derivedHabits}
       onSelectPulse={setActivePulseId}
       proactivityFallback={proactivity}
       isProactivityLoaded={isProactivityLoaded}
@@ -641,7 +607,6 @@ function GrayPageClientInner({
           onSavePlan={savePlan}
           onDeletePlan={deletePlan}
           onTogglePlan={togglePlan}
-          onToggleHabit={toggleHabit}
           activeTab={dashboardTab}
           onSelectTab={setDashboardTab}
       currentDate={now}
@@ -651,10 +616,7 @@ function GrayPageClientInner({
           onCalendarEventsChange={handleEventsChange}
           calendarSelectedDate={calendarSelectedDate}
           onCalendarSelectedDateChange={setCalendarSelectedDate}
-          onEditHabit={editHabit}
-          onDeleteHabit={deleteHabit}
           onCreatePlan={handleCreatePlan}
-          onCreateHabit={handleCreateHabit}
       chatBar={null}
       isCompactLayout={isCompactLayout}
       userId={userId}
@@ -687,15 +649,12 @@ function GrayPageClientInner({
           greeting={greeting}
           currentDate={now}
           plans={derivedPlans}
-          habits={derivedHabits}
           proactivity={proactivity}
           onSelectProactivity={selectProactivityPreset}
           onRemoveProactivity={removeProactivity}
           onTogglePlan={togglePlan}
-          onToggleHabit={toggleHabit}
           onSavePlan={savePlan}
           onDeletePlan={deletePlan}
-          onDeleteHabit={deleteHabit}
           onRefreshData={refreshPlansAndHabits}
           showGreeting={false}
           hidePlans={isMobileViewport}
@@ -1621,18 +1580,6 @@ function GrayPageClientInner({
             </div>
           </div>
         </div>
-        {habitEditorTarget ? (
-          <AddPlanHabitModal
-            isOpen={Boolean(habitEditorTarget)}
-            onClose={() => setHabitEditorTarget(null)}
-            type="habit"
-            habitToEdit={habitEditorTarget}
-            onSubmitHabit={handleHabitModalSubmit}
-            onSuccess={async () => {
-              await refreshPlansAndHabits();
-            }}
-          />
-        ) : null}
         {isSettingsOpen && (
           <SettingsModal
             isOpen={isSettingsOpen}

@@ -18,7 +18,6 @@ export type AccountSectionProps = {
   avatarUploadError: string | null;
   onAvatarFileChange: (event: ChangeEvent<HTMLInputElement>) => void | Promise<void>;
   onNavigateToPricing: () => void;
-  onDeleteAccount: () => void;
 };
 
 const parseExpiryDate = (value?: string | null): Date | null => {
@@ -72,7 +71,6 @@ export function AccountSection({
   avatarUploadError,
   onAvatarFileChange,
   onNavigateToPricing,
-  onDeleteAccount,
 }: AccountSectionProps) {
   const profileName = user?.full_name || "Gray User";
 
@@ -205,23 +203,6 @@ export function AccountSection({
                 </button>
               </div>
             )}
-          </div>
-
-          <div className={styles.settingsSection}>
-            <div className={styles.settingsDangerCard}>
-              <div className={styles.settingsLabelGroup}>
-                <span className={styles.settingsLabel}>{t("Delete account")}</span>
-                <span className={styles.deleteAccountHelper}>
-                  {t("Permanently delete your account and data")}
-                </span>
-              </div>
-              <button
-                className={`${styles.settingsAction} ${styles.settingsActionDanger}`}
-                onClick={onDeleteAccount}
-              >
-                {t("Delete")}
-              </button>
-            </div>
           </div>
         </>
       ) : null}

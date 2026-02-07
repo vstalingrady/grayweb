@@ -19,7 +19,6 @@ type DayViewProps = {
   nowReference: Date | null;
   timeZoneLabel: string;
   rangeNavigationLabel: string;
-  showTodayControl: boolean;
   showViewSelect: boolean;
   showHeaderDates: boolean;
   dayIndicatorOffset: number | null;
@@ -28,7 +27,6 @@ type DayViewProps = {
   selectedEventIds: Set<string>;
   dayColumnRef: MutableRefObject<HTMLDivElement | null>;
   onNavigateRange: (direction: number) => void;
-  onGoToday: () => void;
   onUpdateViewMode: (mode: CalendarViewMode) => void;
   onColumnClick: (event: MouseEvent<HTMLDivElement>, day: Date) => void;
   onEventClick: (
@@ -50,7 +48,6 @@ export function GrayDashboardCalendarDayView({
   nowReference,
   timeZoneLabel,
   rangeNavigationLabel,
-  showTodayControl,
   showViewSelect,
   showHeaderDates,
   dayIndicatorOffset,
@@ -59,7 +56,6 @@ export function GrayDashboardCalendarDayView({
   selectedEventIds,
   dayColumnRef,
   onNavigateRange,
-  onGoToday,
   onUpdateViewMode,
   onColumnClick,
   onEventClick,
@@ -81,7 +77,19 @@ export function GrayDashboardCalendarDayView({
       <div className={styles.calendarBody}>
         <div className={styles.calendarMonthRow}>
           <div className={styles.calendarMonthTitleGroup}>
-            <div className={styles.calendarSurfaceNavArrows}>
+            {showViewSelect && (
+              <div className={styles.calendarInlineViewSelect}>
+                <ViewModeSelect
+                  value="day"
+                  options={[
+                    { value: "week", label: t("Week") },
+                    { value: "day", label: t("Day") },
+                  ]}
+                  onChange={(mode) => onUpdateViewMode(mode)}
+                />
+              </div>
+            )}
+            <div className={`${styles.calendarSurfaceNavArrows} ${styles.calendarMonthNavArrows}`}>
               <button
                 type="button"
                 aria-label={t("Previous {range}", { range: rangeNavigationLabel })}
@@ -97,28 +105,6 @@ export function GrayDashboardCalendarDayView({
                 ›
               </button>
             </div>
-            {showTodayControl && (
-              <button
-                type="button"
-                className={styles.calendarSurfaceButton}
-                onClick={onGoToday}
-                style={{ height: 32, padding: "0 12px", fontSize: "0.55rem" }}
-              >
-                {t("Today")}
-              </button>
-            )}
-            {showViewSelect && (
-              <div style={{ transform: "scale(0.9)", transformOrigin: "left center" }}>
-                <ViewModeSelect
-                  value="day"
-                  options={[
-                    { value: "week", label: t("Week") },
-                    { value: "day", label: t("Day") },
-                  ]}
-                  onChange={(mode) => onUpdateViewMode(mode)}
-                />
-              </div>
-            )}
           </div>
         </div>
         {showHeaderDates && (

@@ -237,7 +237,7 @@ const extractSearchEntryResults = (rawHtml: string): SearchEntryResult[] => {
   }
   try {
     const parsed = new DOMParser().parseFromString(rawHtml, "text/html");
-    const anchors = Array.from(parsed.querySelectorAll("a[href]"));
+    const anchors = Array.from(parsed.querySelectorAll<HTMLAnchorElement>("a[href]"));
     const results: SearchEntryResult[] = [];
     const seen = new Set<string>();
 
@@ -294,7 +294,7 @@ export type ChatMessageGroundingPanelProps = {
 export function ChatMessageGroundingPanel({
   metadata,
   _messageId,
-  previousUserMessageLowercase,
+  previousUserMessageLowercase: _previousUserMessageLowercase,
   t,
 }: ChatMessageGroundingPanelProps) {
   const searchQueries =
@@ -308,23 +308,19 @@ export function ChatMessageGroundingPanel({
   const searchEntryResults = renderedSearchEntry ? extractSearchEntryResults(renderedSearchEntry) : [];
   const thumbnailIndex = buildSearchEntryThumbnailIndex(searchEntryResults);
 
-  const filteredQueries =
-    searchQueries.filter((query) => {
-      const trimmed = query.trim();
-      if (!trimmed) {
-        return false;
-      }
-      if (previousUserMessageLowercase && trimmed.toLowerCase() === previousUserMessageLowercase) {
-        return false;
-      }
-      return true;
-    }) ?? [];
+  const searchedQueries = Array.from(
+    new Set(
+      (searchQueries ?? [])
+        .map((query) => (typeof query === "string" ? query.trim() : ""))
+        .filter((query) => query.length > 0)
+    )
+  );
 
   const sourceCards = buildGroundingSourceCards(metadata, t);
 
   if (
     sourceCards.length === 0 &&
-    filteredQueries.length === 0 &&
+    searchedQueries.length === 0 &&
     !sanitizedSearchEntryHtml &&
     searchEntryResults.length === 0
   ) {
@@ -344,7 +340,7 @@ export function ChatMessageGroundingPanel({
                 href: result.href,
                 siteLabel: result.siteLabel,
               });
-              const thumbnailUrl = result.thumbnailUrl;
+              const thumbnailUrl = result.thumbnailUrl ?? buildWebsiteThumbnailFromHref(result.href);
               const imageUrl = thumbnailUrl ?? faviconUrl;
               const imageKind = thumbnailUrl ? "thumbnail" : "favicon";
               const initials = buildGroundingSourceInitials(result.siteLabel ?? result.title);
@@ -396,12 +392,13 @@ export function ChatMessageGroundingPanel({
           />
         </div>
       ) : null}
-      {filteredQueries.length > 0 ? (
+      {searchedQueries.length > 0 ? (
         <div className={styles.chatGroundingQueries}>
-          {filteredQueries.map((query) => (
-            <span key={query} className={styles.chatGroundingQueryChip}>
-              {query}
-            </span>
+          {searchedQueries.map((query) => (
+            <div key={query} className={styles.chatGroundingQueryChip}>
+              <span className={styles.chatGroundingQueryChipLabel}>{t("Searched")}</span>
+              <span className={styles.chatGroundingQueryChipText}>{query}</span>
+            </div>
           ))}
         </div>
       ) : null}

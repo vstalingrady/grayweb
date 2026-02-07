@@ -815,7 +815,14 @@
   align-items: center;
   justify-content: flex-start;
   gap: 12px;
-  padding-left: 10px;
+  min-width: 0;
+  width: 100%;
+  padding: 0 8px 0 10px;
+}
+
+.calendarInlineViewSelect {
+  display: inline-flex;
+  align-items: center;
 }
 
 .calendarHeaderPlaceholder {
@@ -2187,6 +2194,15 @@
 
   .calendarWeekColumns {
     grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .calendarMonthTitleGroup {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+
+  .calendarMonthNavArrows {
+    margin-left: auto;
   }
 }
 

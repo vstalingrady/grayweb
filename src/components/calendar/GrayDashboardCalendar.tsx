@@ -124,7 +124,6 @@ export function GrayDashboardCalendar({
   compactSurface = false,
   className,
   surfaceClassName,
-  showTodayButton = true,
   onIntegrationAction,
   dashboardTab = "calendar",
   onSelectDashboardTab,
@@ -180,12 +179,23 @@ export function GrayDashboardCalendar({
     onEventsChange,
   });
 
+  const handleCreateTaskFromHabit = useCallback(
+    (payload: EventComposerPayload) => {
+      if (onCreatePlan) {
+        onCreatePlan({ ...payload, entryType: "plan" });
+        return;
+      }
+      onCreateHabit?.(payload);
+    },
+    [onCreateHabit, onCreatePlan]
+  );
+
   const internalComposer = useCalendarComposer({
     events,
     updateEvents,
     onEventDelete,
     onCreatePlan,
-    onCreateHabit,
+    onCreateHabit: handleCreateTaskFromHabit,
     onClearSelection: clearSelection,
   });
 
@@ -401,7 +411,7 @@ export function GrayDashboardCalendar({
     .join(" ");
 
   const showViewSelect = showHeaderControls && !viewModeLocked;
-  const showTodayControl = showHeaderControls && showTodayButton;
+  const showTodayControl = false;
   const showNavigationControls = showHeaderControls;
   const hasHeaderRight =
     showNavigationControls || showTodayControl || showViewSelect;
@@ -418,7 +428,7 @@ export function GrayDashboardCalendar({
     onNextMonth: () => handleMonthNavigate(1),
     onPrevRange: () => handleNavigateRange(-1),
     onNextRange: () => handleNavigateRange(1),
-    onGoToday: showTodayControl ? handleGoToday : undefined,
+    onGoToday: undefined,
     viewMode,
     onViewModeChange: showViewSelect ? updateViewMode : undefined,
     viewModeOptions: [
@@ -494,7 +504,6 @@ export function GrayDashboardCalendar({
             nowReference={nowReference}
             timeZoneLabel={timeZoneLabel}
             rangeNavigationLabel={rangeNavigationLabel}
-            showTodayControl={showTodayControl}
             showViewSelect={showViewSelect}
             showHeaderDates={showHeaderDates}
             weekNowIndicator={weekNowIndicator}
@@ -504,7 +513,6 @@ export function GrayDashboardCalendar({
             weekScrollRef={weekScrollRef}
             weekColumnsRef={weekColumnsRef}
             onNavigateRange={handleNavigateRange}
-            onGoToday={handleGoToday}
             onUpdateViewMode={updateViewMode}
             onColumnClick={handleColumnClick}
             onEventClick={(event, anchorRect, mouseEvent) =>
@@ -521,7 +529,6 @@ export function GrayDashboardCalendar({
             nowReference={nowReference}
             timeZoneLabel={timeZoneLabel}
             rangeNavigationLabel={rangeNavigationLabel}
-            showTodayControl={showTodayControl}
             showViewSelect={showViewSelect}
             showHeaderDates={showHeaderDates}
             dayIndicatorOffset={dayIndicatorOffset}
@@ -530,7 +537,6 @@ export function GrayDashboardCalendar({
             selectedEventIds={selectedEventIds}
             dayColumnRef={dayColumnRef}
             onNavigateRange={handleNavigateRange}
-            onGoToday={handleGoToday}
             onUpdateViewMode={updateViewMode}
             onColumnClick={handleColumnClick}
             onEventClick={(event, anchorRect, mouseEvent) =>

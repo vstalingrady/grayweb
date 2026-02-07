@@ -75,9 +75,21 @@ export const useChatViewScroll = ({
         const viewport = chatViewportRef.current;
         if (viewport) {
           const maxScroll = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
-          viewport.scrollTop = Math.round(maxScroll / 2);
-          isAtBottomRef.current = false;
-          userScrolledAwayRef.current = true;
+          viewport.scrollTop = maxScroll;
+          isAtBottomRef.current = true;
+          userScrolledAwayRef.current = false;
+          requestAnimationFrame(() => {
+            if (userScrolledAwayRef.current) {
+              return;
+            }
+            const nextViewport = chatViewportRef.current;
+            if (!nextViewport) {
+              return;
+            }
+            const nextMaxScroll = Math.max(0, nextViewport.scrollHeight - nextViewport.clientHeight);
+            nextViewport.scrollTop = nextMaxScroll;
+            isAtBottomRef.current = true;
+          });
         } else if (scrollAnchorRef.current) {
           scrollAnchorRef.current.scrollIntoView({ behavior: "auto" });
           isAtBottomRef.current = true;

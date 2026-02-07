@@ -77,10 +77,17 @@ export const useCalendarComposer = ({
         return;
       }
 
-      if (payload.entryType === "habit" && onCreateHabit) {
-        onCreateHabit({ id, ...payload });
-        closeComposer();
-        return;
+      if (payload.entryType === "habit") {
+        if (onCreatePlan) {
+          onCreatePlan({ id, ...payload, entryType: "plan" });
+          closeComposer();
+          return;
+        }
+        if (onCreateHabit) {
+          onCreateHabit({ id, ...payload });
+          closeComposer();
+          return;
+        }
       }
 
       updateEvents((previous) => {

@@ -43,6 +43,7 @@
     0 24px 48px rgba(0, 0, 0, 0.6),
     0 0 0 1px rgba(255, 255, 255, 0.05);
   overflow: hidden;
+  min-height: 0;
 }
 
 .settingsSidebar {
@@ -192,6 +193,9 @@
   padding: 48px 64px;
   overflow-y: auto;
   width: 100%;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .settingsPageHeader {
@@ -566,7 +570,7 @@
 
   .settingsContainer {
     grid-template-columns: 1fr;
-    height: 100dvh;
+    height: var(--gray-viewport-height, 100dvh);
     width: 100%;
     margin: 0;
     border: none;
@@ -870,6 +874,10 @@
   flex-direction: column;
   height: 100%;
   overflow-y: auto;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
 }
 
 .mobileSettingsHeader {

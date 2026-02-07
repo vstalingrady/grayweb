@@ -1,7 +1,7 @@
 "use client";
 
 import styles from "@/components/gray/chat/ChatComposerStyles.module.css";
-import { Paperclip, ArrowUpRight } from "lucide-react";
+import { Paperclip, ArrowUpRight, Mic, Square } from "lucide-react";
 import {
   type ClipboardEvent as ReactClipboardEvent,
   type FormEvent,
@@ -22,6 +22,9 @@ export type GrayChatBarProps = {
   isInputDisabled?: boolean;
   isSubmitting?: boolean;
   onAddAttachment?: () => void;
+  onToggleVoiceInput?: () => void;
+  isVoiceInputActive?: boolean;
+  isVoiceInputSupported?: boolean;
   modelSelector?: React.ReactNode;
   onPasteFiles?: (files: File[]) => void;
   attachmentTray?: React.ReactNode;
@@ -36,6 +39,9 @@ export function GrayChatBar({
   isInputDisabled = false,
   isSubmitting = false,
   onAddAttachment,
+  onToggleVoiceInput,
+  isVoiceInputActive = false,
+  isVoiceInputSupported = false,
   modelSelector,
   onPasteFiles,
   attachmentTray,
@@ -121,6 +127,7 @@ export function GrayChatBar({
 
   const isStreaming = isSubmitting;
   const actionLabel = isStreaming ? t("Stop response") : t("Send message");
+  const voiceInputLabel = isVoiceInputActive ? t("Stop voice input") : t("Start voice input");
 
   // Track if textarea is expanded beyond single line
   const [isExpanded, setIsExpanded] = useState(false);
@@ -170,6 +177,20 @@ export function GrayChatBar({
               onClick={onAddAttachment}
             >
               <Paperclip size={18} />
+            </button>
+          ) : null}
+          {isVoiceInputSupported && onToggleVoiceInput ? (
+            <button
+              type="button"
+              className={styles.chatIconButton}
+              aria-label={voiceInputLabel}
+              title={voiceInputLabel}
+              aria-pressed={isVoiceInputActive ? "true" : "false"}
+              data-active={isVoiceInputActive ? "true" : undefined}
+              onClick={onToggleVoiceInput}
+              disabled={isInputBlocked && !isSubmitting}
+            >
+              {isVoiceInputActive ? <Square size={14} /> : <Mic size={18} />}
             </button>
           ) : null}
         </div>
@@ -225,6 +246,20 @@ export function GrayChatBar({
               onClick={onAddAttachment}
             >
               <Paperclip size={18} />
+            </button>
+          ) : null}
+          {isVoiceInputSupported && onToggleVoiceInput ? (
+            <button
+              type="button"
+              className={styles.chatIconButton}
+              aria-label={voiceInputLabel}
+              title={voiceInputLabel}
+              aria-pressed={isVoiceInputActive ? "true" : "false"}
+              data-active={isVoiceInputActive ? "true" : undefined}
+              onClick={onToggleVoiceInput}
+              disabled={isInputBlocked && !isSubmitting}
+            >
+              {isVoiceInputActive ? <Square size={14} /> : <Mic size={18} />}
             </button>
           ) : null}
         </div>

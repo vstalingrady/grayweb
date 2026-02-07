@@ -13,7 +13,7 @@ import composerStyles from "@/components/gray/chat/ChatComposerStyles.module.css
 import { GrayDashboardCalendar } from "@/components/calendar/GrayDashboardCalendar";
 import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
 import { EventComposerPayload } from "@/components/calendar/EventComposer";
-import { type ProactivityItem, type PulseEntry, type PlanItem, type PlanUpdates, type HabitItem } from "./types";
+import { type ProactivityItem, type PulseEntry, type PlanItem, type PlanUpdates } from "./types";
 import { DashboardHeader } from "./DashboardHeader";
 import { mapPlansToCalendarEvents, PLAN_EVENT_ID_PREFIX } from "./planCalendarUtils";
 import { useUser } from "@/contexts/UserContext";
@@ -24,6 +24,7 @@ import { DashboardPulseGrid } from "./dashboard/DashboardPulseGrid";
 import { normalizePlanTier } from "@/components/gray/utils/helperFunctions";
 import { useCalendarComposer } from "@/components/calendar/useCalendarComposer";
 import { EventComposer } from "@/components/calendar/EventComposer";
+import type { ComposerAnchorRect } from "@/components/calendar/dashboardCalendarTypes";
 
 const CALENDAR_PANEL_MAX_HEIGHT_WITH_CHAT =
   "clamp(360px, calc(100vh - (320px + var(--gray-chat-bar-clearance, 112px))), 660px)";
@@ -48,7 +49,6 @@ type GrayDashboardViewProps = {
   currentPulse: PulseEntry | null;
   isCurrentPulseEditable: boolean;
   livePlans?: PlanItem[];
-  liveHabits?: HabitItem[];
   onSelectPulse: (id: string) => void;
   proactivityFallback: ProactivityItem | null;
   isProactivityLoaded: boolean;
@@ -58,7 +58,6 @@ type GrayDashboardViewProps = {
   onSavePlan?: (planId: string, updates: PlanUpdates) => Promise<void> | void;
   onDeletePlan?: (plan: PlanItem) => void;
   onTogglePlan?: (id: string) => void;
-  onToggleHabit?: (id: string) => void;
   activeTab: "pulse" | "calendar";
   onSelectTab: (tab: "pulse" | "calendar") => void;
   currentDate: Date;
@@ -68,10 +67,7 @@ type GrayDashboardViewProps = {
   onCalendarEventsChange: (events: CalendarEvent[]) => void;
   calendarSelectedDate?: Date;
   onCalendarSelectedDateChange?: (date: Date) => void;
-  onEditHabit?: (habit: { id: string; label: string; previousLabel: string }) => void;
-  onDeleteHabit?: (habit: { id: string; label: string; previousLabel: string }) => void;
   onCreatePlan?: (plan: EventComposerPayload) => Promise<void> | void;
-  onCreateHabit?: (habit: EventComposerPayload) => Promise<void> | void;
   onIntegrationAction?: () => void;
   chatBar?: ReactNode;
   isCompactLayout?: boolean;
@@ -90,14 +86,12 @@ export function GrayDashboardView({
   currentPulse,
   isCurrentPulseEditable,
   livePlans,
-  liveHabits,
   proactivityFallback,
   isProactivityLoaded,
   onProactivitySelect,
   onProactivityRemove,
   onDeletePlan,
   onTogglePlan,
-  onToggleHabit,
   activeTab,
   onSelectTab,
   currentDate,
@@ -108,7 +102,6 @@ export function GrayDashboardView({
   calendarSelectedDate,
   onCalendarSelectedDateChange,
   onCreatePlan,
-  onCreateHabit,
   onIntegrationAction,
   chatBar,
   isCompactLayout = false,
@@ -138,23 +131,6 @@ export function GrayDashboardView({
       return true;
     });
   }, [currentPulse, hasPulseData, isCurrentPulseEditable, livePlans]);
-
-  const displayHabits = useMemo(() => {
-    const fallbackHabits = currentPulse?.habits ?? [];
-    if (isCurrentPulseEditable) {
-      return liveHabits ?? fallbackHabits;
-    }
-    if (hasPulseData) {
-      return fallbackHabits;
-    }
-    const rawHabits = liveHabits ?? [];
-    const seen = new Set<string>();
-    return rawHabits.filter((habit) => {
-      if (seen.has(habit.id)) return false;
-      seen.add(habit.id);
-      return true;
-    });
-  }, [currentPulse, hasPulseData, isCurrentPulseEditable, liveHabits]);
 
   const planCalendarEvents = useMemo(() => mapPlansToCalendarEvents(displayPlans), [displayPlans]);
 
@@ -197,11 +173,11 @@ export function GrayDashboardView({
     composerAnchorRect,
     composerPreviewEvent,
     setComposerDraft,
-    openComposerAt,
-    editEvent,
-    closeComposer,
-    handleComposerSubmit,
-    handleComposerDelete,
+    openComposerAt: openComposerAtInternal,
+    editEvent: editEventInternal,
+    closeComposer: closeComposerInternal,
+    handleComposerSubmit: handleComposerSubmitInternal,
+    handleComposerDelete: handleComposerDeleteInternal,
   } = useCalendarComposer({
     events: mergedEvents,
     updateEvents: (updater) => {
@@ -211,7 +187,6 @@ export function GrayDashboardView({
     },
     onEventDelete: handleCalendarEventDelete,
     onCreatePlan,
-    onCreateHabit,
     onClearSelection: () => { },
   });
 
@@ -235,6 +210,9 @@ export function GrayDashboardView({
   const [panelUserHeightPx, setPanelUserHeightPx] = useState<number | null>(null);
   const panelResizeRef = useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null);
   const [isPanelResizing, setIsPanelResizing] = useState(false);
+  const [isMobileQuickActionsOpen, setIsMobileQuickActionsOpen] = useState(false);
+  const [quickComposerEntryType, setQuickComposerEntryType] = useState<"plan" | null>(null);
+  const [quickComposerStartDate, setQuickComposerStartDate] = useState<Date | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -382,26 +360,152 @@ export function GrayDashboardView({
     setIsProactivityModalOpen(false);
   }, []);
 
+  const resetQuickComposerSeed = useCallback(() => {
+    setQuickComposerEntryType(null);
+    setQuickComposerStartDate(null);
+  }, []);
+
+  const handleComposerOpenAt = useCallback(
+    (...args: Parameters<typeof openComposerAtInternal>) => {
+      resetQuickComposerSeed();
+      openComposerAtInternal(...args);
+    },
+    [openComposerAtInternal, resetQuickComposerSeed]
+  );
+
+  const handleComposerEdit = useCallback(
+    (event: CalendarEvent, anchorRect?: ComposerAnchorRect | null) => {
+      resetQuickComposerSeed();
+      if (anchorRect) {
+        editEventInternal(
+          event,
+          new DOMRect(anchorRect.left, anchorRect.top, anchorRect.width, anchorRect.height)
+        );
+        return;
+      }
+      editEventInternal(event);
+    },
+    [editEventInternal, resetQuickComposerSeed]
+  );
+
+  const handleComposerClose = useCallback(() => {
+    resetQuickComposerSeed();
+    closeComposerInternal();
+  }, [closeComposerInternal, resetQuickComposerSeed]);
+
+  const handleComposerSubmit = useCallback(
+    (...args: Parameters<typeof handleComposerSubmitInternal>) => {
+      resetQuickComposerSeed();
+      handleComposerSubmitInternal(...args);
+    },
+    [handleComposerSubmitInternal, resetQuickComposerSeed]
+  );
+
+  const handleComposerDelete = useCallback(
+    (...args: Parameters<typeof handleComposerDeleteInternal>) => {
+      resetQuickComposerSeed();
+      handleComposerDeleteInternal(...args);
+    },
+    [handleComposerDeleteInternal, resetQuickComposerSeed]
+  );
+
+  const isMobileCalendarView = isCompactLayout && activeTab === "calendar";
+
+  useEffect(() => {
+    if (!isMobileCalendarView || composerOpen || !hasCalendarAccess) {
+      Promise.resolve().then(() => setIsMobileQuickActionsOpen(false));
+    }
+  }, [composerOpen, hasCalendarAccess, isMobileCalendarView]);
+
+  useEffect(() => {
+    if (!isMobileQuickActionsOpen) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsMobileQuickActionsOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isMobileQuickActionsOpen]);
+
+  const quickComposerSeedEvent = useMemo<CalendarEvent | null>(() => {
+    if (!composerOpen || editingEvent || quickComposerEntryType !== "plan") {
+      return null;
+    }
+
+    const start = new Date(quickComposerStartDate ?? calendarSelectedDate ?? currentDate);
+    start.setSeconds(0, 0);
+    const end = new Date(start.getTime() + 30 * 60000);
+
+    return {
+      id: "",
+      title: "",
+      start,
+      end,
+      color: "#3D6F73",
+      entryType: "plan",
+      calendarId: calendars[0]?.id ?? "default",
+      description: "",
+    };
+  }, [
+    calendarSelectedDate,
+    calendars,
+    composerOpen,
+    currentDate,
+    editingEvent,
+    quickComposerEntryType,
+    quickComposerStartDate,
+  ]);
+
+  const handleMobileQuickActionSelect = useCallback(
+    (entryType: "event" | "plan") => {
+      const selectedDate = new Date(calendarSelectedDate ?? currentDate);
+
+      if (entryType === "plan") {
+        setQuickComposerEntryType("plan");
+        setQuickComposerStartDate(selectedDate);
+      } else {
+        resetQuickComposerSeed();
+      }
+
+      setIsMobileQuickActionsOpen(false);
+      openComposerAtInternal(selectedDate);
+    },
+    [calendarSelectedDate, currentDate, openComposerAtInternal, resetQuickComposerSeed]
+  );
+
   const headerClassName = styles.pulseSurfaceHeader;
   const renderCalendarHeader = (headerProps: {
     activeTab: DashboardTab;
     onSelectTab: (tab: DashboardTab) => void;
-  }) => (
-    <DashboardHeader
-      activeTab={headerProps.activeTab}
-      onSelectTab={headerProps.onSelectTab}
-      showTabs={false}
-      onGoToday={undefined}
-      viewMode={undefined}
-      onViewModeChange={undefined}
-      viewModeOptions={[]}
-      label={undefined}
-      rangeLabel={undefined}
-      className={headerClassName}
-      onUpgradeClick={onUpgradeClick}
-      showUpgradeButton={showUpgradeButton}
-    />
-  );
+  }) => {
+    if (hideHeader || isCompactLayout) {
+      return null;
+    }
+
+    return (
+      <DashboardHeader
+        activeTab={headerProps.activeTab}
+        onSelectTab={headerProps.onSelectTab}
+        showTabs={false}
+        onGoToday={undefined}
+        viewMode={undefined}
+        onViewModeChange={undefined}
+        viewModeOptions={[]}
+        label={undefined}
+        rangeLabel={undefined}
+        className={headerClassName}
+        onUpgradeClick={onUpgradeClick}
+        showUpgradeButton={showUpgradeButton}
+      />
+    );
+  };
 
   const proactivityModal = onProactivitySelect ? (
     <ProactivitySettingsModal
@@ -419,11 +523,11 @@ export function GrayDashboardView({
     <EventComposer
       isOpen={composerOpen}
       referenceDate={currentDate}
-      activeEvent={editingEvent}
+      activeEvent={editingEvent ?? quickComposerSeedEvent}
       initialRange={composerRange}
       calendars={calendars}
       anchorRect={composerAnchorRect}
-      onRequestClose={closeComposer}
+      onRequestClose={handleComposerClose}
       onSubmit={handleComposerSubmit}
       onDelete={handleComposerDelete}
       onStateChange={setComposerDraft}
@@ -438,15 +542,13 @@ export function GrayDashboardView({
     proactivity: displayProactivity ?? null,
     events: mergedEvents,
     plans: displayPlans,
-    habits: displayHabits,
     proactivityDeliveryKeys,
     canConfigureProactivity: Boolean(onProactivitySelect),
     onConfigureProactivity: handleOpenProactivityModal,
     onSelectDate: (date: Date) => onCalendarSelectedDateChange?.(date),
     isCompactLayout,
-    onAddEvent: (date: Date) => openComposerAt(date),
+    onAddEvent: (date: Date) => handleComposerOpenAt(date),
     onTogglePlan,
-    onToggleHabit,
   };
 
   const pulseContent = (
@@ -475,9 +577,9 @@ export function GrayDashboardView({
     previewEvent: composerPreviewEvent,
   };
   const calendarComposerHandlers = {
-    onOpenAt: openComposerAt,
-    onEdit: editEvent,
-    onClose: closeComposer,
+    onOpenAt: handleComposerOpenAt,
+    onEdit: handleComposerEdit,
+    onClose: handleComposerClose,
     onSubmit: handleComposerSubmit,
     onDelete: handleComposerDelete,
     onStateChange: setComposerDraft,
@@ -492,7 +594,6 @@ export function GrayDashboardView({
     onEventsChange: onCalendarEventsChange,
     onEventDelete: handleCalendarEventDelete,
     onCreatePlan,
-    onCreateHabit,
     selectedDate: calendarSelectedDate,
     onSelectedDateChange: onCalendarSelectedDateChange,
     composerState: calendarComposerState,
@@ -517,7 +618,6 @@ export function GrayDashboardView({
   const compactCalendarContent = (
     <GrayDashboardCalendar
       {...baseCalendarProps}
-      viewModeLocked="day"
       showSidebar={false}
       showCalendarList={false}
     />
@@ -533,6 +633,7 @@ export function GrayDashboardView({
       : isCompactLayout
         ? compactCalendarContent
         : calendarContent;
+  const shouldShowMobileQuickActions = isMobileCalendarView && hasCalendarAccess && !composerOpen;
 
   return (
     <>
@@ -574,6 +675,56 @@ export function GrayDashboardView({
           </div>
         ) : null}
       </div>
+      {shouldShowMobileQuickActions && isMobileQuickActionsOpen ? (
+        <button
+          type="button"
+          className={styles.mobileQuickActionsBackdrop}
+          onClick={() => setIsMobileQuickActionsOpen(false)}
+          aria-label={t("Close quick actions")}
+        />
+      ) : null}
+      {shouldShowMobileQuickActions ? (
+        <div
+          id="dashboard-mobile-quick-actions-menu"
+          className={styles.mobileQuickActionsMenu}
+          data-open={isMobileQuickActionsOpen ? "true" : "false"}
+          data-chat-visible={isChatBarVisible ? "true" : "false"}
+          role="menu"
+          aria-label={t("Quick actions")}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className={styles.mobileQuickActionButton}
+            onClick={() => handleMobileQuickActionSelect("plan")}
+          >
+            {t("Task")}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={styles.mobileQuickActionButton}
+            onClick={() => handleMobileQuickActionSelect("event")}
+          >
+            {t("Event")}
+          </button>
+        </div>
+      ) : null}
+      {shouldShowMobileQuickActions ? (
+        <button
+          type="button"
+          className={styles.mobileQuickActionsFab}
+          data-open={isMobileQuickActionsOpen ? "true" : "false"}
+          data-chat-visible={isChatBarVisible ? "true" : "false"}
+          aria-haspopup="menu"
+          aria-expanded={isMobileQuickActionsOpen}
+          aria-controls="dashboard-mobile-quick-actions-menu"
+          aria-label={isMobileQuickActionsOpen ? t("Close quick actions") : t("Open quick actions")}
+          onClick={() => setIsMobileQuickActionsOpen((previous) => !previous)}
+        >
+          <span aria-hidden="true">+</span>
+        </button>
+      ) : null}
     </>
   );
 }

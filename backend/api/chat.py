@@ -75,6 +75,42 @@ router = APIRouter(tags=["chat"])
 
 CUSTOM_INSTRUCTIONS_HEADER = "CUSTOM INSTRUCTIONS FROM USER (SOURCE OF TRUTH)"
 FOLLOW_UP_PRONOUN_PATTERN = re.compile(r"\b(him|her|them|that|this|it)\b", re.IGNORECASE)
+LOW_INFORMATION_SEARCH_TURN_PATTERN = re.compile(
+    r"^\s*(?:search|search\s+please|pls\s+search|please\s+search|google\s+it|look\s+it\s+up)\s*$",
+    re.IGNORECASE,
+)
+FOLLOW_UP_CONTEXT_KEYWORDS = (
+    "news",
+    "file",
+    "files",
+    "report",
+    "reports",
+    "document",
+    "documents",
+    "release",
+    "update",
+    "updates",
+    "investigation",
+    "case",
+    "price",
+    "weather",
+    "score",
+    "election",
+    "policy",
+    "court",
+)
+
+
+def _is_low_information_search_turn(text: str) -> bool:
+    normalized = (text or "").strip().lower()
+    if not normalized:
+        return True
+    if LOW_INFORMATION_SEARCH_TURN_PATTERN.match(normalized):
+        return True
+    words = normalized.split()
+    if len(words) <= 3 and any(token in normalized for token in ("search", "google", "lookup", "look up")):
+        return True
+    return False
 
 def _resolve_conversation_memory_enabled(
     user_record: Optional[Dict[str, Any]],
@@ -115,21 +151,40 @@ def _build_effective_web_search_prompt(
     guidance = (
         "Use concise, user-focused web search queries. "
         "For follow-up prompts with pronouns (him/her/them/that/it), resolve the referent from recent user context "
-        "before searching. If the referent is ambiguous, ask one clarifying question instead of broad generic searches."
+        "before searching. Rewrite follow-up queries with the resolved entity/topic explicitly included. "
+        "Keep the user domain intact; do not reinterpret ambiguous words into unrelated domains. "
+        "If the referent is still ambiguous, ask one clarifying question instead of broad generic searches."
     )
     if not conversation_history:
         return f"{base_prompt}\n\n{guidance}" if base_prompt else guidance
 
     recent_user_context: Optional[str] = None
-    for entry in reversed(conversation_history[-8:]):
+    fallback_user_context: Optional[str] = None
+    recent_candidates: List[str] = []
+    for entry in reversed(conversation_history[-10:]):
         if not isinstance(entry, dict):
             continue
         if (entry.get("role") or "").strip().lower() != "user":
             continue
         text = (entry.get("text") or "").strip()
         if text and text != (chat_request.message or "").strip():
-            recent_user_context = text
+            recent_candidates.append(text)
+
+    for candidate in recent_candidates:
+        if _is_low_information_search_turn(candidate):
+            continue
+        if fallback_user_context is None:
+            fallback_user_context = candidate
+        lowered_candidate = candidate.lower()
+        if any(keyword in lowered_candidate for keyword in FOLLOW_UP_CONTEXT_KEYWORDS):
+            recent_user_context = candidate
             break
+        if len(lowered_candidate.split()) >= 6:
+            recent_user_context = candidate
+            break
+
+    if recent_user_context is None:
+        recent_user_context = fallback_user_context
 
     prompt_parts: List[str] = []
     if base_prompt:

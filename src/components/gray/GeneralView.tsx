@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { CheckSquare, Square, Pencil, Trash2, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
-import { type HabitItem, type PlanItem, type PlanUpdates, type ProactivityItem } from "./types";
+import { type PlanItem, type PlanUpdates, type ProactivityItem } from "./types";
 import { useI18n } from "@/contexts/I18nContext";
 import { MiniMonth } from "@/components/calendar/MiniMonth";
 import { toDateKey } from "@/app/gray/utils";
@@ -16,15 +16,12 @@ type GrayGeneralViewProps = {
   greeting: string;
   currentDate: Date;
   plans: PlanItem[];
-  habits: HabitItem[];
   proactivity: ProactivityItem | null;
   onSelectProactivity: (next: ProactivityItem) => void;
   onRemoveProactivity: () => void;
   onTogglePlan: (id: string) => void;
-  onToggleHabit: (id: string) => void;
   onSavePlan: (planId: string, updates: PlanUpdates) => Promise<void> | void;
   onDeletePlan: (plan: PlanItem) => void;
-  onDeleteHabit: (habit: HabitItem) => void;
   onRefreshData: () => Promise<void>;
   showGreeting?: boolean;
   hidePlans?: boolean;
@@ -34,15 +31,12 @@ export function GrayGeneralView({
   greeting,
   currentDate,
   plans,
-  habits,
   proactivity,
   onSelectProactivity,
   onRemoveProactivity,
   onTogglePlan,
-  onToggleHabit,
   onSavePlan,
   onDeletePlan,
-  onDeleteHabit,
   onRefreshData,
   showGreeting = true,
   hidePlans = false,
@@ -60,10 +54,7 @@ export function GrayGeneralView({
     base.setHours(0, 0, 0, 0);
     return base;
   });
-  const [activeEditor, setActiveEditor] = useState<
-    | null
-    | { type: "plan" | "habit"; plan: PlanItem | null; habit: HabitItem | null }
-  >(null);
+  const [activeEditor, setActiveEditor] = useState<null | { plan: PlanItem | null }>(null);
 
   const [isProactivityMenuOpen, setIsProactivityMenuOpen] = useState(false);
   const proactivityAnchorRef = useRef<HTMLButtonElement | null>(null);
@@ -79,7 +70,7 @@ export function GrayGeneralView({
   }, []);
 
   const shouldHideCompletedItem = useCallback(
-    (item: PlanItem | HabitItem) => {
+    (item: PlanItem) => {
       if (!item.completed) {
         return false;
       }
@@ -122,16 +113,11 @@ export function GrayGeneralView({
     setIsProactivityMenuOpen(false);
   };
 
-  const isAdding = Boolean(activeEditor && !activeEditor.plan && !activeEditor.habit);
+  const isAdding = Boolean(activeEditor && !activeEditor.plan);
 
   const unifiedItems = useMemo(
     () => {
-      const next = [
-        ...plans.map((plan) => ({ kind: "plan" as const, item: plan })),
-        ...habits.map((habit) => ({ kind: "habit" as const, item: habit })),
-      ];
-
-      const filtered = next.filter(({ item }) => !shouldHideCompletedItem(item));
+      const filtered = plans.filter((plan) => !shouldHideCompletedItem(plan));
 
       const toTimestamp = (value: string | null | undefined): number => {
         if (!value) return 0;
@@ -141,19 +127,19 @@ export function GrayGeneralView({
 
       filtered.sort((a, b) => {
         const aTime =
-          toTimestamp(a.item.updatedAt) ||
-          toTimestamp(a.item.createdAt) ||
-          (a.kind === "plan" ? toTimestamp(a.item.deadline) : 0);
+          toTimestamp(a.updatedAt) ||
+          toTimestamp(a.createdAt) ||
+          toTimestamp(a.deadline);
         const bTime =
-          toTimestamp(b.item.updatedAt) ||
-          toTimestamp(b.item.createdAt) ||
-          (b.kind === "plan" ? toTimestamp(b.item.deadline) : 0);
+          toTimestamp(b.updatedAt) ||
+          toTimestamp(b.createdAt) ||
+          toTimestamp(b.deadline);
         return bTime - aTime;
       });
 
       return filtered;
     },
-    [habits, plans, shouldHideCompletedItem]
+    [plans, shouldHideCompletedItem]
   );
 
   const shouldShowEmptyState = unifiedItems.length === 0 && !isAdding;
@@ -162,8 +148,8 @@ export function GrayGeneralView({
     <>
       {unifiedItems.length ? (
         <ul className={styles.planList}>
-          {unifiedItems.map(({ kind, item }) => (
-            <li key={`${kind}-${item.id}`} className={styles.planListItem}>
+          {unifiedItems.map((item) => (
+            <li key={item.id} className={styles.planListItem}>
               <div
                 className={styles.planItemButton}
                 data-completed={item.completed ? "true" : "false"}
@@ -180,11 +166,7 @@ export function GrayGeneralView({
                   onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
-                    if (kind === "plan") {
-                      onTogglePlan(item.id);
-                    } else {
-                      onToggleHabit(item.id);
-                    }
+                    onTogglePlan(item.id);
                   }}
                 >
                   <span className={styles.planCheckbox} aria-hidden="true">
@@ -210,14 +192,10 @@ export function GrayGeneralView({
                   onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
-                    if (kind === "plan") {
-                      setActiveEditor({ type: "plan", plan: item as PlanItem, habit: null });
-                    } else {
-                      setActiveEditor({ type: "habit", plan: null, habit: item as HabitItem });
-                    }
+                    setActiveEditor({ plan: item });
                   }}
                   aria-label={t("Edit plan {label}", { label: item.label })}
-                  disabled={kind === "plan" ? !onSavePlan : false}
+                  disabled={!onSavePlan}
                 >
                   <Pencil size={14} />
                 </button>
@@ -227,11 +205,7 @@ export function GrayGeneralView({
                   onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
-                    if (kind === "plan") {
-                      onDeletePlan(item as PlanItem);
-                    } else {
-                      onDeleteHabit(item as HabitItem);
-                    }
+                    onDeletePlan(item);
                   }}
                   aria-label={t("Delete plan {label}", { label: item.label })}
                 >
@@ -254,10 +228,8 @@ export function GrayGeneralView({
         {activeEditor ? (
           <div style={{ marginBottom: "12px" }}>
             <PlanHabitInlineEditor
-              type={activeEditor.type}
-              onTypeChange={(nextType) => setActiveEditor({ type: nextType, plan: null, habit: null })}
+              type="plan"
               planToEdit={activeEditor.plan}
-              habitToEdit={activeEditor.habit}
               onCancel={() => setActiveEditor(null)}
               onSuccess={handleEditorSuccess}
               onSubmitPlan={
@@ -280,7 +252,7 @@ export function GrayGeneralView({
             <button
               type="button"
               className={styles.secondaryAction}
-              onClick={() => setActiveEditor({ type: "plan", plan: null, habit: null })}
+              onClick={() => setActiveEditor({ plan: null })}
             >
               {t("New event")}
             </button>
@@ -292,7 +264,7 @@ export function GrayGeneralView({
               <button
                 type="button"
                 className={styles.secondaryAction}
-                onClick={() => setActiveEditor({ type: "plan", plan: null, habit: null })}
+                onClick={() => setActiveEditor({ plan: null })}
                 style={{ marginTop: "auto" }}
               >
                 {t("New event")}

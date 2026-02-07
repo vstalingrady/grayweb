@@ -78,6 +78,11 @@
   overflow: visible;
 }
 
+:global([data-dashboard-tab="calendar"]) .dashboardCalendarContainer[data-compact="true"] {
+  padding: 0;
+  overflow: hidden;
+}
+
 .dashboardCalendarShell[data-compact="true"] {
   border-radius: 0;
   padding: 0;
@@ -92,6 +97,12 @@
   overflow-y: auto;
   padding-bottom: 24px;
   scrollbar-gutter: stable;
+}
+
+:global([data-dashboard-tab="calendar"]) .dashboardCalendarSurface[data-compact="true"] {
+  gap: 0;
+  overflow: hidden;
+  padding-bottom: 0;
 }
 
 .dashboardCompact {
@@ -145,6 +156,7 @@
   display: grid;
   overflow: hidden;
   min-height: 0;
+  height: 100%;
 }
 
 .dashboardCalendarInnerSurface::after {
@@ -188,4 +200,102 @@
 
 .pulseSurfaceHeader {
   padding-bottom: clamp(12px, 2vw, 20px);
+}
+
+.mobileQuickActionsBackdrop {
+  position: fixed;
+  inset: 0;
+  border: none;
+  background: rgba(0, 0, 0, 0.56);
+  z-index: 120;
+}
+
+.mobileQuickActionsMenu {
+  position: fixed;
+  right: clamp(16px, 4vw, 24px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 88px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 130;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.mobileQuickActionsMenu[data-chat-visible="true"] {
+  bottom: calc(var(--gray-chat-bar-clearance, 0px) + env(safe-area-inset-bottom, 0px) + 80px);
+}
+
+.mobileQuickActionsMenu[data-open="true"] {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.mobileQuickActionButton {
+  min-width: 96px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #101317;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 10px 14px;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.34);
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.mobileQuickActionButton:hover,
+.mobileQuickActionButton:focus-visible {
+  border-color: rgba(255, 255, 255, 1);
+  background: #ffffff;
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.mobileQuickActionsFab {
+  position: fixed;
+  right: clamp(16px, 4vw, 24px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
+  width: 54px;
+  height: 54px;
+  border: none;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #0f1115;
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.45);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  z-index: 131;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.mobileQuickActionsFab[data-chat-visible="true"] {
+  bottom: calc(var(--gray-chat-bar-clearance, 0px) + env(safe-area-inset-bottom, 0px) + 14px);
+}
+
+.mobileQuickActionsFab span {
+  display: inline-flex;
+  line-height: 1;
+  font-size: 2rem;
+  font-weight: 300;
+  transform: translateY(-1px);
+  transition: transform 0.18s ease;
+}
+
+.mobileQuickActionsFab[data-open="true"] span {
+  transform: translateY(-1px) rotate(45deg);
+}
+
+.mobileQuickActionsFab:hover,
+.mobileQuickActionsFab:focus-visible {
+  box-shadow: 0 22px 40px rgba(0, 0, 0, 0.52);
+  transform: translateY(-1px);
+  outline: none;
 }

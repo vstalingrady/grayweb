@@ -100,82 +100,6 @@ PLAN_TOOL = types.Tool(
             ),
         ),
         types.FunctionDeclaration(
-            name="list_habits",
-            description="List habits for the current user.",
-            parameters=types.Schema(
-                type="OBJECT",
-                properties={
-                    "limit": types.Schema(
-                        type="INTEGER",
-                        description="Optional limit on the number of habits to return.",
-                    ),
-                },
-                required=[],
-            ),
-        ),
-        types.FunctionDeclaration(
-            name="create_habit",
-            description="Create a new habit.",
-            parameters=types.Schema(
-                type="OBJECT",
-                properties={
-                    "label": types.Schema(
-                        type="STRING",
-                        description="The name or label of the habit.",
-                    ),
-                    "description": types.Schema(
-                        type="STRING",
-                        description="Optional description of the habit.",
-                    ),
-                    "reminder_at": types.Schema(
-                        type="STRING",
-                        description="Optional reminder time (ISO 8601 with timezone offset). Leave empty or omit for no reminder.",
-                    ),
-                },
-                required=["label"],
-            ),
-        ),
-        types.FunctionDeclaration(
-            name="update_habit",
-            description="Update an existing habit.",
-            parameters=types.Schema(
-                type="OBJECT",
-                properties={
-                    "habit_id": types.Schema(
-                        type="INTEGER",
-                        description="The ID of the habit to update.",
-                    ),
-                    "label": types.Schema(
-                        type="STRING",
-                        description="New label for the habit.",
-                    ),
-                    "description": types.Schema(
-                        type="STRING",
-                        description="New description.",
-                    ),
-                    "reminder_at": types.Schema(
-                        type="STRING",
-                        description="Optional reminder time (ISO 8601 with timezone offset). Set to empty string to clear.",
-                    ),
-                },
-                required=["habit_id"],
-            ),
-        ),
-        types.FunctionDeclaration(
-            name="delete_habit",
-            description="Delete a habit.",
-            parameters=types.Schema(
-                type="OBJECT",
-                properties={
-                    "habit_id": types.Schema(
-                        type="INTEGER",
-                        description="The ID of the habit to delete.",
-                    ),
-                },
-                required=["habit_id"],
-            ),
-        ),
-        types.FunctionDeclaration(
             name="list_reminders",
             description="List reminders for the current user.",
             parameters=types.Schema(
@@ -207,17 +131,13 @@ PLAN_TOOL = types.Tool(
         ),
         types.FunctionDeclaration(
             name="get_workspace_state",
-            description="Fetch a lightweight snapshot of plans, habits, and reminders for the current user.",
+            description="Fetch a lightweight snapshot of plans and reminders for the current user.",
             parameters=types.Schema(
                 type="OBJECT",
                 properties={
                     "plan_limit": types.Schema(
                         type="INTEGER",
                         description="Optional limit on plans to include.",
-                    ),
-                    "habit_limit": types.Schema(
-                        type="INTEGER",
-                        description="Optional limit on habits to include.",
                     ),
                     "reminder_limit": types.Schema(
                         type="INTEGER",

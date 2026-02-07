@@ -230,6 +230,15 @@ async def _stream_openrouter_response_impl(
     total_accumulated = ""
     current_message = message
     annotations_accumulated: List[Dict[str, Any]] = []
+    executed_search_queries: List[str] = []
+
+    def _remember_search_query(query: Optional[str]) -> None:
+        normalized = _normalize_search_query(query)
+        if not normalized:
+            return
+        if normalized in executed_search_queries:
+            return
+        executed_search_queries.append(normalized)
     
     for turn in range(max_tool_turns + 1):
         accumulated = ""
@@ -475,6 +484,7 @@ async def _stream_openrouter_response_impl(
                 tool_status_payload: Dict[str, Any] = {"name": tool_name, "status": "start"}
                 search_query = _extract_search_query(tool_name, tool_args)
                 if search_query:
+                    _remember_search_query(search_query)
                     tool_status_payload["query"] = search_query
                 yield ("tool_status", tool_status_payload)
 
@@ -558,6 +568,21 @@ async def _stream_openrouter_response_impl(
         except Exception as error:
             api_logger.warning(f"Failed to track OpenRouter usage: {error}", extra={"user_id": user_id})
     grounding_metadata = openrouter_annotations_to_grounding(annotations_accumulated)
+    if executed_search_queries:
+        if grounding_metadata is None:
+            grounding_metadata = {}
+        existing_queries = grounding_metadata.get("web_search_queries")
+        merged_queries: List[str] = []
+        if isinstance(existing_queries, list):
+            for existing in existing_queries:
+                normalized_existing = _normalize_search_query(existing)
+                if normalized_existing and normalized_existing not in merged_queries:
+                    merged_queries.append(normalized_existing)
+        for query in executed_search_queries:
+            if query not in merged_queries:
+                merged_queries.append(query)
+        if merged_queries:
+            grounding_metadata["web_search_queries"] = merged_queries
     final_text = total_accumulated
 
     if response_format:

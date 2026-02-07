@@ -25,7 +25,6 @@ import {
   CreditCard,
   LogOut,
   Pencil,
-  Trash2,
 } from "lucide-react";
 import railNavStyles from "../sidebar/RailNav.module.css";
 import styles from "./SettingsStyles.module.css";
@@ -167,13 +166,7 @@ export function SettingsModal({
   const planLabel = useMemo(() => derivePlanTierLabel(user), [user]);
   const accountMemorySettings = useMemo(
     () => extractMemorySettingsFromUser(user),
-    [
-      user?.supermemory_auto_capture,
-      user?.supermemory_auto_recall,
-      user?.supermemory_capture_mode,
-      user?.supermemory_max_recall_results,
-      user?.supermemory_profile_frequency,
-    ]
+    [user]
   );
 
   const handleResponseLanguageChange = (val: string) => {
@@ -402,11 +395,6 @@ export function SettingsModal({
       return () => clearTimeout(timer);
     }
   }, [contextActionState]);
-
-  const handleDeleteAccount = () => {
-    onClose();
-    router.push("/delete-account");
-  };
 
   const handleNavigateToPricing = useCallback(() => {
     onClose();
@@ -684,51 +672,6 @@ export function SettingsModal({
                 <LogOut className={styles.mobileGroupItemIcon} size={20} />
                 <span className={styles.mobileGroupItemLabel}>{t("Sign out")}</span>
               </button>
-              <button
-                className={styles.mobileGroupItem}
-                data-variant="danger"
-                onClick={handleDeleteAccount}
-              >
-                <Trash2 className={styles.mobileGroupItemIcon} size={20} />
-                <span className={styles.mobileGroupItemLabel}>{t("Delete account")}</span>
-              </button>
-            </div>
-
-            <div className={styles.mobileGroupLabel}>{t("Data & Information")}</div>
-            <div className={styles.mobileGroup}>
-              <button
-                className={styles.mobileGroupItem}
-                onClick={() => {
-                  setActiveSection("notifications");
-                  setMobileView("detail");
-                }}
-              >
-                <Bell className={styles.mobileGroupItemIcon} size={20} />
-                <span className={styles.mobileGroupItemLabel}>{t("Notifications")}</span>
-                <ChevronRight className={styles.mobileGroupItemArrow} size={16} />
-              </button>
-              <button
-                className={styles.mobileGroupItem}
-                onClick={() => {
-                  setActiveSection("memory");
-                  setMobileView("detail");
-                }}
-              >
-                <Archive className={styles.mobileGroupItemIcon} size={20} />
-                <span className={styles.mobileGroupItemLabel}>{t("Memory")}</span>
-                <ChevronRight className={styles.mobileGroupItemArrow} size={16} />
-              </button>
-              <button
-                className={styles.mobileGroupItem}
-                onClick={() => {
-                  setActiveSection("data_controls");
-                  setMobileView("detail");
-                }}
-              >
-                <Database className={styles.mobileGroupItemIcon} size={20} />
-                <span className={styles.mobileGroupItemLabel}>{t("Data controls")}</span>
-                <ChevronRight className={styles.mobileGroupItemArrow} size={16} />
-              </button>
             </div>
 
           </div>
@@ -850,7 +793,6 @@ export function SettingsModal({
               avatarUploadError={avatarUploadError}
               onAvatarFileChange={handleAvatarFileChange}
               onNavigateToPricing={handleNavigateToPricing}
-              onDeleteAccount={handleDeleteAccount}
             />
           )}
 

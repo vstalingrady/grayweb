@@ -8,7 +8,7 @@ import {
   type GoogleCalendarEvent as ApiGoogleCalendarEvent,
 } from "@/lib/api";
 import { sanitizeEventColor, DEFAULT_EVENT_COLOR } from "@/app/gray/constants";
-import { type PlanItem, type HabitItem } from "@/components/gray/types";
+import { type PlanItem } from "@/components/gray/types";
 import type { CalendarEvent, CalendarInfo, CalendarEntryType } from "@/components/calendar/types";
 
 // Custom event name for triggering workspace refresh from anywhere in the app
@@ -47,7 +47,6 @@ export function useWorkspaceData(
   loadCalendarDataOverride?: boolean
 ) {
   const [plans, setPlans] = useState<PlanItem[]>([]);
-  const [habits, setHabits] = useState<HabitItem[]>([]);
   const [calendarCalendars, setCalendarCalendars] = useState<CalendarInfo[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
@@ -57,10 +56,7 @@ export function useWorkspaceData(
     if (!userId) return;
 
     try {
-      const [planResponse, habitResponse] = await Promise.all([
-        workspaceService.getPlans(userId),
-        workspaceService.getUserHabits(userId),
-      ]);
+      const planResponse = await workspaceService.getPlans(userId);
 
       const mappedPlans: PlanItem[] = Array.isArray(planResponse)
         ? planResponse.map((plan) => ({
@@ -77,23 +73,9 @@ export function useWorkspaceData(
         }))
         : [];
 
-      const mappedHabits: HabitItem[] = Array.isArray(habitResponse)
-        ? habitResponse.map((habit) => ({
-          id: habit.id.toString(),
-          label: habit.label,
-          previousLabel: habit.previous_label,
-          completed: false,
-          createdAt: habit.created_at,
-          updatedAt: habit.updated_at,
-          details: habit.description ?? null,
-          reminderAt: habit.reminder_at ?? null,
-        }))
-        : [];
-
       setPlans(mappedPlans);
-      setHabits(mappedHabits);
     } catch (err) {
-      console.error("Failed to refresh plans and habits:", err);
+      console.error("Failed to refresh plans:", err);
       setError(err);
     }
   }, [userId]);
@@ -147,7 +129,6 @@ export function useWorkspaceData(
             ? calendarService.getGoogleCalendars(userId)
             : Promise.resolve<GoogleCalendarInfo[]>([]),
           workspaceService.getPlans(userId),
-          workspaceService.getUserHabits(userId),
         ]);
 
         if (!isMounted) {
@@ -159,7 +140,6 @@ export function useWorkspaceData(
           eventResult,
           googleCalendarsResult,
           planResult,
-          habitResult,
         ] = results;
 
         const calendarResponse = calendarResult.status === 'fulfilled' ? calendarResult.value : [];
@@ -180,9 +160,6 @@ export function useWorkspaceData(
 
         const planResponse = planResult.status === 'fulfilled' ? planResult.value : [];
         if (planResult.status === 'rejected') console.error('Failed to load plans:', planResult.reason);
-
-        const habitResponse = habitResult.status === 'fulfilled' ? habitResult.value : [];
-        if (habitResult.status === 'rejected') console.error('Failed to load habits:', habitResult.reason);
 
 
 
@@ -306,23 +283,9 @@ export function useWorkspaceData(
           }))
           : [];
 
-        const mappedHabits: HabitItem[] = Array.isArray(habitResponse)
-          ? habitResponse.map((habit) => ({
-            id: habit.id.toString(),
-            label: habit.label,
-            previousLabel: habit.previous_label,
-            completed: false,
-            createdAt: habit.created_at,
-            updatedAt: habit.updated_at,
-            details: habit.description ?? null,
-            reminderAt: habit.reminder_at ?? null,
-          }))
-          : [];
-
         setCalendarCalendars([...mappedCalendars, ...mappedGoogleCalendars]);
         setCalendarEvents([...mappedEvents, ...mappedGoogleEvents]);
         setPlans(mappedPlans);
-        setHabits(mappedHabits);
       } catch (err) {
         console.error("Failed to load workspace data:", err);
         setError(err);
@@ -341,8 +304,6 @@ export function useWorkspaceData(
   return {
     plans,
     setPlans,
-    habits,
-    setHabits,
     calendarCalendars,
     setCalendarCalendars,
     calendarEvents,

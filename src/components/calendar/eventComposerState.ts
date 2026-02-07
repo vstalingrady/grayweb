@@ -54,12 +54,12 @@ export const DEFAULT_STATE: ComposerState = {
 
 export const DEFAULT_EVENT_DURATION_MINUTES = 60;
 
-export const VISIBLE_ENTRY_TYPES: CalendarEntryType[] = ["plan", "habit", "event"];
+export const VISIBLE_ENTRY_TYPES: CalendarEntryType[] = ["plan", "event"];
 
 export const ENTRY_TYPE_LABELS: Record<CalendarEntryType, string> = {
   event: "Event",
   task: "Task",
-  plan: "Plans",
+  plan: "Task",
   habit: "Habits",
   reminder: "Reminder",
 };
@@ -83,7 +83,7 @@ export const resolveStateFromEvent = (
   startTime: formatTimeInput(event.start),
   endTime: formatTimeInput(event.end),
   color: event.color,
-  entryType: event.entryType ?? "event",
+  entryType: event.entryType === "habit" ? "plan" : (event.entryType ?? "event"),
   calendarId: event.calendarId ?? fallbackCalendarId,
   details: event.description ?? "",
   reminderMinutesBefore:
@@ -93,4 +93,3 @@ export const resolveStateFromEvent = (
   habitId: event.habitId ?? null,
   reminderAt: event.reminderAt ?? null,
 });
-

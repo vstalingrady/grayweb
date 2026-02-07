@@ -460,6 +460,10 @@
   color: rgba(235, 235, 235, 0.7);
 }
 
+.chatIconButton[data-active="true"] {
+  color: #ffffff;
+}
+
 .chatActionButton:hover {
   background: #ffffff;
   color: #050505;

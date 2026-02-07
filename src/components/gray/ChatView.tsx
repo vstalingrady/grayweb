@@ -40,6 +40,58 @@ import { useStreamAssistantReply } from "./chat/view/useStreamAssistantReply";
 import { buildGroundingSourceFaviconUrl, type DerivedGroundingSource } from "./chat/view/groundingSources";
 import { resolveWebSearchDecision } from "./chat/utils/webSearchHeuristics";
 
+type SpeechRecognitionAlternativeLike = {
+  transcript?: string;
+};
+
+type SpeechRecognitionResultLike = {
+  isFinal?: boolean;
+  0?: SpeechRecognitionAlternativeLike;
+  item?: (index: number) => SpeechRecognitionAlternativeLike | null;
+};
+
+type SpeechRecognitionResultListLike = ArrayLike<SpeechRecognitionResultLike>;
+
+type SpeechRecognitionEventLike = {
+  resultIndex: number;
+  results: SpeechRecognitionResultListLike;
+};
+
+type SpeechRecognitionErrorEventLike = {
+  error?: string;
+};
+
+type BrowserSpeechRecognition = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
+
+declare global {
+  interface Window {
+    SpeechRecognition?: BrowserSpeechRecognitionConstructor;
+    webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
+  }
+}
+
+const extractRecognitionTranscript = (result: SpeechRecognitionResultLike): string => {
+  if (typeof result?.[0]?.transcript === "string") {
+    return result[0].transcript;
+  }
+  const fallback = result.item?.(0);
+  if (fallback && typeof fallback.transcript === "string") {
+    return fallback.transcript;
+  }
+  return "";
+};
+
 type GrayChatViewProps = {
   sessionId: string | null;
   introContent?: ReactNode;
@@ -189,6 +241,11 @@ export function GrayChatView({
   const isLoadingHistoryRef = useRef(false);
   const activeSessionIdRef = useRef<string | null>(null);
   const [isWebSearchInFlight, setIsWebSearchInFlight] = useState(false);
+  const [isVoiceInputSupported, setIsVoiceInputSupported] = useState(false);
+  const [isVoiceInputActive, setIsVoiceInputActive] = useState(false);
+  const speechRecognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const voiceDraftPrefixRef = useRef("");
+  const voiceFinalTranscriptRef = useRef("");
 
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const handleAttachmentInputChange = useCallback(
@@ -214,6 +271,92 @@ export function GrayChatView({
     },
     [uploadAttachments]
   );
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const SpeechRecognitionCtor = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+    if (!SpeechRecognitionCtor) {
+      setIsVoiceInputSupported(false);
+      speechRecognitionRef.current = null;
+      return;
+    }
+
+    const recognition = new SpeechRecognitionCtor();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = window.navigator.language || "en-US";
+    recognition.onresult = (event: SpeechRecognitionEventLike) => {
+      let interimText = "";
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        const transcript = extractRecognitionTranscript(result);
+        if (!transcript) {
+          continue;
+        }
+        if (result.isFinal) {
+          voiceFinalTranscriptRef.current += transcript;
+        } else {
+          interimText += transcript;
+        }
+      }
+
+      const nextDraft = `${voiceDraftPrefixRef.current}${voiceFinalTranscriptRef.current}${interimText}`.trim();
+      setDraft(nextDraft);
+    };
+    recognition.onerror = (_event: SpeechRecognitionErrorEventLike) => {
+      setIsVoiceInputActive(false);
+    };
+    recognition.onend = () => {
+      setIsVoiceInputActive(false);
+    };
+
+    speechRecognitionRef.current = recognition;
+    setIsVoiceInputSupported(true);
+
+    return () => {
+      recognition.onresult = null;
+      recognition.onerror = null;
+      recognition.onend = null;
+      try {
+        recognition.stop();
+      } catch {
+        // Ignore stop failures during teardown.
+      }
+      if (speechRecognitionRef.current === recognition) {
+        speechRecognitionRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleToggleVoiceInput = useCallback(() => {
+    const recognition = speechRecognitionRef.current;
+    if (!recognition) {
+      return;
+    }
+
+    if (isVoiceInputActive) {
+      try {
+        recognition.stop();
+      } catch {
+        // Ignore stop errors from browsers that auto-stop.
+      }
+      setIsVoiceInputActive(false);
+      return;
+    }
+
+    const trimmed = draft.trim();
+    voiceDraftPrefixRef.current = trimmed.length > 0 ? `${trimmed} ` : "";
+    voiceFinalTranscriptRef.current = "";
+    try {
+      recognition.start();
+      setIsVoiceInputActive(true);
+    } catch {
+      setIsVoiceInputActive(false);
+    }
+  }, [draft, isVoiceInputActive]);
   const activeConversationId =
     session?.conversationId && session.conversationId !== GENERAL_CHAT_SESSION_ID
       ? session.conversationId
@@ -603,6 +746,17 @@ export function GrayChatView({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isVoiceInputActive) {
+      const recognition = speechRecognitionRef.current;
+      if (recognition) {
+        try {
+          recognition.stop();
+        } catch {
+          // Ignore stop errors from browsers that already ended recognition.
+        }
+      }
+      setIsVoiceInputActive(false);
+    }
     if (isInputDisabled && !(session?.isResponding || activeStreamingMessageId)) {
       return;
     }
@@ -879,6 +1033,9 @@ export function GrayChatView({
           isInputDisabled={isInputDisabled}
           isSubmitting={isResponding}
           onAddAttachment={openAttachmentPicker}
+          onToggleVoiceInput={handleToggleVoiceInput}
+          isVoiceInputSupported={isVoiceInputSupported}
+          isVoiceInputActive={isVoiceInputActive}
           attachmentTray={attachmentTrayNode}
           onPasteFiles={handleAttachmentPaste}
         />

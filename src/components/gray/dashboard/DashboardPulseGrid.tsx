@@ -15,7 +15,7 @@ import {
   getProactivityTimes,
 } from "@/components/gray/proactivityUtils";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
-import type { HabitItem, PlanItem, ProactivityItem } from "@/components/gray/types";
+import type { PlanItem, ProactivityItem } from "@/components/gray/types";
 import type { CalendarEvent } from "@/components/calendar/types";
 
 type ProactivityScheduleEntry = {
@@ -30,13 +30,11 @@ type DashboardPulseGridProps = {
   proactivity: ProactivityItem | null;
   events: CalendarEvent[];
   plans?: PlanItem[];
-  habits?: HabitItem[];
   proactivityDeliveryKeys?: ReadonlySet<string>;
   canConfigureProactivity: boolean;
   onConfigureProactivity: () => void;
   onAddEvent?: (date: Date) => void;
   onTogglePlan?: (id: string) => void;
-  onToggleHabit?: (id: string) => void;
 };
 
 const toDateKey = (date: Date) => {
@@ -53,13 +51,11 @@ export function DashboardPulseGrid({
   proactivity,
   events,
   plans = [],
-  habits = [],
   proactivityDeliveryKeys,
   canConfigureProactivity,
   onConfigureProactivity,
   onAddEvent,
   onTogglePlan,
-  onToggleHabit,
 }: DashboardPulseGridProps) {
   const { t } = useI18n();
   const { notificationPreferences, setNotificationPreference } = useNotificationPreferences();
@@ -124,12 +120,19 @@ export function DashboardPulseGrid({
       .sort((a, b) => a.start.getTime() - b.start.getTime());
   }, [currentDate, events, selectedDate]);
 
-  const visiblePlans = useMemo(() => plans.filter((plan) => plan), [plans]);
-  const visibleHabits = useMemo(() => habits.filter((habit) => habit), [habits]);
+  const visibleTasks = useMemo(
+    () =>
+      plans.filter((plan) => plan).map((plan) => ({
+        id: plan.id,
+        label: plan.label,
+        completed: Boolean(plan.completed),
+      })),
+    [plans]
+  );
 
   return (
     <div className={styles.dashboardGridFinal}>
-      {/* EVENTS + PLANS + HABITS */}
+      {/* EVENTS + TASKS */}
       <div className={`${styles.dashboardCard} ${styles.dashboardCardEvents}`}>
         <div className={styles.dashboardCardHeader}>
           <h2 className={styles.dashboardCardTitle}>{t("Events")}</h2>
@@ -178,73 +181,39 @@ export function DashboardPulseGrid({
 
           <div className={styles.dashboardSection}>
             <div className={styles.dashboardSectionHeader}>
-              <h3 className={styles.dashboardSectionTitle}>{t("Plans")}</h3>
+              <h3 className={styles.dashboardSectionTitle}>{t("Tasks")}</h3>
             </div>
-            {visiblePlans.length > 0 ? (
+            {visibleTasks.length > 0 ? (
               <ul className={styles.dashboardList}>
-                {visiblePlans.map((plan) => (
-                  <li key={plan.id} className={styles.dashboardListItem}>
+                {visibleTasks.map((task) => (
+                  <li key={task.id} className={styles.dashboardListItem}>
                     <button
                       type="button"
                       className={styles.planCheckboxButton}
                       onClick={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
-                        onTogglePlan?.(plan.id);
+                        onTogglePlan?.(task.id);
                       }}
                       aria-label={
-                        plan.completed ? t("Mark plan as incomplete") : t("Mark plan as complete")
+                        task.completed
+                          ? t("Mark task as incomplete")
+                          : t("Mark task as complete")
                       }
                     >
-                      {plan.completed ? <Check size={14} /> : <Square size={14} color="#52525b" />}
+                      {task.completed ? <Check size={14} /> : <Square size={14} color="#52525b" />}
                     </button>
                     <span
                       className={styles.dashboardTaskLabel}
-                      data-completed={plan.completed ? "true" : "false"}
+                      data-completed={task.completed ? "true" : "false"}
                     >
-                      {plan.label}
+                      {task.label}
                     </span>
                   </li>
                 ))}
               </ul>
             ) : (
-              <div className={styles.dashboardListEmpty}>{t("No active plans")}</div>
-            )}
-          </div>
-
-          <div className={styles.dashboardSection}>
-            <div className={styles.dashboardSectionHeader}>
-              <h3 className={styles.dashboardSectionTitle}>{t("Habits")}</h3>
-            </div>
-            {visibleHabits.length > 0 ? (
-              <ul className={styles.dashboardList}>
-                {visibleHabits.map((habit) => (
-                  <li key={habit.id} className={styles.dashboardListItem}>
-                    <button
-                      type="button"
-                      className={styles.planCheckboxButton}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        onToggleHabit?.(habit.id);
-                      }}
-                      aria-label={
-                        habit.completed ? t("Mark habit as incomplete") : t("Mark habit as complete")
-                      }
-                    >
-                      {habit.completed ? <Check size={14} /> : <Square size={14} color="#52525b" />}
-                    </button>
-                    <span
-                      className={styles.dashboardTaskLabel}
-                      data-completed={habit.completed ? "true" : "false"}
-                    >
-                      {habit.label}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div className={styles.dashboardListEmpty}>{t("No active habits")}</div>
+              <div className={styles.dashboardListEmpty}>{t("No active tasks")}</div>
             )}
           </div>
         </div>

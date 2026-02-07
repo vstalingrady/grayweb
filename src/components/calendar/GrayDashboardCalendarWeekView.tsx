@@ -20,7 +20,6 @@ type WeekViewProps = {
   nowReference: Date | null;
   timeZoneLabel: string;
   rangeNavigationLabel: string;
-  showTodayControl: boolean;
   showViewSelect: boolean;
   showHeaderDates: boolean;
   weekNowIndicator: WeekNowIndicator | null;
@@ -30,7 +29,6 @@ type WeekViewProps = {
   weekScrollRef: MutableRefObject<HTMLDivElement | null>;
   weekColumnsRef: MutableRefObject<HTMLDivElement | null>;
   onNavigateRange: (direction: number) => void;
-  onGoToday: () => void;
   onUpdateViewMode: (mode: CalendarViewMode) => void;
   onColumnClick: (event: MouseEvent<HTMLDivElement>, day: Date) => void;
   onEventClick: (
@@ -53,7 +51,6 @@ export function GrayDashboardCalendarWeekView({
   nowReference,
   timeZoneLabel,
   rangeNavigationLabel,
-  showTodayControl,
   showViewSelect,
   showHeaderDates,
   weekNowIndicator,
@@ -63,7 +60,6 @@ export function GrayDashboardCalendarWeekView({
   weekScrollRef,
   weekColumnsRef,
   onNavigateRange,
-  onGoToday,
   onUpdateViewMode,
   onColumnClick,
   onEventClick,
@@ -85,7 +81,19 @@ export function GrayDashboardCalendarWeekView({
           <div className={styles.stickyHeaderGroup}>
             <div className={styles.calendarMonthRow}>
               <div className={styles.calendarMonthTitleGroup}>
-                <div className={styles.calendarSurfaceNavArrows}>
+                {showViewSelect && (
+                  <div className={styles.calendarInlineViewSelect}>
+                    <ViewModeSelect
+                      value="week"
+                      options={[
+                        { value: "week", label: t("Week") },
+                        { value: "day", label: t("Day") },
+                      ]}
+                      onChange={(mode) => onUpdateViewMode(mode)}
+                    />
+                  </div>
+                )}
+                <div className={`${styles.calendarSurfaceNavArrows} ${styles.calendarMonthNavArrows}`}>
                   <button
                     type="button"
                     aria-label={t("Previous {range}", { range: rangeNavigationLabel })}
@@ -101,28 +109,6 @@ export function GrayDashboardCalendarWeekView({
                     ›
                   </button>
                 </div>
-                {showTodayControl && (
-                  <button
-                    type="button"
-                    className={styles.calendarSurfaceButton}
-                    onClick={onGoToday}
-                    style={{ height: 32, padding: "0 12px", fontSize: "0.55rem" }}
-                  >
-                    {t("Today")}
-                  </button>
-                )}
-                {showViewSelect && (
-                  <div style={{ transform: "scale(0.9)", transformOrigin: "left center" }}>
-                    <ViewModeSelect
-                      value="week"
-                      options={[
-                        { value: "week", label: t("Week") },
-                        { value: "day", label: t("Day") },
-                      ]}
-                      onChange={(mode) => onUpdateViewMode(mode)}
-                    />
-                  </div>
-                )}
               </div>
             </div>
             {showHeaderDates && (

@@ -222,6 +222,13 @@ export const useStreamAssistantReply = ({
       const accountMemorySettings = extractMemorySettingsFromUser(resolvedUser);
       const memorySettings = mergeMemorySettings(localMemorySettings, accountMemorySettings);
       const conversationMemoryEnabled = resolveConversationMemoryEnabled(resolvedUser);
+      let completedSearchToolStatus:
+        | {
+            name: string;
+            status: "end";
+            query?: string;
+          }
+        | undefined;
 
       try {
         let localThinkingStartTime: number | null = null;
@@ -229,13 +236,6 @@ export const useStreamAssistantReply = ({
         let shouldClearToolStatusOnNextToken = false;
         let latestSearchQuery: string | null = null;
         let latestSearchToolName: string | null = null;
-        let completedSearchToolStatus:
-          | {
-              name: string;
-              status: "end";
-              query?: string;
-            }
-          | undefined;
         const isSearchToolName = (toolName: string): boolean => {
           const normalized = toolName.trim().toLowerCase();
           return normalized.includes("search") || normalized.includes("web");
@@ -273,6 +273,7 @@ export const useStreamAssistantReply = ({
             should_generate_title: requestTitleHint,
             web_search_enabled: shouldUseWebSearch,
             web_search_mode: webSearchMode,
+            web_search_engine: "google",
             model: selectedModelId ?? modelTier,
             reasoning_mode: reasoningMode,
             reminders_enabled: remindersEnabled,
@@ -481,6 +482,7 @@ export const useStreamAssistantReply = ({
             attachments: buildAttachmentPayloads(),
             web_search_enabled: shouldUseWebSearch,
             web_search_mode: webSearchMode,
+            web_search_engine: "google",
             should_generate_title: requestTitleHint,
             model: selectedModelId ?? modelTier,
             reasoning_mode: reasoningMode,

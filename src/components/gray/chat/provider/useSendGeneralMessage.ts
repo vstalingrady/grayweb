@@ -249,6 +249,7 @@ export const useSendGeneralMessage = ({
             should_generate_title: shouldGenerateTitle,
             web_search_enabled: shouldUseWebSearch,
             web_search_mode: webSearchMode,
+            web_search_engine: "google",
             reasoning_mode: reasoningMode,
             reminders_enabled: remindersEnabled,
             model: selectedModelId ?? modelTier,

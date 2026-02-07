@@ -48,7 +48,7 @@ async def add_security_headers(request: Request, call_next) -> Response:
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     
     # Permissions-Policy - Restrict browser features
-    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(self), camera=()"
     
     # Content-Security-Policy (CSP) - Prevent XSS and injection attacks
     response.headers["Content-Security-Policy"] = "; ".join(CSP_DIRECTIVES)

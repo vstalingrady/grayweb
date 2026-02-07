@@ -1,5 +1,5 @@
 """
-Workspace tool handlers for plans, habits, and reminders.
+Workspace tool handlers for plans and reminders.
 
 Extracted from main.py to improve modularity.
 """
@@ -10,12 +10,11 @@ import databases
 from fastapi import HTTPException
 
 # Import database tables
-from backend.database import plans, habits, reminders
+from backend.database import plans, reminders
 
 # Import shared utilities
 from backend.core.serializers import (
     serialize_reminder_row as _serialize_reminder_row,
-    serialize_habit_record as _serialize_habit_record,
     row_get as _row_get,
 )
 from backend.core.tool_utils import (
@@ -32,6 +31,7 @@ from backend.time_utils import utcnow
 from backend.logging_config import create_logger
 
 api_logger = create_logger("backend.api")
+HABITS_DISABLED_DETAIL = "Habits feature has been removed. This tool is no longer available."
 
 # Reference to reminder scheduler - set by main.py
 reminder_scheduler = None
@@ -141,84 +141,19 @@ async def delete_plan_tool(user_id: int, args: Dict[str, Any], db: databases.Dat
 # --- Habit Tools ---
 
 async def list_habits_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
-    limit = args.get("limit")
-    query = habits.select().where(habits.c.user_id == user_id).order_by(habits.c.created_at)
-    if limit:
-        query = query.limit(limit)
-    rows = await db.fetch_all(query)
-    return {"habits": [_serialize_habit_record(row) for row in rows]}
+    raise HTTPException(status_code=410, detail=HABITS_DISABLED_DETAIL)
 
 
 async def create_habit_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
-    label = args.get("label")
-    if not label:
-        return {"error": "label is required"}
-
-    reminder_at = _parse_remind_at(args.get("reminder_at"))
-    now = utcnow()
-    base_values = {
-        "user_id": user_id, "label": str(label),
-        "description": args.get("description"), "previous_label": args.get("previous_label") or "",
-    }
-    
-    habit_id = await db.execute(habits.insert().values(**base_values, created_at=now, updated_at=now))
-    created = await db.fetch_one(habits.select().where(habits.c.id == habit_id))
-
-    if created and reminder_at is not None:
-        record = dict(created)
-        await _upsert_entity_reminder(
-            user_id=user_id, entity_type="habit", entity_id=int(habit_id),
-            label=str(record.get("label") or str(label)), description=record.get("description"),
-            remind_at=reminder_at, metadata=None, color=None, db=db,
-        )
-    return _build_reminder_payload(dict(created), user_id, "created", entity="habit")
+    raise HTTPException(status_code=410, detail=HABITS_DISABLED_DETAIL)
 
 
 async def update_habit_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
-    habit_id = args.get("habit_id")
-    if not habit_id:
-        return {"error": "habit_id is required"}
-
-    reminder_at_provided = "reminder_at" in args
-    reminder_at = _parse_remind_at(args.get("reminder_at")) if reminder_at_provided else None
-    
-    updates = {}
-    if "label" in args:
-        updates["label"] = args["label"]
-    if "description" in args:
-        updates["description"] = args["description"]
-        
-    if not updates and not reminder_at_provided:
-        return {"status": "no_change", "message": "No updates provided."}
-        
-    now = utcnow()
-    updates["updated_at"] = now
-    existing = await db.fetch_one(habits.select().where((habits.c.id == habit_id) & (habits.c.user_id == user_id)))
-    if not existing:
-        return {"error": "Habit not found or access denied."}
-
-    if updates:
-        await db.execute(habits.update().where((habits.c.id == habit_id) & (habits.c.user_id == user_id)).values(**updates))
-
-    if reminder_at_provided:
-        updated = await db.fetch_one(habits.select().where(habits.c.id == habit_id))
-        record = dict(updated) if updated else dict(existing)
-        await _upsert_entity_reminder(
-            user_id=user_id, entity_type="habit", entity_id=int(habit_id),
-            label=str(_row_get(record, "label") or ""), description=_row_get(record, "description"),
-            remind_at=reminder_at, metadata=None, color=None, db=db,
-        )
-    return {"status": "success", "message": f"Habit {habit_id} updated."}
+    raise HTTPException(status_code=410, detail=HABITS_DISABLED_DETAIL)
 
 
 async def delete_habit_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
-    habit_id = args.get("habit_id")
-    if not habit_id:
-        return {"error": "habit_id is required"}
-
-    await _delete_all_entity_reminders(user_id=user_id, entity_type="habit", entity_id=int(habit_id), db=db)
-    await db.execute(habits.delete().where((habits.c.id == habit_id) & (habits.c.user_id == user_id)))
-    return {"status": "success", "message": f"Habit {habit_id} deleted."}
+    raise HTTPException(status_code=410, detail=HABITS_DISABLED_DETAIL)
 
 
 # --- Reminder Tools ---
@@ -401,22 +336,18 @@ async def delete_latest_reminder_tool(user_id: int, args: Dict[str, Any], db: da
 
 async def get_workspace_state_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
     plan_limit = args.get("plan_limit")
-    habit_limit = args.get("habit_limit")
     reminder_limit = args.get("reminder_limit")
     include_archived = bool(args.get("include_archived_reminders"))
 
     plans_payload = await list_plans_tool(user_id, {"limit": plan_limit}, db)
-    habits_payload = await list_habits_tool(user_id, {"limit": habit_limit}, db)
     reminders_payload = await list_reminders_tool(user_id, {"limit": reminder_limit, "include_archived": include_archived}, db)
 
     plans_list = plans_payload.get("plans") or []
-    habits_list = habits_payload.get("habits") or []
     reminders_list = reminders_payload.get("reminders") or []
     pending = [r for r in reminders_list if str(r.get("status", "")).lower() == "pending"]
 
     return {
-        "summary": f"{len(plans_list)} plans | {len(habits_list)} habits | {len(reminders_list)} reminders ({len(pending)} pending)",
+        "summary": f"{len(plans_list)} plans | {len(reminders_list)} reminders ({len(pending)} pending)",
         "plans": plans_list,
-        "habits": habits_list,
         "reminders": reminders_list,
     }

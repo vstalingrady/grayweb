@@ -17,6 +17,7 @@ export const DEFAULT_COLORS: Record<CalendarEntryType, string> = {
   task: "#B77A2B",
   plan: "#5E7E91",
   habit: "#5E9182",
+  reminder: "#5E7E91",
 };
 
 export const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
