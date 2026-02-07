@@ -750,7 +750,7 @@
 }
 
 .calendarSurfaceNavArrows button:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: transparent;
 }
 
 .calendarSurfaceNavArrows button:disabled {
@@ -836,10 +836,9 @@
 .calendarMonthNavArrows button {
   width: 30px;
   height: 30px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 7px;
-  font-size: 0.95rem;
+  border: none;
+  background: transparent;
+  border-radius: 0;
   line-height: 1;
 }
 

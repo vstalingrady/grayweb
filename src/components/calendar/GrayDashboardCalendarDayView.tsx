@@ -1,6 +1,7 @@
 "use client";
 
 import type { CSSProperties, HTMLAttributes, MouseEvent, MutableRefObject } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import styles from "./GrayDashboardCalendar.module.css";
 import { EventCard } from "./EventCard";
@@ -95,14 +96,14 @@ export function GrayDashboardCalendarDayView({
                 aria-label={t("Previous {range}", { range: rangeNavigationLabel })}
                 onClick={() => onNavigateRange(-1)}
               >
-                {"<"}
+                <ChevronLeft size={16} />
               </button>
               <button
                 type="button"
                 aria-label={t("Next {range}", { range: rangeNavigationLabel })}
                 onClick={() => onNavigateRange(1)}
               >
-                {">"}
+                <ChevronRight size={16} />
               </button>
             </div>
           </div>
