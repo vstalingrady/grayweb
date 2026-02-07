@@ -146,9 +146,8 @@ const buildWebsiteThumbnailCandidatesFromHref = (href?: string): string[] => {
     if (hasDirectImageExtension) {
       return [parsed.toString()];
     }
-    const absoluteUrl = parsed.toString();
-    // Prefer OG image extraction. Avoid full-page screenshot fallbacks.
-    return [`https://image.thum.io/get/ogImage/${absoluteUrl}`];
+    // If we cannot resolve a true media thumbnail, render favicon-only cards.
+    return [];
   } catch {
     return [];
   }

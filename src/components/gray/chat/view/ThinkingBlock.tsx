@@ -65,7 +65,7 @@ export const ThinkingBlock = ({
     if (isStreamingMessage) {
       return t("Thinking");
     }
-    return null;
+    return t("Thought");
   }, [isActivelyThinking, thinkingStartTime, liveSeconds, reasoningSeconds, isStreamingMessage, t, formatTime]);
 
   return (
@@ -79,7 +79,7 @@ export const ThinkingBlock = ({
       >
         <div className={styles.chatThinkingInlineMeta}>
           <Atom size={14} className={styles.chatThinkingIcon} />
-          <span className={styles.chatThinkingLabel}>{timeLabel || t("Thinking")}</span>
+          <span className={styles.chatThinkingLabel}>{timeLabel}</span>
         </div>
         <ChevronDown
           size={14}
