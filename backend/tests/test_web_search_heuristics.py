@@ -27,11 +27,11 @@ def test_should_enable_search_not_for_research_word():
 
 
 def test_should_enable_search_for_generic_fact_question():
-    assert should_enable_search("Who is Albert Einstein?") is True
+    assert should_enable_search("Who is Albert Einstein?") is False
 
 
 def test_should_enable_search_for_what_happened():
-    assert should_enable_search("What happened in the Epstein files?") is True
+    assert should_enable_search("What happened in the Epstein files?") is False
 
 
 def test_should_enable_search_slang_guard():
@@ -51,7 +51,7 @@ def test_should_enable_search_not_for_plain_greeting():
 
 
 def test_should_enable_search_for_non_recency_factual_question():
-    assert should_enable_search("Can you explain what RAG means in LLM systems?") is True
+    assert should_enable_search("Can you explain what RAG means in LLM systems?") is False
 
 
 def test_should_enable_search_ambiguous_follow_up_without_context():

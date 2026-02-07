@@ -89,11 +89,12 @@ const SMALL_TALK_PATTERNS = [
   /^\s*(?:good morning|good afternoon|good evening)\b/i,
 ];
 
-const FACT_LOOKUP_PATTERNS = [
-  /\b(?:who|what|when|where)\s+(?:is|are|was|were)\b/i,
-  /\b(?:tell me about|explain|overview of|background on|give me details on)\b/i,
-  /\b(?:compare|difference between)\b/i,
-  /\b(?:vs|versus)\b/i,
+const STABLE_KNOWLEDGE_PATTERNS = [
+  /\b(?:solve|simplify|factor|differentiate|integrate|derive|calculate|compute)\b/i,
+  /\b(?:algebra|geometry|calculus|equation|formula|theorem|derivative|integral)\b/i,
+  /\b(?:sqrt|square\s*root)\b/i,
+  /\b(?:what does .+ mean)\b/i,
+  /\b(?:define|definition of)\b/i,
 ];
 
 const PERSONAL_RECENCY_PATTERNS = [
@@ -178,10 +179,6 @@ export const shouldEnableWebSearch = (message: string, recentUserMessages?: stri
     return true;
   }
 
-  if (normalized.includes("what happened")) {
-    return true;
-  }
-
   const hasSoftRecency = SOFT_RECENCY_PATTERNS.some((pattern) => pattern.test(normalized));
   const hasHardRecency = HARD_RECENCY_PATTERNS.some((pattern) => pattern.test(normalized));
 
@@ -197,12 +194,12 @@ export const shouldEnableWebSearch = (message: string, recentUserMessages?: stri
     return false;
   }
 
-  if (isAmbiguousFollowUp(normalized)) {
+  if (STABLE_KNOWLEDGE_PATTERNS.some((pattern) => pattern.test(normalized))) {
     return false;
   }
 
-  if (FACT_LOOKUP_PATTERNS.some((pattern) => pattern.test(normalized))) {
-    return true;
+  if (isAmbiguousFollowUp(normalized)) {
+    return false;
   }
 
   if ((hasSoftRecency || hasHardRecency) && isQuestionLike(normalized)) {
@@ -221,10 +218,6 @@ export const shouldEnableWebSearch = (message: string, recentUserMessages?: stri
     if (["news", "update", "updates", "trending"].some((phrase) => normalized.includes(phrase))) {
       return true;
     }
-  }
-
-  if (isQuestionLike(normalized) && wordCount >= 5) {
-    return true;
   }
 
   if (FOLLOW_UP_PATTERNS.some((pattern) => pattern.test(normalized)) && Array.isArray(recentUserMessages)) {
@@ -247,7 +240,12 @@ export const shouldEnableWebSearch = (message: string, recentUserMessages?: stri
       if (FOLLOW_UP_CONTEXT_KEYWORDS.some((keyword) => priorNormalized.includes(keyword))) {
         return true;
       }
-      if (isQuestionLike(priorNormalized) && priorWordCount >= 4) {
+      if (
+        isQuestionLike(priorNormalized) &&
+        priorWordCount >= 4 &&
+        (HARD_RECENCY_PATTERNS.some((pattern) => pattern.test(priorNormalized)) ||
+          LIVE_KEYWORDS.some((keyword) => priorNormalized.includes(keyword)))
+      ) {
         return true;
       }
       break;

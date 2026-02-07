@@ -98,11 +98,12 @@ SMALL_TALK_PATTERNS = (
     re.compile(r"^\s*(?:good morning|good afternoon|good evening)\b", re.IGNORECASE),
 )
 
-FACT_LOOKUP_PATTERNS = (
-    re.compile(r"\b(?:who|what|when|where)\s+(?:is|are|was|were)\b", re.IGNORECASE),
-    re.compile(r"\b(?:tell me about|explain|overview of|background on|give me details on)\b", re.IGNORECASE),
-    re.compile(r"\b(?:compare|difference between)\b", re.IGNORECASE),
-    re.compile(r"\b(?:vs|versus)\b", re.IGNORECASE),
+STABLE_KNOWLEDGE_PATTERNS = (
+    re.compile(r"\b(?:solve|simplify|factor|differentiate|integrate|derive|calculate|compute)\b", re.IGNORECASE),
+    re.compile(r"\b(?:algebra|geometry|calculus|equation|formula|theorem|derivative|integral)\b", re.IGNORECASE),
+    re.compile(r"\b(?:sqrt|square\s*root)\b", re.IGNORECASE),
+    re.compile(r"\b(?:what does .+ mean)\b", re.IGNORECASE),
+    re.compile(r"\b(?:define|definition of)\b", re.IGNORECASE),
 )
 
 FOLLOW_UP_PATTERNS = (
@@ -202,16 +203,13 @@ def _should_enable_search_base(message: str) -> bool:
     if _is_slang_guard(normalized):
         return False
 
+    if any(pattern.search(normalized) for pattern in STABLE_KNOWLEDGE_PATTERNS):
+        return False
+
     # Don't auto-search ambiguous follow-ups without conversation anchor.
     # The contextual pass in should_enable_search handles these.
     if _is_ambiguous_follow_up(normalized):
         return False
-
-    if any(pattern.search(normalized) for pattern in FACT_LOOKUP_PATTERNS):
-        return True
-
-    if _is_question_like(normalized) and word_count >= 5:
-        return True
 
     return False
 
@@ -289,10 +287,6 @@ def should_use_web_search(message: str, model: Optional[str] = None) -> bool:
     }
     if normalized in _SLANG_GUARD_TERMS:
         return False
-
-    # Queries about what happened in an ongoing situation often need current info.
-    if "what happened" in normalized:
-        return True
 
     # Simple year-based heuristic: questions that mention a near-future or
     # current year along with "news" or "update" are likely live.
