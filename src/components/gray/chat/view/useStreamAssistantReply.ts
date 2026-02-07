@@ -320,7 +320,9 @@ export const useStreamAssistantReply = ({
           if (event.type === "token") {
             const delta = event.delta;
             if (assistantMessageId && shouldClearToolStatusOnNextToken) {
-              updateMessage(targetSessionId, assistantMessageId, { toolStatus: undefined });
+              updateMessage(targetSessionId, assistantMessageId, {
+                toolStatus: completedSearchToolStatus ?? undefined,
+              });
               shouldClearToolStatusOnNextToken = false;
             }
             const prevAccumulated = accumulated;

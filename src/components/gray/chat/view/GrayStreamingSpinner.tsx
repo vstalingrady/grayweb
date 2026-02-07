@@ -37,7 +37,7 @@ export const GrayStreamingSpinner = ({
       </div>
       {hasSearchQuery ? (
         <div className={styles.chatSearchQueryBar}>
-          <Search className={styles.chatSearchQueryIcon} size={13} aria-hidden="true" />
+          <span className={styles.chatSearchQueryIcon} aria-hidden="true" />
           <span className={styles.chatSearchQueryText}>{searchQuery}</span>
         </div>
       ) : null}

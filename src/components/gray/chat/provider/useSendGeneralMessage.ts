@@ -292,7 +292,9 @@ export const useSendGeneralMessage = ({
             if (event.type === "token") {
               const delta = event.delta;
               if (assistantMessageId && shouldClearToolStatusOnNextToken) {
-                updateMessage(generalSession.id, assistantMessageId, { toolStatus: undefined });
+                updateMessage(generalSession.id, assistantMessageId, {
+                  toolStatus: completedSearchToolStatus ?? undefined,
+                });
                 shouldClearToolStatusOnNextToken = false;
               }
               accumulated = accumulated && delta.startsWith(accumulated) ? delta : accumulated + delta;
