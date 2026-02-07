@@ -152,7 +152,7 @@ const nextConfig: NextConfig = {
               // Styles: self + Google Fonts
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               // Images: self + trusted sources
-              "img-src 'self' blob: data: https://*.supabase.co https://*.googleusercontent.com https://*.gstatic.com https://www.google.com https://avatars.githubusercontent.com https://*.githubusercontent.com https://cdn.discordapp.com https://secure.gravatar.com https://www.gravatar.com https://api.midtrans.com https://api.sandbox.midtrans.com",
+              "img-src 'self' blob: data: https://*.supabase.co https://*.googleusercontent.com https://*.gstatic.com https://www.google.com https://avatars.githubusercontent.com https://*.githubusercontent.com https://cdn.discordapp.com https://secure.gravatar.com https://www.gravatar.com https://api.midtrans.com https://api.sandbox.midtrans.com https://s.wordpress.com https://image.thum.io https://i.ytimg.com https://*.ytimg.com",
               // Fonts: self + Google Fonts
               "font-src 'self' https://fonts.gstatic.com",
               // XHR/Fetch: self + trusted APIs

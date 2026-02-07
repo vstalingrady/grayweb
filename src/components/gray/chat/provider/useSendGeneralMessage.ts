@@ -250,6 +250,7 @@ export const useSendGeneralMessage = ({
             web_search_enabled: shouldUseWebSearch,
             web_search_mode: webSearchMode,
             web_search_engine: "google",
+            web_search_max_results: 50,
             reasoning_mode: reasoningMode,
             reminders_enabled: remindersEnabled,
             model: selectedModelId ?? modelTier,

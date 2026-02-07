@@ -4,6 +4,7 @@ import { memo, useCallback, useRef, useState, type RefObject } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import styles from "@/components/gray/chat/ChatStyles.module.css";
+import type { GroundingMetadata } from "@/lib/api";
 import { useI18n } from "@/contexts/I18nContext";
 import { REMINDER_CODE_BLOCK_REGEX } from "../constants";
 import { stripGrayTitleMarkers } from "../utils";
@@ -35,6 +36,139 @@ type StreamingTextChunk = {
 type AssistantDisplayContent = {
   normalizedThinkingText: string | null;
   visibleAssistantText: string;
+};
+
+type InlineSourceLink = {
+  href: string;
+  label: string;
+};
+
+const extractGroundingChunks = (metadata?: GroundingMetadata | null) =>
+  metadata?.grounding_chunks ??
+  (metadata as { groundingChunks?: GroundingMetadata["grounding_chunks"] } | undefined)?.groundingChunks ??
+  [];
+
+const extractGroundingSupports = (metadata?: GroundingMetadata | null) =>
+  metadata?.grounding_supports ??
+  (metadata as { groundingSupports?: GroundingMetadata["grounding_supports"] } | undefined)?.groundingSupports ??
+  [];
+
+const extractGroundingSearchQueries = (metadata?: GroundingMetadata | null): string[] => {
+  const rawQueries =
+    metadata?.web_search_queries ??
+    (metadata as { webSearchQueries?: string[] } | undefined)?.webSearchQueries ??
+    [];
+  return rawQueries
+    .map((query) => (typeof query === "string" ? query.trim() : ""))
+    .filter((query) => query.length > 0);
+};
+
+const deriveSourceLabel = (href: string): string => {
+  try {
+    return new URL(href).hostname.replace(/^www\./i, "").toLowerCase();
+  } catch {
+    return "source";
+  }
+};
+
+const buildInlineSourceLinks = (metadata?: GroundingMetadata | null): InlineSourceLink[] => {
+  const chunks = extractGroundingChunks(metadata);
+  if (!chunks?.length) {
+    return [];
+  }
+  const links: InlineSourceLink[] = [];
+  const seen = new Set<string>();
+  for (const chunk of chunks) {
+    const href = chunk?.web?.uri ?? chunk?.retrieved_context?.uri;
+    if (typeof href !== "string" || !/^https?:\/\//i.test(href)) {
+      continue;
+    }
+    if (seen.has(href)) {
+      continue;
+    }
+    seen.add(href);
+    links.push({ href, label: deriveSourceLabel(href) });
+  }
+  return links;
+};
+
+const injectInlineSourceLinks = (text: string, metadata?: GroundingMetadata): string => {
+  const trimmed = text.trim();
+  if (!trimmed || !metadata) {
+    return text;
+  }
+
+  const links = buildInlineSourceLinks(metadata);
+  if (links.length === 0) {
+    return text;
+  }
+
+  const supports = extractGroundingSupports(metadata);
+  const linkByChunkIndex = new Map<number, InlineSourceLink>();
+  const chunks = extractGroundingChunks(metadata);
+  chunks.forEach((chunk, index) => {
+    const href = chunk?.web?.uri ?? chunk?.retrieved_context?.uri;
+    if (typeof href !== "string" || !/^https?:\/\//i.test(href)) {
+      return;
+    }
+    linkByChunkIndex.set(index, { href, label: deriveSourceLabel(href) });
+  });
+
+  const insertions: Array<{ index: number; link: InlineSourceLink }> = [];
+  const seenInsertionKeys = new Set<string>();
+
+  for (const support of supports) {
+    const supportRecord = support as
+      | (GroundingMetadata["grounding_supports"] extends Array<infer T> ? T : never)
+      | { grounding_chunk_indices?: number[]; segment?: { end_index?: number }; end_index?: number }
+      | undefined;
+    const chunkIndices = supportRecord?.grounding_chunk_indices ?? [];
+    const link = chunkIndices
+      .map((index) => linkByChunkIndex.get(index))
+      .find((candidate): candidate is InlineSourceLink => Boolean(candidate));
+    if (!link) {
+      continue;
+    }
+    const rawIndex = supportRecord?.segment?.end_index ?? supportRecord?.end_index;
+    if (typeof rawIndex !== "number" || !Number.isFinite(rawIndex)) {
+      continue;
+    }
+    const index = Math.max(0, Math.min(trimmed.length, Math.floor(rawIndex)));
+    const dedupeKey = `${index}:${link.href}`;
+    if (seenInsertionKeys.has(dedupeKey)) {
+      continue;
+    }
+    seenInsertionKeys.add(dedupeKey);
+    insertions.push({ index, link });
+    if (insertions.length >= 10) {
+      break;
+    }
+  }
+
+  if (insertions.length > 0) {
+    const sorted = [...insertions].sort((a, b) => b.index - a.index);
+    let output = trimmed;
+    for (const insertion of sorted) {
+      if (output.includes(`](${insertion.link.href})`)) {
+        continue;
+      }
+      const marker = ` [${insertion.link.label}](${insertion.link.href})`;
+      output = `${output.slice(0, insertion.index)}${marker}${output.slice(insertion.index)}`;
+    }
+    return output;
+  }
+
+  // Fallback for providers that omit support offsets: attach sources at paragraph ends.
+  const paragraphs = trimmed.split(/\n{2,}/);
+  const maxInline = Math.min(links.length, paragraphs.length, 6);
+  for (let index = 0; index < maxInline; index += 1) {
+    const link = links[index];
+    if (!paragraphs[index] || paragraphs[index].includes(`](${link.href})`)) {
+      continue;
+    }
+    paragraphs[index] = `${paragraphs[index]} [${link.label}](${link.href})`;
+  }
+  return paragraphs.join("\n\n");
 };
 
 const getAssistantDisplayContent = (rawContent: string): AssistantDisplayContent => {
@@ -162,7 +296,10 @@ export const ChatMessagesList = memo(
 	          const isAssistant = !isUser;
 	          const rawContent = message.content ?? "";
 	          const assistantDisplayContent = isAssistant ? getAssistantDisplayContent(rawContent) : null;
-          const visibleAssistantText = isAssistant ? assistantDisplayContent?.visibleAssistantText ?? "" : rawContent;
+          const visibleAssistantTextRaw = isAssistant ? assistantDisplayContent?.visibleAssistantText ?? "" : rawContent;
+          const visibleAssistantText = isAssistant
+            ? injectInlineSourceLinks(visibleAssistantTextRaw, message.groundingMetadata)
+            : visibleAssistantTextRaw;
           const normalizedThinkingText = isAssistant ? assistantDisplayContent?.normalizedThinkingText ?? null : null;
           const fullText = isAssistant ? visibleAssistantText : rawContent;
           const hasThinkingContent = typeof normalizedThinkingText === "string" && normalizedThinkingText.trim().length > 0;
@@ -185,14 +322,19 @@ export const ChatMessagesList = memo(
           const toolStatusFromStream = message.toolStatus?.name ? resolveToolStatusInfo(message.toolStatus.name, t) : null;
           const parsedToolStatus = extractCurrentToolStatus(rawContent, t);
           const toolStatusInfo = toolStatusFromStream ?? parsedToolStatus;
-          const spinnerVariant = toolStatusInfo?.variant ?? (searchStatusLabel ? "search" : "default");
+          const groundingSearchQueries = extractGroundingSearchQueries(message.groundingMetadata);
+          const latestGroundingQuery =
+            groundingSearchQueries.length > 0 ? groundingSearchQueries[groundingSearchQueries.length - 1] : null;
+          const hasGroundingSearchQuery = Boolean(latestGroundingQuery);
+          const spinnerVariant =
+            toolStatusInfo?.variant ?? (searchStatusLabel || hasGroundingSearchQuery ? "search" : "default");
           const spinnerSearchQuery =
             typeof message.toolStatus?.query === "string" && message.toolStatus.query.trim().length > 0
               ? message.toolStatus.query.trim()
-              : null;
+              : latestGroundingQuery;
           const isCompletedSearchStatus = Boolean(
             !isStreamingAssistantMessage &&
-              message.toolStatus?.status === "end" &&
+              (message.toolStatus?.status === "end" || hasGroundingSearchQuery) &&
               spinnerVariant === "search" &&
               spinnerSearchQuery
           );

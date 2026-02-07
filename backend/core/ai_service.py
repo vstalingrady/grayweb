@@ -260,7 +260,7 @@ def _build_web_search_plugin(
     if requested_engine == "exa":
         plugin["engine"] = "exa"
     if isinstance(max_results, int) and max_results > 0:
-        plugin["max_results"] = min(max_results, 10)
+        plugin["max_results"] = max_results
     if search_prompt:
         plugin["search_prompt"] = search_prompt
     return [plugin]

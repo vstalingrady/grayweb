@@ -280,9 +280,6 @@ const extractSearchEntryResults = (rawHtml: string): SearchEntryResult[] => {
         siteLabel: siteLabel || undefined,
         thumbnailUrl: thumbnailUrl ?? undefined,
       });
-      if (results.length >= 6) {
-        break;
-      }
     }
 
     return results;
@@ -322,13 +319,6 @@ export function ChatMessageGroundingPanel({ metadata, t }: ChatMessageGroundingP
   );
 
   const sourceCards = buildGroundingSourceCards(metadata, t);
-  const inlineSourceIcons = sourceCards
-    .slice(0, 10)
-    .map((source) => ({
-      ...source,
-      faviconUrl: buildGroundingSourceFaviconUrl(source),
-      initials: buildGroundingSourceInitials(source.siteLabel ?? source.title),
-    }));
 
   if (
     sourceCards.length === 0 &&
@@ -423,38 +413,6 @@ export function ChatMessageGroundingPanel({ metadata, t }: ChatMessageGroundingP
               <span className={styles.chatGroundingQueryChipText}>{query}</span>
             </div>
           ))}
-        </div>
-      ) : null}
-      {inlineSourceIcons.length > 0 ? (
-        <div className={styles.chatGroundingInlineSourceRow}>
-          {inlineSourceIcons.map((source) => {
-            const iconContent = (
-              <span className={styles.chatGroundingInlineSourceIcon}>
-                <span className={styles.chatGroundingInlineSourceIconFallback}>{source.initials}</span>
-                {source.faviconUrl ? (
-                  /* eslint-disable-next-line @next/next/no-img-element -- Favicon URLs are arbitrary; prefer a plain img with graceful fallback. */
-                  <img
-                    src={source.faviconUrl}
-                    alt=""
-                    referrerPolicy="no-referrer"
-                    className={styles.chatGroundingInlineSourceIconImage}
-                    onLoad={handleGroundingImageLoad}
-                    onError={handleGroundingFaviconError}
-                  />
-                ) : null}
-              </span>
-            );
-
-            if (source.href) {
-              return (
-                <a key={`inline-${source.id}`} href={source.href} target="_self" rel="noreferrer" aria-label={source.title}>
-                  {iconContent}
-                </a>
-              );
-            }
-
-            return <span key={`inline-${source.id}`}>{iconContent}</span>;
-          })}
         </div>
       ) : null}
       {sourceCards.length > 0 ? (
