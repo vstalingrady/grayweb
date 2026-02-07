@@ -34,8 +34,6 @@ type SearchEntryResult = {
   thumbnailUrl?: string;
 };
 
-const THUMBNAIL_ALLOWED_HOSTS = ["gstatic.com", "googleusercontent.com"];
-
 const normalizeSearchEntryImageUrl = (raw: string | null): string | null => {
   if (!raw) {
     return null;
@@ -78,8 +76,7 @@ const isAllowedThumbnailUrl = (url: string): boolean => {
   }
   try {
     const parsed = new URL(url);
-    const host = parsed.hostname.toLowerCase();
-    return THUMBNAIL_ALLOWED_HOSTS.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
   } catch {
     return false;
   }
@@ -132,25 +129,47 @@ const extractYouTubeVideoId = (url: URL): string | null => {
   return null;
 };
 
-const buildWebsiteThumbnailFromHref = (href?: string): string | undefined => {
+const dedupeNonEmptyUrls = (values: Array<string | undefined>): string[] => {
+  const unique = new Set<string>();
+  for (const value of values) {
+    if (typeof value !== "string" || !value.trim()) {
+      continue;
+    }
+    unique.add(value.trim());
+  }
+  return Array.from(unique);
+};
+
+const buildWebsiteThumbnailCandidatesFromHref = (href?: string): string[] => {
   if (!href) {
-    return undefined;
+    return [];
   }
   try {
     const parsed = new URL(href);
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-      return undefined;
+      return [];
     }
     const videoId = extractYouTubeVideoId(parsed);
     if (videoId) {
-      return `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`;
+      return [`https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`];
     }
-    // Best-effort full-page thumbnail preview (ChatGPT-like cards).
-    // Falls back to favicon via onError handler when unavailable.
-    return `https://s.wordpress.com/mshots/v1/${encodeURIComponent(parsed.toString())}?w=600`;
+    const absoluteUrl = parsed.toString();
+    // Use two providers so cards still get thumbnails when one provider is down/rate-limited.
+    return [
+      `https://s.wordpress.com/mshots/v1/${encodeURIComponent(absoluteUrl)}?w=600`,
+      `https://image.thum.io/get/width/1200/crop/675/noanimate/${absoluteUrl}`,
+    ];
   } catch {
-    return undefined;
+    return [];
   }
+};
+
+const resolveThumbnailWithFallbacks = (preferred: string | undefined, href?: string) => {
+  const candidates = dedupeNonEmptyUrls([preferred, ...buildWebsiteThumbnailCandidatesFromHref(href)]);
+  return {
+    primary: candidates[0],
+    fallbacks: candidates.slice(1),
+  };
 };
 
 const buildSearchEntryThumbnailIndex = (results: SearchEntryResult[]) => {
@@ -213,19 +232,22 @@ const resolveThumbnailForSource = (
 
 const handleGroundingImageError = (event: SyntheticEvent<HTMLImageElement>) => {
   const target = event.currentTarget;
-  const fallback = target.dataset.fallback;
-  const fallbackKind = target.dataset.fallbackKind;
-  target.parentElement?.removeAttribute("data-image-loaded");
-  if (fallback) {
-    target.dataset.fallback = "";
-    if (fallbackKind) {
-      target.dataset.kind = fallbackKind;
-      target.parentElement?.setAttribute("data-kind", fallbackKind);
-    }
-    target.src = fallback;
+  const fallbackQueue = String(target.dataset.fallbackQueue ?? "")
+    .split("|")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const nextFallback = fallbackQueue.shift();
+  if (nextFallback) {
+    target.dataset.fallbackQueue = fallbackQueue.join("|");
+    target.src = nextFallback;
     return;
   }
+  target.parentElement?.removeAttribute("data-image-loaded");
   target.style.display = "none";
+};
+
+const handleGroundingFaviconError = (event: SyntheticEvent<HTMLImageElement>) => {
+  event.currentTarget.style.display = "none";
 };
 
 const extractSearchEntryResults = (rawHtml: string): SearchEntryResult[] => {
@@ -314,6 +336,13 @@ export function ChatMessageGroundingPanel({
   );
 
   const sourceCards = buildGroundingSourceCards(metadata, t);
+  const inlineSourceIcons = sourceCards
+    .slice(0, 10)
+    .map((source) => ({
+      ...source,
+      faviconUrl: buildGroundingSourceFaviconUrl(source),
+      initials: buildGroundingSourceInitials(source.siteLabel ?? source.title),
+    }));
 
   if (
     sourceCards.length === 0 &&
@@ -337,9 +366,9 @@ export function ChatMessageGroundingPanel({
                 href: result.href,
                 siteLabel: result.siteLabel,
               });
-              const thumbnailUrl = result.thumbnailUrl ?? buildWebsiteThumbnailFromHref(result.href);
-              const imageUrl = thumbnailUrl ?? faviconUrl;
-              const imageKind = thumbnailUrl ? "thumbnail" : "favicon";
+              const thumbnailResolution = resolveThumbnailWithFallbacks(result.thumbnailUrl, result.href);
+              const previewImageUrl = thumbnailResolution.primary;
+              const previewFallbackQueue = thumbnailResolution.fallbacks.join("|");
               const initials = buildGroundingSourceInitials(result.siteLabel ?? result.title);
 
               return (
@@ -350,18 +379,17 @@ export function ChatMessageGroundingPanel({
                   rel="noreferrer"
                   className={styles.chatGroundingSearchResult}
                 >
-                  <div className={styles.chatGroundingSearchResultIcon} data-kind={imageKind}>
+                  <div className={styles.chatGroundingSearchResultIcon} data-kind="thumbnail">
                     <span className={styles.chatGroundingSearchResultFallback}>{initials}</span>
-                    {imageUrl ? (
+                    {previewImageUrl ? (
                       /* eslint-disable-next-line @next/next/no-img-element -- Favicon URLs are arbitrary; prefer a plain img with graceful fallback. */
                       <img
-                        src={imageUrl}
+                        src={previewImageUrl}
                         alt=""
                         referrerPolicy="no-referrer"
                         className={styles.chatGroundingSearchResultImage}
-                        data-kind={imageKind}
-                        data-fallback={thumbnailUrl && faviconUrl ? faviconUrl : undefined}
-                        data-fallback-kind={thumbnailUrl && faviconUrl ? "favicon" : undefined}
+                        data-kind="thumbnail"
+                        data-fallback-queue={previewFallbackQueue || undefined}
                         onLoad={(event) => {
                           event.currentTarget.style.opacity = "1";
                           event.currentTarget.parentElement?.setAttribute("data-image-loaded", "true");
@@ -370,11 +398,30 @@ export function ChatMessageGroundingPanel({
                       />
                     ) : null}
                   </div>
-                  <div className={styles.chatGroundingSearchResultContent}>
-                    <div className={styles.chatGroundingSearchResultTitle}>{result.title}</div>
-                    {result.siteLabel ? (
-                      <div className={styles.chatGroundingSearchResultSite}>{result.siteLabel}</div>
-                    ) : null}
+                  <div className={styles.chatGroundingSearchResultMeta}>
+                    <div className={styles.chatGroundingSearchResultFavicon}>
+                      <span className={styles.chatGroundingSearchResultFaviconFallback}>{initials}</span>
+                      {faviconUrl ? (
+                        /* eslint-disable-next-line @next/next/no-img-element -- Favicon URLs are arbitrary; prefer a plain img with graceful fallback. */
+                        <img
+                          src={faviconUrl}
+                          alt=""
+                          referrerPolicy="no-referrer"
+                          className={styles.chatGroundingSearchResultFaviconImage}
+                          onLoad={(event) => {
+                            event.currentTarget.style.opacity = "1";
+                            event.currentTarget.parentElement?.setAttribute("data-image-loaded", "true");
+                          }}
+                          onError={handleGroundingFaviconError}
+                        />
+                      ) : null}
+                    </div>
+                    <div className={styles.chatGroundingSearchResultContent}>
+                      <div className={styles.chatGroundingSearchResultTitle}>{result.title}</div>
+                      {result.siteLabel ? (
+                        <div className={styles.chatGroundingSearchResultSite}>{result.siteLabel}</div>
+                      ) : null}
+                    </div>
                   </div>
                 </a>
               );
@@ -399,32 +446,65 @@ export function ChatMessageGroundingPanel({
           ))}
         </div>
       ) : null}
+      {inlineSourceIcons.length > 0 ? (
+        <div className={styles.chatGroundingInlineSourceRow}>
+          {inlineSourceIcons.map((source) => {
+            const iconContent = (
+              <span className={styles.chatGroundingInlineSourceIcon}>
+                <span className={styles.chatGroundingInlineSourceIconFallback}>{source.initials}</span>
+                {source.faviconUrl ? (
+                  /* eslint-disable-next-line @next/next/no-img-element -- Favicon URLs are arbitrary; prefer a plain img with graceful fallback. */
+                  <img
+                    src={source.faviconUrl}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    className={styles.chatGroundingInlineSourceIconImage}
+                    onLoad={(event) => {
+                      event.currentTarget.style.opacity = "1";
+                      event.currentTarget.parentElement?.setAttribute("data-image-loaded", "true");
+                    }}
+                    onError={handleGroundingFaviconError}
+                  />
+                ) : null}
+              </span>
+            );
+
+            if (source.href) {
+              return (
+                <a key={`inline-${source.id}`} href={source.href} target="_self" rel="noreferrer" aria-label={source.title}>
+                  {iconContent}
+                </a>
+              );
+            }
+
+            return <span key={`inline-${source.id}`}>{iconContent}</span>;
+          })}
+        </div>
+      ) : null}
       {sourceCards.length > 0 ? (
         <div className={styles.chatGroundingSourceDeck}>
           <div className={styles.chatGroundingSourceCards}>
             {sourceCards.map((source) => {
               const faviconUrl = buildGroundingSourceFaviconUrl(source);
               const extractedThumbnailUrl = resolveThumbnailForSource(source, thumbnailIndex);
-              const inferredThumbnailUrl = buildWebsiteThumbnailFromHref(source.href);
-              const thumbnailUrl = extractedThumbnailUrl ?? inferredThumbnailUrl;
-              const imageUrl = thumbnailUrl ?? faviconUrl;
-              const imageKind = thumbnailUrl ? "thumbnail" : "favicon";
+              const thumbnailResolution = resolveThumbnailWithFallbacks(extractedThumbnailUrl, source.href);
+              const previewImageUrl = thumbnailResolution.primary;
+              const previewFallbackQueue = thumbnailResolution.fallbacks.join("|");
               const initials = buildGroundingSourceInitials(source.siteLabel ?? source.title);
 
               const cardContent = (
                 <>
-                  <div className={styles.chatGroundingSourceCardAvatar} data-kind={imageKind}>
+                  <div className={styles.chatGroundingSourceCardAvatar} data-kind="thumbnail">
                     <span className={styles.chatGroundingSourceCardFallback}>{initials}</span>
-                    {imageUrl ? (
+                    {previewImageUrl ? (
                       /* eslint-disable-next-line @next/next/no-img-element -- Favicon URLs are arbitrary; prefer a plain img with graceful fallback. */
                       <img
-                        src={imageUrl}
+                        src={previewImageUrl}
                         alt=""
                         referrerPolicy="no-referrer"
                         className={styles.chatGroundingSourceCardImage}
-                        data-kind={imageKind}
-                        data-fallback={thumbnailUrl && faviconUrl ? faviconUrl : undefined}
-                        data-fallback-kind={thumbnailUrl && faviconUrl ? "favicon" : undefined}
+                        data-kind="thumbnail"
+                        data-fallback-queue={previewFallbackQueue || undefined}
                         onLoad={(event) => {
                           event.currentTarget.style.opacity = "1";
                           event.currentTarget.parentElement?.setAttribute("data-image-loaded", "true");
@@ -433,9 +513,28 @@ export function ChatMessageGroundingPanel({
                       />
                     ) : null}
                   </div>
-                  <div className={styles.chatGroundingSourceCardContent}>
-                    <div className={styles.chatGroundingSourceCardTitle}>{source.title ?? t("Referenced source")}</div>
-                    {source.siteLabel ? <div className={styles.chatGroundingSourceCardSite}>{source.siteLabel}</div> : null}
+                  <div className={styles.chatGroundingSourceCardMeta}>
+                    <div className={styles.chatGroundingSourceCardFavicon}>
+                      <span className={styles.chatGroundingSourceCardFaviconFallback}>{initials}</span>
+                      {faviconUrl ? (
+                        /* eslint-disable-next-line @next/next/no-img-element -- Favicon URLs are arbitrary; prefer a plain img with graceful fallback. */
+                        <img
+                          src={faviconUrl}
+                          alt=""
+                          referrerPolicy="no-referrer"
+                          className={styles.chatGroundingSourceCardFaviconImage}
+                          onLoad={(event) => {
+                            event.currentTarget.style.opacity = "1";
+                            event.currentTarget.parentElement?.setAttribute("data-image-loaded", "true");
+                          }}
+                          onError={handleGroundingFaviconError}
+                        />
+                      ) : null}
+                    </div>
+                    <div className={styles.chatGroundingSourceCardContent}>
+                      <div className={styles.chatGroundingSourceCardTitle}>{source.title ?? t("Referenced source")}</div>
+                      {source.siteLabel ? <div className={styles.chatGroundingSourceCardSite}>{source.siteLabel}</div> : null}
+                    </div>
                   </div>
                 </>
               );

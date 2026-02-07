@@ -133,16 +133,32 @@ const parseHostname = (value?: string | null): string | null => {
   }
 };
 
+const CITATION_LINK_TEXT_PATTERN = /^(?:\[?\d+\]?|source\s*\d*|ref(?:erence)?\s*\d*)$/i;
+
+const buildHostTokens = (host: string): string[] => {
+  return host
+    .split(".")
+    .map((token) => token.trim().toLowerCase())
+    .filter((token) => token.length >= 3 && !["www", "com", "org", "net", "edu", "gov", "co", "io", "ai", "app"].includes(token));
+};
+
 const shouldRenderSourceIcon = (linkText: string, href?: string | null): boolean => {
-  if (!linkText) {
-    return false;
-  }
   const normalizedText = normalizeCitationText(linkText);
+  if (normalizedText && CITATION_LINK_TEXT_PATTERN.test(normalizedText)) {
+    return true;
+  }
   const host = parseHostname(href) ?? parseHostname(normalizedText);
   if (!host) {
     return false;
   }
+  if (!normalizedText) {
+    return true;
+  }
   if (normalizedText === host || normalizedText.startsWith(host) || normalizedText.endsWith(host)) {
+    return true;
+  }
+  const hostTokens = buildHostTokens(host);
+  if (hostTokens.some((token) => normalizedText === token || normalizedText.startsWith(`${token} `))) {
     return true;
   }
   if (href) {
