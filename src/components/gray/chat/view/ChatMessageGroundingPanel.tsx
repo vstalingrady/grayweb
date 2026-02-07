@@ -141,12 +141,14 @@ const buildWebsiteThumbnailCandidatesFromHref = (href?: string): string[] => {
     if (videoId) {
       return [`https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`];
     }
+    const pathname = parsed.pathname.toLowerCase();
+    const hasDirectImageExtension = /\.(?:png|jpe?g|webp|avif|gif|bmp|svg)$/.test(pathname);
+    if (hasDirectImageExtension) {
+      return [parsed.toString()];
+    }
     const absoluteUrl = parsed.toString();
-    // Use two providers so cards still get thumbnails when one provider is down/rate-limited.
-    return [
-      `https://s.wordpress.com/mshots/v1/${encodeURIComponent(absoluteUrl)}?w=600`,
-      `https://image.thum.io/get/width/1200/crop/675/noanimate/${absoluteUrl}`,
-    ];
+    // Prefer OG image extraction. Avoid full-page screenshot fallbacks.
+    return [`https://image.thum.io/get/ogImage/${absoluteUrl}`];
   } catch {
     return [];
   }

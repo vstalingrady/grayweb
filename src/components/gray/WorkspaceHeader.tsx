@@ -1,4 +1,5 @@
 import { memo, type ReactNode } from "react";
+import { Flame } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { useI18n } from "@/contexts/I18nContext";
 
@@ -40,7 +41,8 @@ function GrayWorkspaceHeader({
         <div className={`${styles.headerRight} hidden md:flex`}>
           {showStreak ? (
             <div className={styles.streakBadge} aria-label={streakLabel} title={streakLabel}>
-              <span className={styles.streakBadgeText}>{streakLabel}</span>
+              <Flame size={14} className={styles.streakBadgeIcon} aria-hidden="true" />
+              <span className={styles.streakBadgeCount}>{streakCount}</span>
             </div>
           ) : null}
           {shouldShowUpgrade ? (

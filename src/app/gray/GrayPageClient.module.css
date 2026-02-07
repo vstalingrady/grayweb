@@ -3218,6 +3218,16 @@
   white-space: nowrap;
 }
 
+.streakBadgeIcon {
+  color: rgba(255, 167, 38, 0.95);
+  flex-shrink: 0;
+}
+
+.streakBadgeCount {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .upgradeFloat {
   position: absolute;
   top: 24px;

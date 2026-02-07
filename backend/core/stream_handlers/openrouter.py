@@ -55,9 +55,6 @@ def _extract_search_query(tool_name: str, tool_args: Any) -> Optional[str]:
         return None
     if "search" not in normalized_name and "web" not in normalized_name:
         return None
-    if not isinstance(tool_args, dict):
-        return None
-
     candidate_keys = (
         "query",
         "queries",
@@ -65,12 +62,22 @@ def _extract_search_query(tool_name: str, tool_args: Any) -> Optional[str]:
         "search",
         "search_query",
         "searchQuery",
+        "search_term",
+        "searchTerm",
         "query_text",
         "queryText",
         "keywords",
         "keyword",
+        "terms",
+        "question",
+        "topic",
         "text",
         "prompt",
+        "input",
+        "value",
+        "request",
+        "params",
+        "arguments",
     )
 
     def _pull(value: Any) -> Optional[str]:
@@ -92,13 +99,28 @@ def _extract_search_query(tool_name: str, tool_args: Any) -> Optional[str]:
                     nested = _pull(value.get(key))
                     if nested:
                         return nested
+            for nested_value in value.values():
+                nested = _pull(nested_value)
+                if nested:
+                    return nested
+        if isinstance(value, str):
+            for pattern in (
+                r'"(?:query|q|search_query|searchQuery|search_term|searchTerm|keywords|text|prompt|question|topic|input)"\s*:\s*"([^"]+)"',
+                r"'(?:query|q|search_query|searchQuery|search_term|searchTerm|keywords|text|prompt|question|topic|input)'\s*:\s*'([^']+)'",
+            ):
+                match = re.search(pattern, value, flags=re.IGNORECASE)
+                if match:
+                    extracted = _normalize_search_query(match.group(1))
+                    if extracted:
+                        return extracted
         return None
 
-    for key in candidate_keys:
-        if key in tool_args:
-            direct = _pull(tool_args.get(key))
-            if direct:
-                return direct
+    if isinstance(tool_args, dict):
+        for key in candidate_keys:
+            if key in tool_args:
+                direct = _pull(tool_args.get(key))
+                if direct:
+                    return direct
 
     return _pull(tool_args)
 
@@ -240,6 +262,24 @@ async def _stream_openrouter_response_impl(
         if normalized in executed_search_queries:
             return
         executed_search_queries.append(normalized)
+
+    def _resolve_fallback_search_query() -> Optional[str]:
+        if isinstance(current_message, str):
+            normalized_current = _normalize_search_query(current_message)
+            if normalized_current:
+                return normalized_current
+        for entry in reversed(current_history):
+            if not isinstance(entry, dict):
+                continue
+            role = str(entry.get("role") or "").strip().lower()
+            if role != "user":
+                continue
+            text = entry.get("text")
+            if isinstance(text, str):
+                normalized_text = _normalize_search_query(text)
+                if normalized_text:
+                    return normalized_text
+        return None
     
     for turn in range(max_tool_turns + 1):
         accumulated = ""
@@ -540,6 +580,8 @@ async def _stream_openrouter_response_impl(
                 # Emit tool status so the client can show UI feedback while the tool runs.
                 tool_status_payload: Dict[str, Any] = {"name": tool_name, "status": "start"}
                 search_query = _extract_search_query(tool_name, tool_args)
+                if not search_query and (("search" in tool_name.lower()) or ("web" in tool_name.lower())):
+                    search_query = _resolve_fallback_search_query()
                 if search_query:
                     _remember_search_query(search_query)
                     tool_status_payload["query"] = search_query
