@@ -39,7 +39,7 @@ import type { DashboardHeaderProps } from "@/components/gray/DashboardHeader";
 import { useI18n } from "@/contexts/I18nContext";
 import type { CalendarViewMode, ComposerAnchorRect } from "./dashboardCalendarTypes";
 
-const DEFAULT_HOUR_HEIGHT = 64;
+const DEFAULT_HOUR_HEIGHT = 72;
 const SNAP_MINUTES = 15;
 const TIMELINE_WIDTH = 56;
 
