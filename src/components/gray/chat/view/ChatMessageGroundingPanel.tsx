@@ -145,12 +145,9 @@ const buildWebsiteThumbnailFromHref = (href?: string): string | undefined => {
     if (videoId) {
       return `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`;
     }
-    const host = parsed.hostname.toLowerCase();
-    if (!host) {
-      return undefined;
-    }
-    // Best-effort domain logo when result snippets don't include a real thumbnail.
-    return `https://logo.clearbit.com/${host}`;
+    // Best-effort full-page thumbnail preview (ChatGPT-like cards).
+    // Falls back to favicon via onError handler when unavailable.
+    return `https://s.wordpress.com/mshots/v1/${encodeURIComponent(parsed.toString())}?w=600`;
   } catch {
     return undefined;
   }

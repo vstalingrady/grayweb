@@ -75,6 +75,14 @@ router = APIRouter(tags=["chat"])
 
 CUSTOM_INSTRUCTIONS_HEADER = "CUSTOM INSTRUCTIONS FROM USER (SOURCE OF TRUTH)"
 FOLLOW_UP_PRONOUN_PATTERN = re.compile(r"\b(him|her|them|that|this|it)\b", re.IGNORECASE)
+FOLLOW_UP_REFERENTIAL_PATTERN = re.compile(
+    r"\b("
+    r"him|her|them|that|this|it|those|these|"
+    r"other\s+half|the\s+other\s+half|other\s+part|the\s+rest|rest\s+of\s+(?:it|that|them)|"
+    r"other\s+side|remaining\s+(?:half|part|pieces?|details?)|what\s+about\s+(?:that|it|him|her|them|the\s+rest|the\s+other)"
+    r")\b",
+    re.IGNORECASE,
+)
 LOW_INFORMATION_SEARCH_TURN_PATTERN = re.compile(
     r"^\s*(?:search|search\s+please|pls\s+search|please\s+search|google\s+it|look\s+it\s+up)\s*$",
     re.IGNORECASE,
@@ -150,8 +158,10 @@ def _build_effective_web_search_prompt(
     base_prompt = (chat_request.web_search_prompt or "").strip()
     guidance = (
         "Use concise, user-focused web search queries. "
-        "For follow-up prompts with pronouns (him/her/them/that/it), resolve the referent from recent user context "
+        "For follow-up prompts with pronouns or vague referential phrases (e.g. other half/the rest/what about that), "
+        "resolve the referent from recent user context "
         "before searching. Rewrite follow-up queries with the resolved entity/topic explicitly included. "
+        "Never run standalone generic queries such as 'other half', 'the rest', or 'what about him'. "
         "Keep the user domain intact; do not reinterpret ambiguous words into unrelated domains. "
         "If the referent is still ambiguous, ask one clarifying question instead of broad generic searches."
     )
@@ -190,7 +200,11 @@ def _build_effective_web_search_prompt(
     if base_prompt:
         prompt_parts.append(base_prompt)
     prompt_parts.append(guidance)
-    if recent_user_context and FOLLOW_UP_PRONOUN_PATTERN.search(chat_request.message or ""):
+    follow_up_message = chat_request.message or ""
+    if recent_user_context and (
+        FOLLOW_UP_PRONOUN_PATTERN.search(follow_up_message)
+        or FOLLOW_UP_REFERENTIAL_PATTERN.search(follow_up_message)
+    ):
         prompt_parts.append(f"Recent user context to anchor follow-up search: {recent_user_context[:220]}")
     return "\n\n".join(prompt_parts)
 
