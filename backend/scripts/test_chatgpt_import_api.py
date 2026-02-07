@@ -59,14 +59,14 @@ def test_api_import():
     
     print(f"Status Code: {response.status_code}")
     print(f"Response: {response.json()}")
-        
-        assert response.status_code == 201
-        data = response.json()
-        assert "context_cache_id" in data
-        assert data["conversation_count"] == 1
-        assert "chef" in data["summary_preview"]
-        
-        print("\nSUCCESS: API integration verified!")
+
+    assert response.status_code == 201
+    data = response.json()
+    assert "context_cache_id" in data
+    assert data["conversation_count"] == 1
+    assert "chef" in data["summary_preview"]
+
+    print("\nSUCCESS: API integration verified!")
 
 if __name__ == "__main__":
     # Ensure DB is connected for the test if needed (TestClient usually handles lifespan if used as context manager)

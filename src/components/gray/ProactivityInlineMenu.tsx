@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, useEffect } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Plus, Pencil, X } from "lucide-react";
 import calendarStyles from "@/components/calendar/GrayDashboardCalendar.module.css";
@@ -50,6 +50,7 @@ export function ProactivityInlineMenu({
 
   return createPortal(
     <ProactivityInlineMenuContent
+      key={`${activeProactivity?.id ?? "none"}:${activeProactivity?.messageLength ?? "default"}`}
       isOpen={isOpen}
       onClose={onClose}
       anchorRef={anchorRef}
@@ -102,12 +103,6 @@ function ProactivityInlineMenuContent({
   const [editingCustomTimeDraft, setEditingCustomTimeDraft] = useState<string>("");
 
   const isCustomPresetSelected = selectedPresetId === CUSTOM_PROACTIVITY_ID;
-
-  useEffect(() => {
-    if (activeProactivity?.messageLength) {
-      setMessageLength(activeProactivity.messageLength);
-    }
-  }, [activeProactivity?.messageLength]);
 
   useLayoutEffect(() => {
     const anchorEl = anchorRef.current;

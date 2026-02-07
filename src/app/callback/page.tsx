@@ -227,7 +227,9 @@ export default function CallbackPage() {
 
         try {
           const { data: primaryData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-          console.log(`[AUTH PERF] Client-side code exchange took ${(performance.now() - perfStart).toFixed(2)}ms`);
+          if (isAuthDebugEnabled) {
+            console.log(`[AUTH PERF] Client-side code exchange took ${(performance.now() - perfStart).toFixed(2)}ms`);
+          }
           if (exchangeError) {
             throw exchangeError;
           }
@@ -288,7 +290,9 @@ export default function CallbackPage() {
             }
 
             data = manualData;
-            console.log(`[AUTH PERF] Manual PKCE exchange + session set took ${(performance.now() - manualStart).toFixed(2)}ms`);
+            if (isAuthDebugEnabled) {
+              console.log(`[AUTH PERF] Manual PKCE exchange + session set took ${(performance.now() - manualStart).toFixed(2)}ms`);
+            }
 
             try {
               window.localStorage.removeItem(codeVerifier.storageKey);
@@ -322,7 +326,9 @@ export default function CallbackPage() {
           }).catch(() => {
             // Continue even if cookie sync fails; the Supabase session is still active client-side.
           });
-          console.log(`[AUTH PERF] Session sync took ${(performance.now() - syncStart).toFixed(2)}ms`);
+          if (isAuthDebugEnabled) {
+            console.log(`[AUTH PERF] Session sync took ${(performance.now() - syncStart).toFixed(2)}ms`);
+          }
         }
 
         const destination = resolveDestination(redirectParam, workspaceHost, currentOrigin);

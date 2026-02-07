@@ -103,6 +103,7 @@ export function UserSettingsSync() {
   }, [
     locale,
     setLocale,
+    user,
     user?.conversation_memory_enabled,
     user?.id,
     user?.improve_model_for_everyone,

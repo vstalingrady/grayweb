@@ -49,6 +49,7 @@ const providers = [
 
 const SUPABASE_STORAGE_KEYS = getSupabaseAuthStorageKeys();
 const MIN_PASSWORD_LENGTH = 8;
+const isAuthDebugEnabled = process.env.NODE_ENV !== "production";
 
 export default function LoginForm({
   initialMode = "signin",
@@ -259,7 +260,9 @@ export default function LoginForm({
 
     try {
       const callbackUrl = ensureAbsoluteUrl(buildCallbackDestination(redirectTo));
-      console.log("[AUTH DEBUG] Generated OAuth redirectTo:", callbackUrl);
+      if (isAuthDebugEnabled) {
+        console.log("[AUTH DEBUG] Generated OAuth redirectTo:", callbackUrl);
+      }
       const captchaTokenValue = shouldUseCaptcha ? captchaToken : null;
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
@@ -278,13 +281,17 @@ export default function LoginForm({
       }
 
       if (data.url) {
-        console.log(`[AUTH PERF] OAuth ${provider} redirecting to:`, data.url);
+        if (isAuthDebugEnabled) {
+          console.log(`[AUTH PERF] OAuth ${provider} redirecting to:`, data.url);
+        }
         window.location.replace(data.url);
         return;
       }
 
 
-      console.log(`[AUTH PERF] OAuth ${provider} initiated in ${(performance.now() - perfStart).toFixed(2)}ms`);
+      if (isAuthDebugEnabled) {
+        console.log(`[AUTH PERF] OAuth ${provider} initiated in ${(performance.now() - perfStart).toFixed(2)}ms`);
+      }
     } catch (error) {
       const text = handleCaptchaErrorReset(error) || "OAuth request failed.";
       setMessage({ type: "error", text });
@@ -429,9 +436,11 @@ export default function LoginForm({
           ...(captchaTokenValue ? { options: { captchaToken: captchaTokenValue } } : {}),
         });
 
-        console.log(
-          `[AUTH PERF] Sign in request took ${(performance.now() - authStart).toFixed(2)}ms`
-        );
+        if (isAuthDebugEnabled) {
+          console.log(
+            `[AUTH PERF] Sign in request took ${(performance.now() - authStart).toFixed(2)}ms`
+          );
+        }
 
         if (error) {
           throw error;
@@ -458,7 +467,9 @@ export default function LoginForm({
         }
 
         const destination = redirectTo ?? resolvePostAuthDestination();
-        console.log(`[AUTH PERF] Total sign in flow took ${(performance.now() - perfStart).toFixed(2)}ms`);
+        if (isAuthDebugEnabled) {
+          console.log(`[AUTH PERF] Total sign in flow took ${(performance.now() - perfStart).toFixed(2)}ms`);
+        }
         if (typeof window !== "undefined") {
           performPostAuthNavigation(destination);
         }
@@ -474,7 +485,9 @@ export default function LoginForm({
           ...(captchaTokenValue ? { captchaToken: captchaTokenValue } : {}),
         },
       });
-      console.log(`[AUTH PERF] Sign up request took ${(performance.now() - authStart).toFixed(2)}ms`);
+      if (isAuthDebugEnabled) {
+        console.log(`[AUTH PERF] Sign up request took ${(performance.now() - authStart).toFixed(2)}ms`);
+      }
 
       if (error) {
         throw error;
@@ -496,7 +509,9 @@ export default function LoginForm({
           }
         }
         const destination = resolvePostAuthDestination();
-        console.log(`[AUTH PERF] Total sign up flow took ${(performance.now() - perfStart).toFixed(2)}ms`);
+        if (isAuthDebugEnabled) {
+          console.log(`[AUTH PERF] Total sign up flow took ${(performance.now() - perfStart).toFixed(2)}ms`);
+        }
         if (typeof window !== "undefined") {
           performPostAuthNavigation(destination);
         }

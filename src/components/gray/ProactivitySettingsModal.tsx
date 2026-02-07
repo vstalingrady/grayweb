@@ -42,7 +42,14 @@ export function ProactivitySettingsModal({
         return null;
     }
 
-    return createPortal(<ProactivitySettingsModalContent {...props} isOpen={isOpen} />, document.body);
+    return createPortal(
+        <ProactivitySettingsModalContent
+            {...props}
+            key={`${props.activeProactivity?.id ?? "none"}:${props.activeProactivity?.messageLength ?? "default"}`}
+            isOpen={isOpen}
+        />,
+        document.body
+    );
 }
 
 function ProactivitySettingsModalContent({
@@ -88,12 +95,6 @@ function ProactivitySettingsModalContent({
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [onClose]);
-
-    useEffect(() => {
-        if (activeProactivity?.messageLength) {
-            setMessageLength(activeProactivity.messageLength);
-        }
-    }, [activeProactivity?.messageLength]);
 
     const applyCustomProactivity = useCallback(
         (nextTimes: string[]) => {

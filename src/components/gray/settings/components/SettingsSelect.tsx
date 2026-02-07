@@ -25,13 +25,14 @@ export function SettingsSelect({
 }: SettingsSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const menuIsOpen = isOpen && !disabled;
   const activeLabel = useMemo(() => {
     const match = options.find((option) => option.value === value);
     return match?.label ?? value;
   }, [options, value]);
 
   useEffect(() => {
-    if (!isOpen || disabled) {
+    if (!menuIsOpen) {
       return;
     }
     const handlePointerDown = (event: PointerEvent) => {
@@ -51,13 +52,7 @@ export function SettingsSelect({
       document.removeEventListener("pointerdown", handlePointerDown, true);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [disabled, isOpen]);
-
-  useEffect(() => {
-    if (disabled && isOpen) {
-      setIsOpen(false);
-    }
-  }, [disabled, isOpen]);
+  }, [menuIsOpen]);
 
   return (
     <div className={styles.settingsSelectButton} style={{ position: "relative" }} ref={containerRef}>
@@ -70,7 +65,7 @@ export function SettingsSelect({
           setIsOpen((prev) => !prev);
         }}
         aria-haspopup="listbox"
-        aria-expanded={isOpen ? "true" : "false"}
+        aria-expanded={menuIsOpen ? "true" : "false"}
         aria-disabled={disabled ? "true" : "false"}
         disabled={disabled}
       >
@@ -80,11 +75,11 @@ export function SettingsSelect({
           size={14}
           className={styles.settingsSelectChevron}
           aria-hidden="true"
-          data-open={isOpen ? "true" : "false"}
+          data-open={menuIsOpen ? "true" : "false"}
         />
       </button>
 
-      {isOpen ? (
+      {menuIsOpen ? (
         <div className={styles.settingsSelectMenu} role="listbox">
           {options.map((option) => {
             const selected = option.value === value;
