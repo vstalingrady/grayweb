@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useRef, useState, type RefObject } from "react";
+import { memo, useCallback, useMemo, useRef, useState, type RefObject } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import styles from "@/components/gray/chat/ChatStyles.module.css";
@@ -61,21 +61,6 @@ const extractGroundingSearchQueries = (metadata?: GroundingMetadata | null): str
   return rawQueries
     .map((query) => (typeof query === "string" ? query.trim() : ""))
     .filter((query) => query.length > 0);
-};
-
-const findNearestPreviousUserMessage = (messages: ChatSessionMessage[], assistantIndex: number): string | null => {
-  for (let index = assistantIndex - 1; index >= 0; index -= 1) {
-    const candidate = messages[index];
-    if (candidate.role !== "user") {
-      continue;
-    }
-    const text = typeof candidate.content === "string" ? candidate.content.trim() : "";
-    if (!text) {
-      continue;
-    }
-    return text.length > 180 ? `${text.slice(0, 177).trimEnd()}...` : text;
-  }
-  return null;
 };
 
 const deriveSourceLabel = (href: string): string => {
@@ -291,6 +276,24 @@ export const ChatMessagesList = memo(
       setExpandedMessageId((prev) => (prev === messageId ? null : messageId));
     }, []);
 
+    const nearestPreviousUserQueryByIndex = useMemo(() => {
+      const nearest: Array<string | null> = new Array(messages.length).fill(null);
+      let lastUserText: string | null = null;
+      for (let index = 0; index < messages.length; index += 1) {
+        nearest[index] = lastUserText;
+        const candidate = messages[index];
+        if (candidate.role !== "user") {
+          continue;
+        }
+        const text = typeof candidate.content === "string" ? candidate.content.trim() : "";
+        if (!text) {
+          continue;
+        }
+        lastUserText = text.length > 180 ? `${text.slice(0, 177).trimEnd()}...` : text;
+      }
+      return nearest;
+    }, [messages]);
+
     const shouldAnchorMessages = !isLoadingHistory;
 
     return (
@@ -340,7 +343,7 @@ export const ChatMessagesList = memo(
           const groundingSearchQueries = extractGroundingSearchQueries(message.groundingMetadata);
           const latestGroundingQuery =
             groundingSearchQueries.length > 0 ? groundingSearchQueries[groundingSearchQueries.length - 1] : null;
-          const previousUserQuery = findNearestPreviousUserMessage(messages, messageIndex);
+          const previousUserQuery = nearestPreviousUserQueryByIndex[messageIndex] ?? null;
           const hasGroundingSearchQuery = Boolean(latestGroundingQuery);
           const spinnerVariant =
             toolStatusInfo?.variant ?? (searchStatusLabel || hasGroundingSearchQuery ? "search" : "default");

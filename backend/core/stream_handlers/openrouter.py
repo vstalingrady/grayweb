@@ -466,12 +466,12 @@ async def _stream_openrouter_response_impl(
                     yield ("delta", chunk)
         except httpx.HTTPStatusError as stream_error:
             status_code = getattr(getattr(stream_error, "response", None), "status_code", None)
-            # Recovery path for provider 5xx during follow-up tool turns.
-            if isinstance(status_code, int) and status_code >= 500 and turn > 0:
+            if isinstance(status_code, int) and status_code >= 500:
                 api_logger.warning(
-                    "OpenRouter follow-up stream failed; attempting non-stream recovery",
+                    "OpenRouter stream failed with provider 5xx; attempting non-stream recovery",
                     extra={"status_code": status_code, "turn": turn, "user_id": user_id},
                 )
+                recovered_text = ""
                 try:
                     recovery = await openrouter_service.generate(
                         current_message or "Continue.",
@@ -493,9 +493,17 @@ async def _stream_openrouter_response_impl(
                         user=user,
                         extra_headers=extra_headers,
                     )
-                except Exception:
-                    raise stream_error
-                recovered_text = recovery if isinstance(recovery, str) else ""
+                    recovered_text = recovery if isinstance(recovery, str) else ""
+                except Exception as recovery_error:
+                    api_logger.error(
+                        "OpenRouter non-stream recovery failed after stream 5xx",
+                        extra={
+                            "status_code": status_code,
+                            "turn": turn,
+                            "user_id": user_id,
+                            "error": str(recovery_error),
+                        },
+                    )
                 if recovered_text.strip():
                     if reasoning_started:
                         yield ("delta", "</thinking>\n")
@@ -504,6 +512,18 @@ async def _stream_openrouter_response_impl(
                     yielded_any_tokens = True
                     assistant_text_emitted = True
                     yield ("delta", recovered_text)
+                elif turn == 0:
+                    fallback_text = (
+                        "I hit a temporary provider issue while generating your response. "
+                        "Please try again in a few seconds."
+                    )
+                    if reasoning_started:
+                        yield ("delta", "</thinking>\n")
+                        reasoning_started = False
+                    accumulated += fallback_text
+                    yielded_any_tokens = True
+                    assistant_text_emitted = True
+                    yield ("delta", fallback_text)
                 else:
                     raise stream_error
             else:
