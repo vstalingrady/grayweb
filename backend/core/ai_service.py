@@ -253,8 +253,20 @@ def _build_web_search_plugin(
 ) -> Optional[List[Dict[str, Any]]]:
     if not search_enabled:
         return None
+    allowed_engines = {"native", "exa"}
+    engine_aliases = {
+        "google": "native",
+        "default": "native",
+        "openrouter": "native",
+    }
     plugin: Dict[str, Any] = {"id": "web"}
-    resolved_engine = (engine or "").strip().lower() or "google"
+    requested_engine = (engine or "").strip().lower()
+    if requested_engine in engine_aliases:
+        resolved_engine = engine_aliases[requested_engine]
+    elif requested_engine in allowed_engines:
+        resolved_engine = requested_engine
+    else:
+        resolved_engine = "native"
     plugin["engine"] = resolved_engine
     if isinstance(max_results, int) and max_results > 0:
         plugin["max_results"] = min(max_results, 10)

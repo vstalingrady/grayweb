@@ -877,6 +877,16 @@ class OpenRouterService:
             headers=self._build_headers(extra_headers),
             json=payload,
         )
+        if response.status_code >= 400:
+            _logger = logging.getLogger("openrouter_client")
+            _logger.error(
+                "OpenRouter non-stream request failed",
+                extra={
+                    "status_code": response.status_code,
+                    "response_text": response.text[:1000],
+                    "model": resolved_model,
+                },
+            )
         response.raise_for_status()
         data = response.json()
         
@@ -1066,6 +1076,16 @@ class OpenRouterService:
             headers=self._build_headers(extra_headers),
             json=payload,
         ) as response:
+            if response.status_code >= 400:
+                body = await response.aread()
+                _logger.error(
+                    "OpenRouter stream request failed",
+                    extra={
+                        "status_code": response.status_code,
+                        "response_text": body.decode("utf-8", errors="replace")[:1000],
+                        "model": resolved_model,
+                    },
+                )
             response.raise_for_status()
             
             buffer = ""
