@@ -455,7 +455,7 @@ export function GrayChatView({
     />
   ) : null;
 
-  const { chatViewportRef, scrollAnchorRef, composerDockRef, chatViewStyle, handleScroll: handleScrollBase } = useChatViewScroll({
+  const { chatViewportRef, scrollAnchorRef, composerDockRef, chatViewStyle, handleScroll: handleScrollBase, forceScrollToBottom } = useChatViewScroll({
     hasHydrated,
     sessionKey: session?.id ?? null,
     messages,
@@ -830,6 +830,7 @@ export function GrayChatView({
       isSubmittingRef.current = false;
       return;
     }
+    forceScrollToBottom();
     setIsWebSearchInFlight(resolveWebSearchForPrompt(content));
 
     // General chat handles its own optimistic append to avoid duplicate user messages

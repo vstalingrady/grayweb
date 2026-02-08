@@ -25,6 +25,7 @@ type UseChatViewScrollResult = {
   composerDockRef: RefObject<HTMLDivElement | null>;
   chatViewStyle: CSSProperties | undefined;
   handleScroll: () => void;
+  forceScrollToBottom: () => void;
 };
 
 export const useChatViewScroll = ({
@@ -71,6 +72,19 @@ export const useChatViewScroll = ({
       isAtBottomRef.current = true;
     }
   }, []);
+
+  const forceScrollToBottom = useCallback(() => {
+    userScrolledAwayRef.current = false;
+    isAtBottomRef.current = true;
+    scrollToBottom();
+    if (typeof window !== "undefined") {
+      window.requestAnimationFrame(() => {
+        userScrolledAwayRef.current = false;
+        isAtBottomRef.current = true;
+        scrollToBottom();
+      });
+    }
+  }, [scrollToBottom]);
 
   useEffect(() => {
     if (prevSessionKeyRef.current === sessionKey) {
@@ -298,5 +312,6 @@ export const useChatViewScroll = ({
     composerDockRef,
     chatViewStyle,
     handleScroll,
+    forceScrollToBottom,
   };
 };
