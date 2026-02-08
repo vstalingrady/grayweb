@@ -1093,7 +1093,13 @@
 .chatMarkdownStreaming :global(h4:last-child),
 .chatMarkdownStreaming :global(h5:last-child),
 .chatMarkdownStreaming :global(h6:last-child) {
-  animation: chatStreamingTextFadeIn 0.2s ease-out;
+  animation: none;
+}
+
+/* Prevent full-block flash while streaming: ReactMarkdown updates can remount
+   trailing nodes, so we keep only caret/tail motion and no paragraph fade. */
+.chatMarkdownStreaming > * {
+  animation: none !important;
 }
 
 .chatMarkdownStreaming :global(p:last-child)::after,
@@ -1116,7 +1122,22 @@
 
 .chatStreamingToken {
   display: inline;
-  animation: chatStreamingTokenFadeIn 0.22s ease-out both;
+  white-space: pre-wrap;
+  animation: chatStreamingTokenFadeIn 0.22s ease-out both !important;
+}
+
+.chatStreamingStableText {
+  white-space: pre-wrap;
+}
+
+.chatStreamingCaret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.28));
+  animation: chatStreamingCaretBlink 0.8s ease-in-out infinite !important;
+  vertical-align: text-bottom;
 }
 
 
@@ -1167,8 +1188,9 @@
     animation: none;
   }
 
-  .chatStreamingToken {
-    animation: none;
+  .chatStreamingToken,
+  .chatStreamingCaret {
+    animation: none !important;
   }
 
   .chatMarkdownStreaming::after {

@@ -219,13 +219,39 @@ async def update_dashboard_pulse(
     ) = _get_dashboard_helpers()
     
     update_data = pulse_update.dict(exclude_unset=True)
+    existing = await db.fetch_one(
+        dashboard_pulses.select().where(
+            (dashboard_pulses.c.id == pulse_id) & (dashboard_pulses.c.user_id == user_id)
+        )
+    )
+    if not existing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pulse entry not found")
+
+    if "timestamp" in update_data:
+        normalized_timestamp = _timestamp_ms_to_datetime(update_data["timestamp"])
+        if normalized_timestamp is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid timestamp; expected milliseconds since epoch",
+            )
+        update_data["timestamp"] = normalized_timestamp
+    if "plans" in update_data:
+        update_data["plans"] = _normalize_plan_items(update_data["plans"])
+    if "habits" in update_data:
+        update_data["habits"] = _normalize_habit_items(update_data["habits"])
+    if "proactivity" in update_data:
+        update_data["proactivity"] = _normalize_proactivity(update_data["proactivity"])
     update_data["updated_at"] = utcnow()
     await db.execute(
         dashboard_pulses.update()
-        .where(dashboard_pulses.c.id == pulse_id)
+        .where((dashboard_pulses.c.id == pulse_id) & (dashboard_pulses.c.user_id == user_id))
         .values(**update_data)
     )
-    record = await db.fetch_one(dashboard_pulses.select().where(dashboard_pulses.c.id == pulse_id))
+    record = await db.fetch_one(
+        dashboard_pulses.select().where(
+            (dashboard_pulses.c.id == pulse_id) & (dashboard_pulses.c.user_id == user_id)
+        )
+    )
     payload = _serialize_dashboard_pulse_record(record)
     if not payload:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update dashboard pulse")

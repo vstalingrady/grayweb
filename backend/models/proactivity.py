@@ -95,6 +95,7 @@ class DashboardPulsePlanItem(BaseModel):
     id: Union[str, int]
     label: str
     completed: bool = False
+    deadline: Optional[str] = None
 
 
 class DashboardPulseHabitItem(BaseModel):
@@ -112,6 +113,10 @@ class DashboardPulseProactivity(BaseModel):
     description: Optional[str] = Field(default=DEFAULT_DASHBOARD_PROACTIVITY.get("description"))
     cadence: str = Field(default=DEFAULT_DASHBOARD_PROACTIVITY["cadence"])
     time: str = Field(default=DEFAULT_DASHBOARD_PROACTIVITY["time"])
+    times: Optional[List[str]] = Field(default=None)
+    channels: Optional[List[str]] = Field(default=None)
+    timezone: Optional[str] = Field(default=None)
+    message_length: str = Field(default=DEFAULT_DASHBOARD_PROACTIVITY["message_length"])
 
 
 class DashboardPulseBase(BaseModel):

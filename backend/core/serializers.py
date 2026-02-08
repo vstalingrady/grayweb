@@ -318,6 +318,9 @@ DEFAULT_DASHBOARD_PROACTIVITY = {
     "description": "Daily sync nudges for squad channels.",
     "cadence": "Daily",
     "time": "09:00 AM",
+    "times": ["09:00 AM"],
+    "channels": [],
+    "timezone": None,
     "message_length": "medium",
 }
 
@@ -332,15 +335,35 @@ def normalize_proactivity(raw: Any) -> Dict[str, Any]:
     description = raw.get("description")
     cadence = str(raw.get("cadence") or DEFAULT_DASHBOARD_PROACTIVITY["cadence"]).strip()
     time_label = str(raw.get("time") or DEFAULT_DASHBOARD_PROACTIVITY["time"]).strip()
+    times_raw = raw.get("times")
+    channels_raw = raw.get("channels")
+    timezone_raw = raw.get("timezone")
     message_length = str(raw.get("message_length") or DEFAULT_DASHBOARD_PROACTIVITY["message_length"]).strip().lower()
     if message_length not in {"short", "medium", "long"}:
         message_length = DEFAULT_DASHBOARD_PROACTIVITY["message_length"]
+
+    times: List[str] = []
+    if isinstance(times_raw, list):
+        times = [str(entry).strip() for entry in times_raw if str(entry).strip()]
+    if not times:
+        times = [time_label or DEFAULT_DASHBOARD_PROACTIVITY["time"]]
+
+    channels: List[str] = []
+    if isinstance(channels_raw, list):
+        channels = [str(entry).strip() for entry in channels_raw if str(entry).strip()]
+
+    timezone = str(timezone_raw).strip() if isinstance(timezone_raw, str) and timezone_raw.strip() else None
+
+    normalized_time = time_label or times[0] or DEFAULT_DASHBOARD_PROACTIVITY["time"]
 
     return {
         "id": identifier or DEFAULT_DASHBOARD_PROACTIVITY["id"],
         "label": label or DEFAULT_DASHBOARD_PROACTIVITY["label"],
         "description": (description or DEFAULT_DASHBOARD_PROACTIVITY.get("description")) or "",
         "cadence": cadence or DEFAULT_DASHBOARD_PROACTIVITY["cadence"],
-        "time": time_label or DEFAULT_DASHBOARD_PROACTIVITY["time"],
+        "time": normalized_time,
+        "times": times,
+        "channels": channels,
+        "timezone": timezone,
         "message_length": message_length,
     }

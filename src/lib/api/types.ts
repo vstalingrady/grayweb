@@ -122,6 +122,7 @@ export interface DashboardPulsePlanItem {
   id: string;
   label: string;
   completed: boolean;
+  deadline?: string | null;
 }
 
 export interface DashboardPulseHabitItem {
@@ -137,6 +138,9 @@ export interface DashboardPulseProactivity {
   description?: string | null;
   cadence: string;
   time: string;
+  times?: string[] | null;
+  channels?: string[] | null;
+  timezone?: string | null;
   message_length?: string | null;
 }
 

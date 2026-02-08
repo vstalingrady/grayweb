@@ -28,7 +28,7 @@ export default async function PulsePage() {
   return (
     <GrayPageClient
       initialTimestamp={initialTimestamp}
-      activeNav="calendar"
+      activeNav="dashboard"
       variant="dashboard"
       initialDashboardTab="pulse"
     />

@@ -5,15 +5,20 @@ Extracted from main.py to handle dashboard-specific logic and data normalization
 from __future__ import annotations
 
 import json
-from datetime import datetime, date
+from datetime import datetime
 from typing import Any, Dict, List, Optional
+
 from backend.core.serializers import normalize_proactivity as _normalize_proactivity_settings
 from backend.core.serializers import row_get as _row_get
 
+
 # Lazy utilities
+
 def _get_utcnow():
     from backend.time_utils import utcnow
+
     return utcnow
+
 
 def _timestamp_ms_to_datetime(ms: Optional[int]) -> Optional[datetime]:
     """Convert a millisecond timestamp to a datetime object."""
@@ -21,14 +26,41 @@ def _timestamp_ms_to_datetime(ms: Optional[int]) -> Optional[datetime]:
         return None
     try:
         return datetime.fromtimestamp(ms / 1000.0)
-    except (OSError, OverflowError, ValueError):
+    except (OSError, OverflowError, ValueError, TypeError):
         return None
+
+
+def _datetime_to_timestamp_ms(value: Any) -> Optional[int]:
+    """Convert DB datetime values to millisecond timestamps for API payloads."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return int(value.timestamp() * 1000)
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        parsed = _timestamp_ms_to_datetime(_safe_int(value))
+        if parsed is not None:
+            return int(parsed.timestamp() * 1000)
+        try:
+            return int(datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp() * 1000)
+        except ValueError:
+            return None
+    return None
+
+
+def _safe_int(value: Any) -> Optional[int]:
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
 
 def serialize_dashboard_pulse_record(record: Any) -> Optional[Dict[str, Any]]:
     """Serialize a dashboard_pulses row to a dictionary."""
     if record is None:
         return None
-    
+
     # Handle dict or Row object
     if not isinstance(record, dict):
         try:
@@ -62,12 +94,17 @@ def serialize_dashboard_pulse_record(record: Any) -> Optional[Dict[str, Any]]:
 
     proactivity_raw = _parse_json_dict("proactivity")
     proactivity_payload = normalize_proactivity(proactivity_raw)
+    timestamp_ms = _datetime_to_timestamp_ms(_row_get(record, "timestamp"))
+    if timestamp_ms is None:
+        timestamp_ms = _datetime_to_timestamp_ms(_row_get(record, "created_at"))
+    if timestamp_ms is None:
+        timestamp_ms = int(_get_utcnow()().timestamp() * 1000)
 
     return {
         "id": _row_get(record, "id"),
         "user_id": _row_get(record, "user_id"),
         "date_key": _row_get(record, "date_key"),
-        "timestamp": _row_get(record, "timestamp"),
+        "timestamp": timestamp_ms,
         "plans": _parse_json("plans"),
         "habits": _parse_json("habits"),
         "proactivity": proactivity_payload,
@@ -75,14 +112,16 @@ def serialize_dashboard_pulse_record(record: Any) -> Optional[Dict[str, Any]]:
         "updated_at": _row_get(record, "updated_at"),
     }
 
+
 async def load_dashboard_pulse_by_date(db: Any, user_id: int, date_key: str) -> Any:
     """Load a dashboard pulse by user and date."""
     from backend.database import dashboard_pulses
-        
+
     query = dashboard_pulses.select().where(
         (dashboard_pulses.c.user_id == user_id) & (dashboard_pulses.c.date_key == date_key)
     )
     return await db.fetch_one(query)
+
 
 async def load_previous_dashboard_pulse(db: Any, user_id: int, current_date_key: str) -> Any:
     """Load the most recent dashboard pulse before the given date."""
@@ -98,45 +137,53 @@ async def load_previous_dashboard_pulse(db: Any, user_id: int, current_date_key:
     )
     return await db.fetch_one(query)
 
+
 def normalize_plan_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Ensure plan items have required fields for JSON storage."""
     normalized = []
     for item in items:
-        normalized.append({
-            "id": _row_get(item, "id"),
-            "label": str(_row_get(item, "label", "")),
-            "completed": bool(_row_get(item, "completed", False)),
-            "deadline": _row_get(item, "deadline"),
-        })
+        normalized.append(
+            {
+                "id": _row_get(item, "id"),
+                "label": str(_row_get(item, "label", "")),
+                "completed": bool(_row_get(item, "completed", False)),
+                "deadline": _row_get(item, "deadline"),
+            }
+        )
     return normalized
+
 
 def normalize_habit_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Ensure habit items have required fields for JSON storage."""
     normalized = []
     for item in items:
-        normalized.append({
-            "id": _row_get(item, "id"),
-            "label": str(_row_get(item, "label", "")),
-            "streak": int(_row_get(item, "streak", 0)),
-        })
+        previous_label = _row_get(item, "previous_label", _row_get(item, "previousLabel", ""))
+        normalized.append(
+            {
+                "id": _row_get(item, "id"),
+                "label": str(_row_get(item, "label", "")),
+                "previous_label": str(previous_label or ""),
+                "completed": bool(_row_get(item, "completed", False)),
+            }
+        )
     return normalized
+
 
 def normalize_proactivity(data: Dict[str, Any]) -> Dict[str, Any]:
     """Ensure proactivity settings have required fields for JSON storage."""
     return _normalize_proactivity_settings(data)
 
+
 def carry_forward_dashboard_entries(
     previous: Dict[str, Any], current_plans: List[Dict[str, Any]], current_habits: List[Dict[str, Any]]
 ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Merge uncompleted items from previous day into current lists."""
-    # Logic to merge entries (carry forward uncompleted)
     merged_plans = list(current_plans)
     existing_plan_ids = {_row_get(p, "id") for p in merged_plans if _row_get(p, "id")}
-    
+
     for prev_plan in (_row_get(previous, "plans") or []):
         if not _row_get(prev_plan, "completed") and _row_get(prev_plan, "id") not in existing_plan_ids:
-            # Carry forward uncompleted plans
             merged_plans.append(prev_plan)
-            
-    # Habits are usually ongoing, so we might just keep the current list or update streaks
+
+    # Habits are usually ongoing, so we keep the current list from the incoming payload.
     return merged_plans, current_habits

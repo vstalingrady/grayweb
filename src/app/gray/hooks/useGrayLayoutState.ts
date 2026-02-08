@@ -36,7 +36,8 @@ export const useGrayLayoutState = ({
   sidebarPreferenceKey,
   defaultSidebarExpandedDesktop,
 }: UseGrayLayoutStateOptions) => {
-  const isCalendarPage = pathname === "/pulse" || pathname.startsWith("/cal");
+  const isCalendarPage =
+    pathname === "/pulse" || pathname.startsWith("/cal") || pathname.startsWith("/gray/dashboard");
 
   const [isMobileViewport, setIsMobileViewport] = useState(() => {
     if (typeof window === "undefined") return false;

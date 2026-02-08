@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Check,
   Plus,
@@ -69,12 +69,12 @@ export function DashboardPulseGrid({
       return [];
     }
 
-    const todayKey = toDateKey(currentDate);
+    const targetKey = toDateKey(selectedDate ?? currentDate);
     return times.map((time) => ({
       label: formatCustomTimeLabel(time),
-      delivered: proactivityDeliveryKeys?.has(`${todayKey}T${time}`) ?? false,
+      delivered: proactivityDeliveryKeys?.has(`${targetKey}T${time}`) ?? false,
     }));
-  }, [currentDate, proactivity, proactivityDeliveryKeys]);
+  }, [currentDate, proactivity, proactivityDeliveryKeys, selectedDate]);
 
   const shouldPromptForProactivityAlerts =
     proactivity?.id === "proactivity-daily" || proactivity?.id === "proactivity-frequent";
@@ -93,11 +93,32 @@ export function DashboardPulseGrid({
     NotificationPermission | "unsupported"
   >(() => resolveNotificationPermission());
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const syncPermission = () => {
+      const next = resolveNotificationPermission();
+      setNotificationPermissionState((previous) => (previous === next ? previous : next));
+    };
+
+    syncPermission();
+    window.addEventListener("focus", syncPermission);
+    document.addEventListener("visibilitychange", syncPermission);
+
+    return () => {
+      window.removeEventListener("focus", syncPermission);
+      document.removeEventListener("visibilitychange", syncPermission);
+    };
+  }, [resolveNotificationPermission]);
+
   const shouldShowNotificationBanner =
     shouldPromptForProactivityAlerts &&
     notificationPermission !== "unsupported" &&
-    notificationPreferences.device &&
-    notificationPermission !== "granted";
+    notificationPreferences.proactivity &&
+    notificationPermission !== "granted" &&
+    (notificationPermission === "denied" || notificationPreferences.device);
 
   const notificationBannerLabel =
     notificationPermission === "denied"
