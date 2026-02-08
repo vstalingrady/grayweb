@@ -100,78 +100,79 @@ def _serialize_notification_row(row: Any) -> Dict[str, Any]:
     return record
 
 
+async def _resolve_user_from_token(raw_token: str) -> Optional[Dict[str, Any]]:
+    from backend.auth import verify_supabase_token
+
+    try:
+        payload = await verify_supabase_token(raw_token)
+        auth_user_id = str(payload.get("sub")).strip() if payload.get("sub") is not None else None
+        email = payload.get("email")
+        normalized_email = email.strip().lower() if isinstance(email, str) else None
+        if not auth_user_id and not normalized_email:
+            return None
+
+        user_by_auth_user_id = None
+        user_by_email = None
+        if auth_user_id:
+            user_by_auth_user_id = await database.fetch_one(
+                users.select().where(users.c.auth_user_id == auth_user_id)
+            )
+        if normalized_email:
+            user_by_email = await database.fetch_one(
+                users.select().where(sqlalchemy.func.lower(users.c.email) == normalized_email)
+            )
+
+        if user_by_auth_user_id and user_by_email and int(user_by_auth_user_id["id"]) != int(user_by_email["id"]):
+            api_logger.warning(
+                "Rejected proactivity token due to sub/email mapping mismatch",
+                extra={
+                    "event_type": "auth_identity_mismatch_proactivity",
+                    "token_sub": auth_user_id,
+                    "email": normalized_email,
+                    "sub_user_id": int(user_by_auth_user_id["id"]),
+                    "email_user_id": int(user_by_email["id"]),
+                },
+            )
+            return None
+
+        if user_by_auth_user_id:
+            return dict(user_by_auth_user_id)
+
+        if user_by_email:
+            existing_auth_user_id = user_by_email["auth_user_id"]
+            if auth_user_id and existing_auth_user_id and str(existing_auth_user_id) != auth_user_id:
+                api_logger.warning(
+                    "Rejected proactivity token due to existing auth binding mismatch",
+                    extra={
+                        "event_type": "auth_identity_rebind_rejected_proactivity",
+                        "email": normalized_email,
+                        "token_sub": auth_user_id,
+                        "existing_auth_user_id": str(existing_auth_user_id),
+                    },
+                )
+                return None
+            if auth_user_id and not existing_auth_user_id:
+                await database.execute(
+                    users.update()
+                    .where(users.c.id == user_by_email["id"])
+                    .values(auth_user_id=auth_user_id, updated_at=utcnow())
+                )
+                refreshed = await database.fetch_one(users.select().where(users.c.id == user_by_email["id"]))
+                return dict(refreshed) if refreshed else None
+            return dict(user_by_email)
+        return None
+    except Exception as exc:
+        api_logger.debug(
+            "Failed to resolve user from token",
+            extra={"event_type": "auth_token_invalid", "error": str(exc)},
+        )
+        return None
+
+
 async def get_user_from_bearer_token(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
 ) -> Optional[Dict[str, Any]]:
     """Resolve authenticated user from Authorization header bearer token."""
-    async def _resolve_user_from_token(raw_token: str) -> Optional[Dict[str, Any]]:
-        from backend.auth import verify_supabase_token
-
-        try:
-            payload = await verify_supabase_token(raw_token)
-            auth_user_id = str(payload.get("sub")).strip() if payload.get("sub") is not None else None
-            email = payload.get("email")
-            normalized_email = email.strip().lower() if isinstance(email, str) else None
-            if not auth_user_id and not normalized_email:
-                return None
-
-            user_by_auth_user_id = None
-            user_by_email = None
-            if auth_user_id:
-                user_by_auth_user_id = await database.fetch_one(
-                    users.select().where(users.c.auth_user_id == auth_user_id)
-                )
-            if normalized_email:
-                user_by_email = await database.fetch_one(
-                    users.select().where(sqlalchemy.func.lower(users.c.email) == normalized_email)
-                )
-
-            if user_by_auth_user_id and user_by_email and int(user_by_auth_user_id["id"]) != int(user_by_email["id"]):
-                api_logger.warning(
-                    "Rejected proactivity token due to sub/email mapping mismatch",
-                    extra={
-                        "event_type": "auth_identity_mismatch_proactivity",
-                        "token_sub": auth_user_id,
-                        "email": normalized_email,
-                        "sub_user_id": int(user_by_auth_user_id["id"]),
-                        "email_user_id": int(user_by_email["id"]),
-                    },
-                )
-                return None
-
-            if user_by_auth_user_id:
-                return dict(user_by_auth_user_id)
-
-            if user_by_email:
-                existing_auth_user_id = user_by_email["auth_user_id"]
-                if auth_user_id and existing_auth_user_id and str(existing_auth_user_id) != auth_user_id:
-                    api_logger.warning(
-                        "Rejected proactivity token due to existing auth binding mismatch",
-                        extra={
-                            "event_type": "auth_identity_rebind_rejected_proactivity",
-                            "email": normalized_email,
-                            "token_sub": auth_user_id,
-                            "existing_auth_user_id": str(existing_auth_user_id),
-                        },
-                    )
-                    return None
-                if auth_user_id and not existing_auth_user_id:
-                    await database.execute(
-                        users.update()
-                        .where(users.c.id == user_by_email["id"])
-                        .values(auth_user_id=auth_user_id, updated_at=utcnow())
-                    )
-                    refreshed = await database.fetch_one(users.select().where(users.c.id == user_by_email["id"]))
-                    return dict(refreshed) if refreshed else None
-                return dict(user_by_email)
-            return None
-        except Exception as exc:
-            api_logger.debug(
-                "Failed to resolve user from token",
-                extra={"event_type": "auth_token_invalid", "error": str(exc)},
-            )
-            return None
-
     if credentials and credentials.credentials:
         resolved_user = await _resolve_user_from_token(credentials.credentials)
         if resolved_user:
@@ -253,10 +254,16 @@ async def stream_user_proactivity(
     proactivity_engine, proactivity_realtime_broker = _get_proactivity_services()
 
     if token is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Query-token auth is not supported for this endpoint. Use Authorization: Bearer <token>.",
-        )
+        token_user = await _resolve_user_from_token(token)
+        if not token_user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+        if current_user is not None and int(current_user["id"]) != int(token_user["id"]):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Conflicting authentication credentials.",
+            )
+        current_user = token_user
+
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
     require_same_user(user_id, current_user)
