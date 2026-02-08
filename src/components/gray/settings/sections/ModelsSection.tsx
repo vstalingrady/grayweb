@@ -38,8 +38,8 @@ export function ModelsSection({
   const visibleIds = visibleModelIds ?? ALL_PIONEER_MODEL_IDS;
   const renderModelLabel = (label: string, isFast?: boolean) => (
     <span className={styles.settingsFastLabel}>
-      {isFast ? <Zap size={13} className={styles.settingsFastIcon} aria-hidden="true" /> : null}
       <span>{label}</span>
+      {isFast ? <Zap size={13} className={styles.settingsFastIcon} aria-hidden="true" /> : null}
     </span>
   );
 

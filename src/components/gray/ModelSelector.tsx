@@ -160,8 +160,8 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
   const renderModelLabel = useCallback(
     (label: string, isFast = false) => (
       <span className={styles.modelLabelWithIcon}>
-        {isFast ? <Zap size={13} className={styles.modelFastIcon} aria-hidden="true" /> : null}
         <span>{stripBrandPrefix(label)}</span>
+        {isFast ? <Zap size={13} className={styles.modelFastIcon} aria-hidden="true" /> : null}
       </span>
     ),
     []
