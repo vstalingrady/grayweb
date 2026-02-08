@@ -108,6 +108,7 @@ export const PIONEER_GROUPS: ModelGroup[] = [
     iconPath: "/logos/zaiwhite.svg",
     models: [
       { id: "z-ai/glm-4.7", label: "GLM 4.7", cost: "$$", tierRequired: "pathfinder" },
+      { id: "z-ai/glm-4.7-flash", label: "GLM 4.7 Flash", cost: "$", tierRequired: "pathfinder" },
       { id: "z-ai/glm-4.7:fast", label: "GLM 4.7", isFast: true, cost: "$$", tierRequired: "pathfinder" },
     ],
   },
