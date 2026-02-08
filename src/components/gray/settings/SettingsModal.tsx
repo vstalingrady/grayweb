@@ -584,6 +584,7 @@ export function SettingsModal({
       className={styles.settingsOverlay}
       role="dialog"
       aria-modal="true"
+      aria-label={t("Settings")}
       onPointerDown={handleOverlayPointerDown}
       onMouseDown={handleOverlayMouseDown}
     >
@@ -592,7 +593,12 @@ export function SettingsModal({
         {isMobile && mobileView === "root" && (
           <div className={styles.mobileSettingsRoot}>
             <header className={styles.mobileSettingsHeader}>
-              <button className={styles.mobileSettingsBack} onClick={onClose}>
+              <button
+                type="button"
+                className={styles.mobileSettingsBack}
+                onClick={onClose}
+                aria-label={t("Back")}
+              >
                 <ChevronLeft size={20} />
               </button>
               <h2 className={styles.mobileSettingsTitle}>{t("Settings")}</h2>
@@ -751,8 +757,10 @@ export function SettingsModal({
           {isMobile && mobileView === "detail" && (
             <div className={styles.mobileSettingsHeader} style={{ marginBottom: 0 }}>
               <button
+                type="button"
                 className={styles.mobileSettingsBack}
                 onClick={() => setMobileView("root")}
+                aria-label={t("Back")}
               >
                 <ChevronLeft size={20} />
               </button>

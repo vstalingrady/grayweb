@@ -19,9 +19,7 @@ create index if not exists idx_conversation_messages_conversation_created_at
 create index if not exists idx_conversation_messages_user_id
     on public.conversation_messages (user_id);
 
--- Enable row level security and mirror the conversations policies so that the
--- backend can access messages using the anon key while retaining a clear
--- separation between service_role and anon access.
+-- Enable row level security and keep backend access scoped to service_role.
 
 alter table if exists public.conversation_messages
     enable row level security;
@@ -58,12 +56,6 @@ create policy "conversation_messages_service_role_full_access"
     using (true)
     with check (true);
 
-create policy "conversation_messages_anon_full_access"
-    on public.conversation_messages
-    for all
-    to anon
-    using (true)
-    with check (true);
 
 -- One-time migration: backfill messages from the legacy conversations.history
 -- jsonb array into the new conversation_messages table. This only inserts
@@ -89,7 +81,8 @@ select
     msg -> 'grounding_metadata' as grounding_metadata,
     coalesce(
         nullif(msg ->> 'created_at', '')::timestamptz,
-        c.updated_at
+        c.created_at,
+        'epoch'::timestamptz
     ) as created_at
 from public.conversations c
 cross join lateral jsonb_array_elements(c.history) as msg
@@ -104,5 +97,15 @@ where c.history is not null
       select 1
       from public.conversation_messages existing
       where existing.conversation_id = c.id
+        and existing.role = case
+            when msg ->> 'role' = 'assistant' then 'model'
+            else msg ->> 'role'
+        end
+        and existing.text = coalesce(msg ->> 'text', '')
+        and coalesce(existing.created_at, 'epoch'::timestamptz) = coalesce(
+            nullif(msg ->> 'created_at', '')::timestamptz,
+            c.created_at,
+            'epoch'::timestamptz
+        )
+        and existing.grounding_metadata is not distinct from msg -> 'grounding_metadata'
   );
-

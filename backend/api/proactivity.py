@@ -71,6 +71,14 @@ def _infer_proactivity_id(cadence: Optional[str]) -> Optional[str]:
     normalized = (cadence or "").strip().lower()
     return PROACTIVITY_ID_BY_CADENCE.get(normalized)
 
+
+def _validate_task_counts_non_negative(tasks_completed: int, total_tasks: int) -> None:
+    if tasks_completed < 0 or total_tasks < 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="tasks_completed and total_tasks must be non-negative.",
+        )
+
 def _serialize_notification_row(row: Any) -> Dict[str, Any]:
     record = dict(row)
     metadata = record.get("metadata")
@@ -92,38 +100,83 @@ def _serialize_notification_row(row: Any) -> Dict[str, Any]:
     return record
 
 
-async def get_user_from_query_token(
-    token: Optional[str] = Query(None),
+async def get_user_from_bearer_token(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
 ) -> Optional[Dict[str, Any]]:
-    """Get authenticated user from query token or Authorization header (for SSE)."""
-    if token:
+    """Resolve authenticated user from Authorization header bearer token."""
+    async def _resolve_user_from_token(raw_token: str) -> Optional[Dict[str, Any]]:
         from backend.auth import verify_supabase_token
-        
+
         try:
-            payload = await verify_supabase_token(token)
+            payload = await verify_supabase_token(raw_token)
+            auth_user_id = str(payload.get("sub")).strip() if payload.get("sub") is not None else None
             email = payload.get("email")
             normalized_email = email.strip().lower() if isinstance(email, str) else None
-            if not normalized_email:
+            if not auth_user_id and not normalized_email:
                 return None
 
-            user = await database.fetch_one(
-                users.select().where(sqlalchemy.func.lower(users.c.email) == normalized_email)
-            )
-            return dict(user) if user else None
+            user_by_auth_user_id = None
+            user_by_email = None
+            if auth_user_id:
+                user_by_auth_user_id = await database.fetch_one(
+                    users.select().where(users.c.auth_user_id == auth_user_id)
+                )
+            if normalized_email:
+                user_by_email = await database.fetch_one(
+                    users.select().where(sqlalchemy.func.lower(users.c.email) == normalized_email)
+                )
+
+            if user_by_auth_user_id and user_by_email and int(user_by_auth_user_id["id"]) != int(user_by_email["id"]):
+                api_logger.warning(
+                    "Rejected proactivity token due to sub/email mapping mismatch",
+                    extra={
+                        "event_type": "auth_identity_mismatch_proactivity",
+                        "token_sub": auth_user_id,
+                        "email": normalized_email,
+                        "sub_user_id": int(user_by_auth_user_id["id"]),
+                        "email_user_id": int(user_by_email["id"]),
+                    },
+                )
+                return None
+
+            if user_by_auth_user_id:
+                return dict(user_by_auth_user_id)
+
+            if user_by_email:
+                existing_auth_user_id = user_by_email["auth_user_id"]
+                if auth_user_id and existing_auth_user_id and str(existing_auth_user_id) != auth_user_id:
+                    api_logger.warning(
+                        "Rejected proactivity token due to existing auth binding mismatch",
+                        extra={
+                            "event_type": "auth_identity_rebind_rejected_proactivity",
+                            "email": normalized_email,
+                            "token_sub": auth_user_id,
+                            "existing_auth_user_id": str(existing_auth_user_id),
+                        },
+                    )
+                    return None
+                if auth_user_id and not existing_auth_user_id:
+                    await database.execute(
+                        users.update()
+                        .where(users.c.id == user_by_email["id"])
+                        .values(auth_user_id=auth_user_id, updated_at=utcnow())
+                    )
+                    refreshed = await database.fetch_one(users.select().where(users.c.id == user_by_email["id"]))
+                    return dict(refreshed) if refreshed else None
+                return dict(user_by_email)
+            return None
         except Exception as exc:
             api_logger.debug(
-                "Failed to resolve user from query token",
+                "Failed to resolve user from token",
                 extra={"event_type": "auth_token_invalid", "error": str(exc)},
             )
             return None
-    
-    if credentials:
-        try:
-            return await get_current_user(credentials)
-        except HTTPException:
-            return None
-    
+
+    if credentials and credentials.credentials:
+        resolved_user = await _resolve_user_from_token(credentials.credentials)
+        if resolved_user:
+            return resolved_user
+
     return None
 
 
@@ -165,6 +218,7 @@ async def create_proactivity_log(
 ):
     """Create a new proactivity log entry."""
     require_same_user(user_id, current_user)
+    _validate_task_counts_non_negative(proactivity.tasks_completed, proactivity.total_tasks)
     score = min(100, (proactivity.tasks_completed / max(proactivity.total_tasks, 1)) * 100) if proactivity.total_tasks > 0 else 0
     query = proactivity_logs.insert().values(
         user_id=user_id,
@@ -192,13 +246,20 @@ async def create_proactivity_log(
 @router.get("/users/{user_id}/proactivity/stream")
 async def stream_user_proactivity(
     user_id: int,
-    current_user: Optional[Dict[str, Any]] = Depends(get_user_from_query_token),
+    token: Optional[str] = Query(None),
+    current_user: Optional[Dict[str, Any]] = Depends(get_user_from_bearer_token),
 ):
     """SSE endpoint for real-time proactivity updates."""
     proactivity_engine, proactivity_realtime_broker = _get_proactivity_services()
 
+    if token is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Query-token auth is not supported for this endpoint. Use Authorization: Bearer <token>.",
+        )
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+    require_same_user(user_id, current_user)
     user_id = int(current_user["id"])
     if not proactivity_engine:
         raise HTTPException(status_code=503, detail="Proactivity engine not initialized")
@@ -300,16 +361,25 @@ async def upsert_proactivity_push_subscription(
         raise HTTPException(status_code=400, detail="Invalid subscription payload")
 
     query_existing = proactivity_push_subscriptions.select().where(
-        (proactivity_push_subscriptions.c.user_id == user_id)
-        & (proactivity_push_subscriptions.c.endpoint == endpoint)
+        proactivity_push_subscriptions.c.endpoint == endpoint
     )
     existing = await db.fetch_one(query_existing)
 
     if existing:
+        existing_user_id = int(existing["user_id"])
+        if existing_user_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Subscription endpoint is already registered to another user",
+            )
         update_query = (
             proactivity_push_subscriptions.update()
             .where(proactivity_push_subscriptions.c.id == existing["id"])
-            .values(p256dh=p256dh, auth=auth_key, updated_at=utcnow())
+            .values(
+                p256dh=p256dh,
+                auth=auth_key,
+                updated_at=utcnow(),
+            )
         )
         await db.execute(update_query)
     else:
@@ -335,44 +405,51 @@ async def daily_proactivity_checkin(
 ):
     """Daily proactivity check-in - creates or updates today's log."""
     require_same_user(user_id, current_user)
-    from sqlalchemy import func
+    _validate_task_counts_non_negative(checkin.tasks_completed, checkin.total_tasks)
+    now = utcnow()
+    activity_date = datetime.combine(now.date(), datetime.min.time())
+    score = min(100, (checkin.tasks_completed / max(checkin.total_tasks, 1)) * 100) if checkin.total_tasks > 0 else 0
 
-    today = utcnow().date()
-    
-    existing_log_query = proactivity_logs.select().where(
-        (proactivity_logs.c.user_id == user_id) &
-        (func.date(proactivity_logs.c.activity_date) == today)
-    )
-    existing_log = await db.fetch_one(existing_log_query)
-
-    if existing_log:
-        score = min(100, (checkin.tasks_completed / max(checkin.total_tasks, 1)) * 100) if checkin.total_tasks > 0 else 0
+    try:
         await db.execute(
-            proactivity_logs.update()
-            .where(proactivity_logs.c.id == existing_log.id)
-            .values(
-                tasks_completed=checkin.tasks_completed,
-                total_tasks=checkin.total_tasks,
-                score=score,
-                notes=checkin.notes
-            )
-        )
-        result = await db.fetch_one(proactivity_logs.select().where(proactivity_logs.c.id == existing_log.id))
-    else:
-        score = min(100, (checkin.tasks_completed / max(checkin.total_tasks, 1)) * 100) if checkin.total_tasks > 0 else 0
-        log_id = await db.execute(
             proactivity_logs.insert().values(
                 user_id=user_id,
-                activity_date=utcnow(),
+                activity_date=activity_date,
                 tasks_completed=checkin.tasks_completed,
                 total_tasks=checkin.total_tasks,
                 score=score,
                 notes=checkin.notes,
-                created_at=utcnow(),
-                updated_at=utcnow()
+                created_at=now,
+                updated_at=now,
             )
         )
-        result = await db.fetch_one(proactivity_logs.select().where(proactivity_logs.c.id == log_id))
+    except (sqlite3.IntegrityError, sqlalchemy.exc.IntegrityError):
+        await db.execute(
+            proactivity_logs.update()
+            .where(
+                (proactivity_logs.c.user_id == user_id)
+                & (proactivity_logs.c.activity_date == activity_date)
+            )
+            .values(
+                tasks_completed=checkin.tasks_completed,
+                total_tasks=checkin.total_tasks,
+                score=score,
+                notes=checkin.notes,
+                updated_at=now,
+            )
+        )
+
+    result = await db.fetch_one(
+        proactivity_logs.select().where(
+            (proactivity_logs.c.user_id == user_id)
+            & (proactivity_logs.c.activity_date == activity_date)
+        )
+    )
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to persist daily check-in.",
+        )
 
     return {
         "id": result.id,
@@ -583,9 +660,18 @@ async def _upsert_push_subscription(
 
     now = utcnow()
     if existing:
+        existing_user_id = int(existing["user_id"])
+        if existing_user_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Subscription endpoint is already registered to another user",
+            )
         await db.execute(
             proactivity_push_subscriptions.update()
-            .where(proactivity_push_subscriptions.c.id == existing.id)
+            .where(
+                (proactivity_push_subscriptions.c.id == existing["id"])
+                & (proactivity_push_subscriptions.c.user_id == user_id)
+            )
             .values(
                 p256dh=subscription.p256dh,
                 auth=subscription.auth,
@@ -611,11 +697,26 @@ async def _upsert_push_subscription(
         if "unique" not in message and "duplicate" not in message:
             raise
 
+        conflict_row = await db.fetch_one(
+            proactivity_push_subscriptions.select().where(
+                proactivity_push_subscriptions.c.endpoint == subscription.endpoint
+            )
+        )
+        if not conflict_row:
+            raise
+        conflict_user_id = int(conflict_row["user_id"])
+        if conflict_user_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Subscription endpoint is already registered to another user",
+            )
         await db.execute(
             proactivity_push_subscriptions.update()
-            .where(proactivity_push_subscriptions.c.endpoint == subscription.endpoint)
+            .where(
+                (proactivity_push_subscriptions.c.id == conflict_row["id"])
+                & (proactivity_push_subscriptions.c.user_id == user_id)
+            )
             .values(
-                user_id=user_id,
                 p256dh=subscription.p256dh,
                 auth=subscription.auth,
                 updated_at=now,
@@ -629,10 +730,16 @@ async def subscribe_push_notifications(
     request: Request,
     user_id: int,
     subscription: PushSubscriptionCreate,
+    token: Optional[str] = Query(None),
     db: databases.Database = Depends(get_database),
-    current_user: Optional[Dict[str, Any]] = Depends(get_user_from_query_token),
+    current_user: Optional[Dict[str, Any]] = Depends(get_user_from_bearer_token),
 ):
     """Register a Web Push subscription for the user."""
+    if token is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Query-token auth is not supported for this endpoint. Use Authorization: Bearer <token>.",
+        )
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
     require_same_user(user_id, current_user)

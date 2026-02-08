@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import Image from "next/image";
 
 type ImageLightboxProps = {
@@ -14,13 +14,48 @@ type ImageLightboxProps = {
 
 export default function ImageLightbox({ src, alt, width, height, className, caption }: ImageLightboxProps) {
   const [open, setOpen] = useState(false);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   const openModal = useCallback(() => setOpen(true), []);
   const closeModal = useCallback(() => setOpen(false), []);
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const rafId = window.requestAnimationFrame(() => {
+      closeButtonRef.current?.focus();
+    });
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeModal();
+        return;
+      }
+      if (event.key === "Tab") {
+        event.preventDefault();
+        closeButtonRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.removeEventListener("keydown", handleKeyDown);
+      previousFocusRef.current?.focus();
+    };
+  }, [open, closeModal]);
+
   return (
     <>
-      <button type="button" onClick={openModal} className="group block w-full focus:outline-none" aria-label={`Open preview: ${alt}`}>
+      <button
+        type="button"
+        onClick={openModal}
+        className="group block w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        aria-label={`Open preview: ${alt}`}
+      >
         <Image src={src} alt={alt} width={width} height={height} className={className ?? "h-auto w-full object-cover"} />
       </button>
       {caption ? (
@@ -44,6 +79,7 @@ export default function ImageLightbox({ src, alt, width, height, className, capt
               priority
             />
             <button
+              ref={closeButtonRef}
               type="button"
               onClick={closeModal}
               aria-label="Close preview"
@@ -57,4 +93,3 @@ export default function ImageLightbox({ src, alt, width, height, className, capt
     </>
   );
 }
-

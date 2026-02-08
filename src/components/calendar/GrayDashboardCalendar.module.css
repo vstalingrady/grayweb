@@ -139,6 +139,7 @@
   gap: 18px;
   min-height: 0;
   transition: opacity 0.2s ease;
+  visibility: visible;
   padding-left: 12px;
   flex-shrink: 0;
   /* Hide scrollbar */
@@ -153,6 +154,7 @@
 .calendarSidebarContent[data-visible="false"] {
   opacity: 0;
   pointer-events: none;
+  visibility: hidden;
 }
 
 .miniMonth {
@@ -820,11 +822,60 @@
   padding: 0 8px 0 10px;
 }
 
+.calendarMonthControls {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
 .calendarInlineViewSelect {
   display: inline-flex;
   align-items: center;
   flex: 0 1 auto;
   min-width: 0;
+}
+
+.calendarMobileViewToggle {
+  display: none;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(12, 12, 12, 0.74);
+}
+
+.calendarMobileViewToggleButton {
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(230, 230, 230, 0.68);
+  font-size: 0.56rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  line-height: 1;
+  min-height: 24px;
+  padding: 5px 9px;
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease;
+}
+
+.calendarMobileViewToggleButton[data-active="true"] {
+  background: rgba(245, 245, 245, 0.95);
+  color: rgba(12, 12, 12, 0.92);
+}
+
+.calendarMobileViewToggleButton:hover:not([data-active="true"]),
+.calendarMobileViewToggleButton:focus-visible:not([data-active="true"]) {
+  color: rgba(245, 245, 245, 0.9);
+}
+
+.calendarMobileViewToggleButton:focus-visible {
+  outline: none;
 }
 
 .calendarMonthNavArrows {
@@ -1132,6 +1183,23 @@
   box-sizing: border-box;
 }
 
+.calendarColumnSurfaceButton {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.calendarColumnSurfaceButton:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
 .calendarColumnScroller::-webkit-scrollbar-button,
 .calendarBodyScroll::-webkit-scrollbar-button {
   display: none;
@@ -1161,6 +1229,27 @@
   z-index: 2;
   width: 100%;
   box-sizing: border-box;
+}
+
+.eventCardAction {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.eventCardAction:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline-offset: -2px;
+  border-radius: 4px;
 }
 
 .eventCardText {
@@ -1279,6 +1368,25 @@
   display: none;
 }
 
+.eventCardTaskToggle {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 11;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 999px;
+  padding: 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.22);
+  color: inherit;
+  cursor: pointer;
+}
+
 /* The horizontal line */
 .eventCard[data-entry-type="reminder"]::before {
   content: "";
@@ -1365,7 +1473,7 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  z-index: 1000;
+  z-index: 10020;
 }
 
 .composerOverlayAnchored {
@@ -2204,6 +2312,10 @@
     display: none;
   }
 
+  .calendarMobileViewToggle {
+    display: inline-flex;
+  }
+
   .calendarSurfaceHeaderRight .calendarViewToggle {
     display: none;
   }
@@ -2233,6 +2345,10 @@
   .calendarMonthTitleGroup {
     grid-column: 1 / -1;
     justify-content: space-between;
+  }
+
+  .calendarMonthControls {
+    gap: 6px;
   }
 
   .calendarMonthNavArrows {

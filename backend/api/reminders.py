@@ -20,6 +20,7 @@ from backend.compat_imports import row_get as _row_get
 from backend.time_utils import utcnow
 
 router = APIRouter(tags=["reminders"])
+ALLOWED_REMINDER_STATUSES = {"pending", "delivered", "archived"}
 
 
 def _serialize_reminder_row(row: Any) -> Dict[str, Any]:
@@ -158,7 +159,17 @@ async def update_user_reminder(
     if payload.remind_at is not None:
         update_values["remind_at"] = payload.remind_at
     if payload.status is not None:
-        update_values["status"] = payload.status
+        normalized_status = str(payload.status).strip().lower()
+        if normalized_status not in ALLOWED_REMINDER_STATUSES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid reminder status: {payload.status}",
+            )
+        update_values["status"] = normalized_status
+        if normalized_status == "delivered":
+            update_values["delivered_at"] = utcnow()
+        elif normalized_status == "pending":
+            update_values["delivered_at"] = None
     if payload.delivery_mode is not None:
         update_values["delivery_mode"] = payload.delivery_mode
     if payload.metadata is not None:

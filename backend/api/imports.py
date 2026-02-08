@@ -35,6 +35,7 @@ CHATGPT_IMPORT_COMPRESS = (os.getenv("CHATGPT_IMPORT_COMPRESS") or "true").strip
 }
 CHATGPT_IMPORT_COMPRESS_MODEL = os.getenv("CHATGPT_IMPORT_COMPRESS_MODEL", "x-ai/grok-4.1-fast")
 CHATGPT_IMPORT_COMPRESS_MAX_CHARS = _int_env("CHATGPT_IMPORT_COMPRESS_MAX_CHARS", 2000)
+CHATGPT_IMPORT_MAX_UPLOAD_BYTES = _int_env("CHATGPT_IMPORT_MAX_UPLOAD_BYTES", 26_214_400)
 
 _openrouter_service = None
 
@@ -57,6 +58,24 @@ def _require_chatgpt_import_access(current_user) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="ChatGPT import requires a Voyager or Pioneer plan.",
         )
+
+
+def _safe_upload_size(file: UploadFile) -> int | None:
+    size_attr = getattr(file, "size", None)
+    if isinstance(size_attr, int) and size_attr >= 0:
+        return size_attr
+    try:
+        stream = file.file
+        stream.seek(0, os.SEEK_END)
+        size = stream.tell()
+        stream.seek(0)
+        return size
+    except Exception:
+        try:
+            file.file.seek(0)
+        except Exception:
+            pass
+        return None
 
 
 async def _compress_summary(summary_text: str) -> str:
@@ -100,6 +119,12 @@ async def import_chatgpt_memory(
     _require_chatgpt_import_access(current_user)
     if not file.filename or not file.filename.lower().endswith(".zip"):
         raise HTTPException(status_code=400, detail="Please upload a .zip ChatGPT export.")
+    upload_size = _safe_upload_size(file)
+    if upload_size is not None and upload_size > CHATGPT_IMPORT_MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Upload too large. Max size is {CHATGPT_IMPORT_MAX_UPLOAD_BYTES} bytes.",
+        )
 
     try:
         summary = extract_chatgpt_memory_from_zip(file.file)

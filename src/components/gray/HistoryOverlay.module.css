@@ -36,6 +36,29 @@
   gap: 12px;
 }
 
+.closeButton {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.88);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.closeButton:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.closeButton:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.85);
+  outline-offset: 2px;
+}
+
 .searchIcon {
   color: rgba(255, 255, 255, 0.3);
 }
@@ -49,6 +72,12 @@
   outline: none;
   font-family: inherit;
   padding: 0;
+}
+
+.searchInput:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.55);
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 
 .searchInput::placeholder {
@@ -101,15 +130,12 @@
   border-radius: 8px;
   cursor: pointer;
   background: transparent;
-  border: none;
   width: 100%;
-  text-align: left;
   transition: background 0.15s ease;
-  color: inherit;
 }
 
 .item:hover,
-.item:focus-visible,
+.item:focus-within,
 .item[data-active="true"] {
   background: linear-gradient(
     to left,
@@ -117,6 +143,25 @@
     rgba(255, 255, 255, 0.05) 55%,
     rgba(255, 255, 255, 0) 100%
   );
+  outline: none;
+}
+
+.itemMain {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.itemMain:focus-visible {
   outline: none;
 }
 
@@ -156,6 +201,11 @@
 }
 
 .item:hover .itemActions {
+  opacity: 1;
+}
+
+.item:focus-within .itemActions,
+.item[data-active="true"] .itemActions {
   opacity: 1;
 }
 
@@ -220,5 +270,17 @@
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .itemActions {
+    opacity: 1;
+  }
+
+  .actionButton {
+    width: 32px;
+    height: 32px;
+    padding: 7px;
   }
 }

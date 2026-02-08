@@ -12,8 +12,15 @@ import databases
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from backend.auth import get_current_user, require_same_user
+from backend.api.chat_models import (
+    ConversationCreateRequest,
+    ConversationHistoryPayload,
+    ConversationUpdateRequest,
+    MessageCreateRequest,
+)
 from backend.database import get_database
 from backend.logging_config import create_logger
+from backend.models import ChatSession, ChatSessionCreate
 
 from backend.core.rate_limit import limiter
 
@@ -108,7 +115,7 @@ def _get_conversation_helpers():
 async def create_conversation_message(
     request: Request,
     conversation_id: str,
-    payload: Any,  # Will be MessageCreateRequest
+    payload: MessageCreateRequest,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Manually append a message to a conversation history."""
@@ -144,21 +151,36 @@ async def create_conversation_message(
         await _require_conversation_owner(conversation_id, current_user)
         if payload.user_id is not None:
             require_same_user(payload.user_id, current_user)
+
+        raw_role = payload.role.strip().lower() if isinstance(payload.role, str) else ""
+        if raw_role not in {"user", "model", "assistant"}:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="role must be one of: user, model, assistant.",
+            )
+        normalized_role = "model" if raw_role == "assistant" else raw_role
         payload_dict = {
-            "role": payload.role,
-            "text": payload.text
+            "role": normalized_role,
+            "text": payload.text,
         }
-        await save_conversation_message(conversation_id, payload_dict, user_id=payload.user_id)
-        
+        message_id = await save_conversation_message(conversation_id, payload_dict, user_id=payload.user_id)
+        if message_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to persist conversation message.",
+            )
+
         # Invalidate cache since conversation changed
         try:
             await invalidate_conversation_cache(conversation_id)
         except Exception as e:
             api_logger.debug(f"Cache invalidation failed for {conversation_id}: {e}")
-        
-        return {"status": "success"}
+
+        return {"status": "success", "message_id": message_id}
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error saving message: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error saving message.")
 
 
 @router.get("/api/conversation/{conversation_id}")
@@ -235,14 +257,14 @@ async def get_conversation(
 
         return history
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching conversation: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error fetching conversation.")
 
 
 @router.post("/api/conversation")
 @limiter.limit("30/minute")
 async def create_conversation(
     request: Request,
-    payload: Any,  # Will be ConversationCreateRequest
+    payload: ConversationCreateRequest,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Create a new conversation"""
@@ -289,7 +311,7 @@ async def create_conversation(
     except HTTPException:
         raise
     except Exception as error:
-        raise HTTPException(status_code=500, detail=f"Error creating conversation: {str(error)}")
+        raise HTTPException(status_code=500, detail="Error creating conversation.")
 
 
 @router.delete("/api/conversation/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -349,7 +371,7 @@ async def delete_conversation(
                 _handle_conversation_store_error("Error deleting conversation", error)
         invalidate_conversation_cache(conversation_id)
     except Exception as error:
-        raise HTTPException(status_code=500, detail=f"Error deleting conversation: {str(error)}")
+        raise HTTPException(status_code=500, detail="Error deleting conversation.")
 
 
 @router.delete("/users/{user_id}/conversations", status_code=status.HTTP_204_NO_CONTENT)
@@ -421,12 +443,12 @@ async def delete_all_conversations(
     except HTTPException:
         raise
     except Exception as error:
-        raise HTTPException(status_code=500, detail=f"Error deleting all conversations: {str(error)}")
+        raise HTTPException(status_code=500, detail="Error deleting all conversations.")
 
 
 async def _overwrite_conversation_history_logic(
     conversation_id: str,
-    payload: Any,  # ConversationHistoryPayload
+    payload: ConversationHistoryPayload,
     current_user: Dict[str, Any],
     *,
     allow_truncate: bool = False,
@@ -557,7 +579,7 @@ async def _overwrite_conversation_history_logic(
 async def overwrite_conversation_history(
     request: Request,
     conversation_id: str,
-    payload: Any,  # ConversationHistoryPayload
+    payload: ConversationHistoryPayload,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Replace the full message history for a conversation."""
@@ -573,7 +595,7 @@ async def overwrite_conversation_history(
 async def update_conversation(
     request: Request,
     conversation_id: str,
-    payload: Any,  # ConversationUpdateRequest
+    payload: ConversationUpdateRequest,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Update conversation metadata such as its title."""
@@ -605,6 +627,7 @@ async def update_conversation(
         ChatSessionCreate,
     ) = _get_conversation_helpers()
     
+    await _require_conversation_owner(conversation_id, current_user)
     return await apply_conversation_update(conversation_id, payload, current_user)
 
 
@@ -613,7 +636,7 @@ async def update_conversation(
 async def update_conversation_metadata(
     request: Request,
     conversation_id: str,
-    payload: Any,  # ConversationUpdateRequest
+    payload: ConversationUpdateRequest,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Update metadata via POST for clients that cannot rely on PATCH."""
@@ -645,6 +668,7 @@ async def update_conversation_metadata(
         ChatSessionCreate,
     ) = _get_conversation_helpers()
     
+    await _require_conversation_owner(conversation_id, current_user)
     return await apply_conversation_update(conversation_id, payload, current_user)
 
 
@@ -745,7 +769,7 @@ async def get_conversation_usage(
             "suggested_models": suggested_models,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching conversation usage: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error fetching conversation usage.")
 
 
 @router.post("/api/conversation/{conversation_id}/compress")
@@ -858,13 +882,13 @@ Summary:"""
         }
     except Exception as e:
         api_logger.error(f"Error compressing conversation: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error compressing conversation: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error compressing conversation.")
 
 
 @router.post("/users/{user_id}/chat-sessions", status_code=status.HTTP_201_CREATED)
 async def create_chat_session(
     user_id: int,
-    session: Any,  # ChatSessionCreate
+    session: ChatSessionCreate,
     db: databases.Database = Depends(get_database),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):

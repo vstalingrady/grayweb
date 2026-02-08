@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo, useRef } from "react";
-import { Search, Plus, ExternalLink, Pencil, Trash2, CornerDownLeft } from "lucide-react";
+import { Search, Plus, ExternalLink, Pencil, Trash2, CornerDownLeft, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import styles from "./HistoryOverlay.module.css";
 import { type SidebarHistorySection, type SidebarHistoryEntry } from "./types";
@@ -28,6 +28,15 @@ type FlatEntry = {
     meta?: string;
 };
 
+const FOCUSABLE_SELECTOR = [
+    "button:not([disabled])",
+    "[href]",
+    "input:not([disabled])",
+    "select:not([disabled])",
+    "textarea:not([disabled])",
+    "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
 export function HistoryOverlay({
     isOpen,
     onClose,
@@ -41,18 +50,24 @@ export function HistoryOverlay({
     const { t } = useI18n();
     const [query, setQuery] = useState("");
     const inputRef = useRef<HTMLInputElement>(null);
+    const overlayRef = useRef<HTMLDivElement>(null);
+    const previousFocusRef = useRef<HTMLElement | null>(null);
     const [activeIndex, setActiveIndex] = useState(0);
 
     // Reset query when opening
     useEffect(() => {
         if (isOpen) {
+            previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
             void Promise.resolve().then(() => {
                 setQuery("");
                 setActiveIndex(0);
             });
             // Small timeout to ensure DOM is ready for focus
             const focusTimer = setTimeout(() => inputRef.current?.focus(), 50);
-            return () => clearTimeout(focusTimer);
+            return () => {
+                clearTimeout(focusTimer);
+                previousFocusRef.current?.focus();
+            };
         }
     }, [isOpen]);
 
@@ -129,6 +144,23 @@ export function HistoryOverlay({
         if (!isOpen) return;
 
         const handleKeyDown = (e: KeyboardEvent) => {
+            const target = e.target as EventTarget | null;
+            const isEditableTarget =
+                target instanceof HTMLInputElement ||
+                target instanceof HTMLTextAreaElement ||
+                target instanceof HTMLSelectElement ||
+                (target instanceof HTMLElement && target.isContentEditable);
+            if (isEditableTarget) {
+                return;
+            }
+            if (document.activeElement === inputRef.current) {
+                return;
+            }
+
+            if (flatItems.length === 0) {
+                return;
+            }
+
             if (e.key === "ArrowDown") {
                 e.preventDefault();
                 setActiveIndex((prev) => (prev + 1) % flatItems.length);
@@ -154,12 +186,57 @@ export function HistoryOverlay({
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [isOpen, flatItems, activeIndex, onCreateNewChat, onOpenEntry, onClose]);
 
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const handleFocusTrap = (event: KeyboardEvent) => {
+            if (event.key !== "Tab") {
+                return;
+            }
+            const container = overlayRef.current;
+            if (!container) {
+                return;
+            }
+            const focusables = Array.from(
+                container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+            ).filter((element) => element.offsetParent !== null);
+            if (focusables.length === 0) {
+                event.preventDefault();
+                return;
+            }
+
+            const first = focusables[0];
+            const last = focusables[focusables.length - 1];
+            const activeElement = document.activeElement as HTMLElement | null;
+            const focusInside = activeElement ? container.contains(activeElement) : false;
+
+            if (event.shiftKey) {
+                if (!focusInside || activeElement === first) {
+                    event.preventDefault();
+                    last.focus();
+                }
+                return;
+            }
+
+            if (!focusInside || activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        };
+
+        window.addEventListener("keydown", handleFocusTrap);
+        return () => window.removeEventListener("keydown", handleFocusTrap);
+    }, [isOpen]);
+
 
     return (
         <AnimatePresence>
             {isOpen && (
                 <motion.div
                     className={styles.overlayBackdrop}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={t("Search history")}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
@@ -169,7 +246,9 @@ export function HistoryOverlay({
                     }}
                 >
                     <motion.div
+                        ref={overlayRef}
                         className={styles.overlayContainer}
+                        tabIndex={-1}
                         initial={{ opacity: 0, scale: 0.96 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.96 }}
@@ -188,6 +267,14 @@ export function HistoryOverlay({
                                     setActiveIndex(0);
                                 }}
                             />
+                            <button
+                                type="button"
+                                className={styles.closeButton}
+                                onClick={onClose}
+                                aria-label={t("Close history")}
+                            >
+                                <X size={16} />
+                            </button>
                         </div>
 
                         <div className={styles.scrollArea}>
@@ -242,61 +329,72 @@ export function HistoryOverlay({
                                                         <span className={styles.sectionTitle}>{item.sectionLabel}</span>
                                                     </div>
                                                 )}
-                                                <button
+                                                <div
                                                     className={styles.item}
                                                     data-active={realIndex === activeIndex}
-                                                    onClick={() => {
-                                                        if (item.entry) {
-                                                            onOpenEntry(item.entry);
-                                                            onClose();
-                                                        }
-                                                    }}
                                                     onMouseEnter={() => setActiveIndex(realIndex)}
                                                 >
-                                                    <div className={styles.itemContent}>
-                                                        <span className={styles.itemText}>{item.label}</span>
-                                                    </div>
-                                                    <span className={styles.itemMeta}>{item.meta}</span>
+                                                    <button
+                                                        type="button"
+                                                        className={styles.itemMain}
+                                                        onClick={() => {
+                                                            if (item.entry) {
+                                                                onOpenEntry(item.entry);
+                                                                onClose();
+                                                            }
+                                                        }}
+                                                    >
+                                                        <div className={styles.itemContent}>
+                                                            <span className={styles.itemText}>{item.label}</span>
+                                                        </div>
+                                                        <span className={styles.itemMeta}>{item.meta}</span>
+                                                    </button>
 
                                                     <div className={styles.itemActions}>
                                                         {onOpenEntryExternal && item.entry?.href && (
-                                                            <div
+                                                            <button
+                                                                type="button"
                                                                 className={styles.actionButton}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     onOpenEntryExternal(item.entry!);
                                                                 }}
                                                                 title={t("Open in new tab")}
+                                                                aria-label={t("Open in new tab")}
                                                             >
                                                                 <ExternalLink size={14} />
-                                                            </div>
+                                                            </button>
                                                         )}
                                                         {onRenameEntry && (
-                                                            <div
+                                                            <button
+                                                                type="button"
                                                                 className={styles.actionButton}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     onRenameEntry(item.entry!);
                                                                 }}
                                                                 title={t("Rename")}
+                                                                aria-label={t("Rename")}
                                                             >
                                                                 <Pencil size={14} />
-                                                            </div>
+                                                            </button>
                                                         )}
                                                         {onDeleteEntry && (
-                                                            <div
+                                                            <button
+                                                                type="button"
                                                                 className={styles.actionButton}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     onDeleteEntry(item.entry!);
                                                                 }}
                                                                 title={t("Delete")}
+                                                                aria-label={t("Delete")}
                                                             >
                                                                 <Trash2 size={14} />
-                                                            </div>
+                                                            </button>
                                                         )}
                                                     </div>
-                                                </button>
+                                                </div>
                                             </div>
                                         );
                                     })}

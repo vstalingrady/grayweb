@@ -167,10 +167,14 @@ async def send_reminder(ctx: Dict[str, Any], user_id: int, reminder_id: int) -> 
     try:
         engine = ctx.get("proactivity_engine")
         if engine:
-            # Dispatch reminder using existing engine
-            await engine.dispatch_user_if_due(user_id, source="scheduled_reminder", force=True)
+            await engine.dispatch_reminder(
+                user_id=user_id,
+                reminder_id=reminder_id,
+                source="scheduled_reminder",
+            )
     except Exception as e:
         logger.error("Failed to execute reminder %d: %s", reminder_id, e)
+        raise
 
 
 async def send_proactive_checkin(ctx: Dict[str, Any], user_id: int) -> None:

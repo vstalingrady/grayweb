@@ -15,6 +15,8 @@ type NavigationProps = {
 const Navigation = ({ defaultHidden = false }: NavigationProps) => {
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
+  const menuToggleRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
   const drawerId = "mobile-navigation";
   const [menuOpen, setMenuOpen] = useState(false);
   const [navHidden, setNavHidden] = useState(defaultHidden);
@@ -28,16 +30,20 @@ const Navigation = ({ defaultHidden = false }: NavigationProps) => {
   const grayHref = "/gray";
   const closeMenu = useCallback(() => setMenuOpen(false), []);
   const showNav = useCallback(() => setNavHidden(false), []);
+  const navTabIndex = navHidden ? -1 : undefined;
 
   const navLinks = [
     { href: grayHref, label: "GRAY" },
     { href: "/#research", label: "RESEARCH" },
   ] as const;
+  const dismissRefs = useMemo(() => [containerRef], []);
 
   useDismissableLayer({
     isOpen: menuOpen,
-    ignoreRefs: [containerRef],
+    ignoreRefs: dismissRefs,
     onDismiss: closeMenu,
+    focusTrapRef: drawerRef,
+    returnFocusRef: menuToggleRef,
   });
 
   useEffect(() => {
@@ -45,6 +51,18 @@ const Navigation = ({ defaultHidden = false }: NavigationProps) => {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, [closeMenu]);
+
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [menuOpen]);
 
   const toggleMenu = () => setMenuOpen((open) => !open);
   const handleNavBarClick = useCallback(
@@ -69,8 +87,8 @@ const Navigation = ({ defaultHidden = false }: NavigationProps) => {
         aria-hidden={!navHidden}
         aria-label={t("Show navigation")}
       />
-      <nav className="nav-bar" onClick={handleNavBarClick}>
-        <Link href="/" className="nav-logo" onClick={handleNavClick}>
+      <nav className="nav-bar" onClick={handleNavBarClick} aria-hidden={navHidden ? "true" : undefined}>
+        <Link href="/" className="nav-logo" onClick={handleNavClick} tabIndex={navTabIndex}>
           <span className="sr-only">alignment.id</span>
           <Image
             src="/alignmentlogo.svg"
@@ -88,6 +106,7 @@ const Navigation = ({ defaultHidden = false }: NavigationProps) => {
                 href={link.href}
                 className="nav-link"
                 onClick={handleNavClick}
+                tabIndex={navTabIndex}
                 prefetch={false}
               >
                 {link.label}
@@ -98,6 +117,7 @@ const Navigation = ({ defaultHidden = false }: NavigationProps) => {
             href={tryGrayUrl}
             className="nav-cta"
             onClick={handleNavClick}
+            tabIndex={navTabIndex}
             prefetch={false}
             target="_blank"
             rel="noreferrer"
@@ -117,9 +137,11 @@ const Navigation = ({ defaultHidden = false }: NavigationProps) => {
         <button
           type="button"
           className="nav-menu-toggle"
+          ref={menuToggleRef}
           aria-label={t("Toggle navigation")}
           aria-expanded={menuOpen}
           aria-controls={drawerId}
+          tabIndex={navTabIndex}
           onClick={toggleMenu}
         >
           <svg
@@ -140,7 +162,13 @@ const Navigation = ({ defaultHidden = false }: NavigationProps) => {
       <div
         className={`nav-drawer${menuOpen ? " nav-drawer--open" : ""}`}
         id={drawerId}
+        ref={drawerRef}
         aria-hidden={!menuOpen}
+        role="dialog"
+        aria-modal={menuOpen ? "true" : undefined}
+        aria-label={t("Navigation menu")}
+        tabIndex={-1}
+        hidden={!menuOpen}
       >
         <div className="nav-drawer__content">
           {navLinks.map((link) => (

@@ -4,7 +4,9 @@ Database migration helpers.
 Extracted from main.py to improve modularity.
 """
 
-from backend.database import database, DATABASE_URL
+import sqlalchemy
+
+from backend.database import database, DATABASE_URL, metadata
 from backend.core.sqlite_helpers import (
     ensure_sqlite_columns as _ensure_sqlite_columns,
     ensure_sqlite_index as _ensure_sqlite_index,
@@ -18,6 +20,31 @@ from backend.logging_config import create_logger
 
 api_logger = create_logger("backend.api")
 app_logger = create_logger("backend.core")
+
+
+def _sync_sqlalchemy_url(database_url: str) -> str:
+    """Convert async SQLite URL variants to a sync SQLAlchemy URL."""
+    if "+aiosqlite" in database_url:
+        return database_url.replace("+aiosqlite", "")
+    return database_url
+
+
+def _ensure_sqlite_metadata_tables() -> None:
+    """Ensure metadata-defined tables exist for fresh SQLite databases."""
+    database_url = str(DATABASE_URL or "")
+    if not database_url.startswith("sqlite"):
+        return
+    try:
+        engine = sqlalchemy.create_engine(_sync_sqlalchemy_url(database_url), echo=False)
+        try:
+            metadata.create_all(engine)
+        finally:
+            engine.dispose()
+    except Exception as exc:
+        app_logger.error(
+            "Failed to ensure base SQLite tables",
+            extra={"event_type": "sqlite_migration_error", "error": str(exc)},
+        )
 
 
 # User columns to ensure exist at startup (sync, runs at import time)
@@ -68,6 +95,58 @@ _USER_BACKFILL_NULLS = {
 }
 
 
+def _ensure_sqlite_runtime_indexes() -> None:
+    """Ensure runtime SQLite indexes/unique constraints after possible table creation."""
+    _ensure_sqlite_index("archived_chat_messages", "ix_archived_chat_messages_user_id", "user_id")
+    _ensure_sqlite_index("user_chat_messages", "ix_user_chat_messages_thread_id", "thread_id")
+    _ensure_sqlite_index("transactions", "ix_transactions_user_id", "user_id")
+    _ensure_sqlite_index(
+        "user_chat_threads",
+        "ix_user_chat_threads_user_identifier_last_message_at",
+        "user_identifier, last_message_at",
+    )
+    _ensure_sqlite_index(
+        "general_chat_messages",
+        "ix_general_chat_messages_user_id_created_at",
+        "user_id, created_at",
+    )
+    _ensure_sqlite_index("payment_webhook_events", "ix_payment_webhook_events_order_id", "order_id")
+    _ensure_sqlite_index("media_uploads", "ix_media_uploads_user_id_created_at", "user_id, created_at")
+    _ensure_sqlite_index("reminders", "ix_reminders_user_status_remind_at", "user_id, status, remind_at")
+
+    # Auto-dedupe existing legacy duplicates before creating UNIQUE indexes.
+    _ensure_sqlite_unique_index(
+        "proactivity_delivery_guard",
+        "uq_proactivity_delivery_guard_user_key",
+        "user_id, delivery_key",
+        auto_dedupe=True,
+    )
+    _ensure_sqlite_unique_index(
+        "payment_webhook_events",
+        "uq_payment_webhook_events_provider_key",
+        "provider, event_key",
+        auto_dedupe=True,
+    )
+    _ensure_sqlite_unique_index(
+        "proactivity_logs",
+        "uq_proactivity_logs_user_activity_date",
+        "user_id, activity_date",
+        auto_dedupe=True,
+    )
+    _ensure_sqlite_unique_index(
+        "dashboard_pulses",
+        "uq_dashboard_pulses_user_date",
+        "user_id, date_key",
+        auto_dedupe=True,
+    )
+    _ensure_sqlite_unique_index(
+        "proactivity_settings",
+        "uq_proactivity_settings_user_id",
+        "user_id",
+        auto_dedupe=True,
+    )
+
+
 def run_startup_migrations():
     """
     Run synchronous SQLite migrations at import time.
@@ -75,6 +154,8 @@ def run_startup_migrations():
     This consolidates the migration calls that were previously inline in main.py.
     These run BEFORE the FastAPI app starts, ensuring schema is ready.
     """
+    _ensure_sqlite_metadata_tables()
+
     # Ensure user columns
     _ensure_sqlite_columns("users", _USER_COLUMNS, backfill_nulls=_USER_BACKFILL_NULLS)
 
@@ -189,22 +270,19 @@ def run_startup_migrations():
             UNIQUE(user_id, delivery_key)
         )
     """)
-    _ensure_sqlite_unique_index(
-        "proactivity_delivery_guard",
-        "uq_proactivity_delivery_guard_user_key",
-        "user_id, delivery_key",
-    )
-    
-    # Indexes
-    _ensure_sqlite_index("archived_chat_messages", "ix_archived_chat_messages_user_id", "user_id")
-    _ensure_sqlite_index("user_chat_messages", "ix_user_chat_messages_thread_id", "thread_id")
-    _ensure_sqlite_index("transactions", "ix_transactions_user_id", "user_id")
-    _ensure_sqlite_index("user_chat_threads", "ix_user_chat_threads_user_identifier_last_message_at", "user_identifier, last_message_at")
-    _ensure_sqlite_index("general_chat_messages", "ix_general_chat_messages_user_id_created_at", "user_id, created_at")
-    _ensure_sqlite_index("media_uploads", "ix_media_uploads_user_id_created_at", "user_id, created_at")
-    _ensure_sqlite_index("reminders", "ix_reminders_user_status_remind_at", "user_id, status, remind_at")
-    _ensure_sqlite_unique_index("dashboard_pulses", "uq_dashboard_pulses_user_date", "user_id, date_key")
-    _ensure_sqlite_unique_index("proactivity_settings", "uq_proactivity_settings_user_id", "user_id")
+    _ensure_sqlite_table("payment_webhook_events", """
+        CREATE TABLE payment_webhook_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            provider TEXT NOT NULL,
+            event_key TEXT NOT NULL,
+            order_id TEXT,
+            event_type TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(provider, event_key)
+        )
+    """)
+
+    _ensure_sqlite_runtime_indexes()
 
     # Transaction columns
     _ensure_sqlite_columns("transactions", [
@@ -299,3 +377,4 @@ async def run_basic_migrations():
             ("delivered_at", "TIMESTAMP", "NULL"),
         ]
     )
+    _ensure_sqlite_runtime_indexes()

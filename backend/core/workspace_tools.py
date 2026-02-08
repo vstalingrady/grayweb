@@ -197,7 +197,7 @@ async def create_reminder_tool(user_id: int, args: Dict[str, Any], db: databases
     now = utcnow()
     local_payload = {
         "user_id": user_id, "label": label, "description": description,
-        "status": "pending", "delivery_mode": "reminder", "entity_type": "plan",
+        "status": "pending", "delivery_mode": "reminder", "entity_type": "reminder",
         "remind_at": remind_at_dt, "created_at": now, "updated_at": now,
     }
     created_id = await db.execute(reminders.insert().values(**local_payload))
@@ -226,6 +226,13 @@ async def update_reminder_tool(user_id: int, args: Dict[str, Any], db: databases
             updates["remind_at"] = datetime.fromisoformat(args["remind_at"].replace("Z", "+00:00"))
         except (ValueError, AttributeError):
             raise HTTPException(status_code=400, detail="Invalid remind_at format")
+    if "status" in updates:
+        normalized_status = str(updates["status"]).strip().lower()
+        if normalized_status == "delivered":
+            updates["delivered_at"] = utcnow()
+        elif normalized_status == "pending":
+            updates["delivered_at"] = None
+    updates["updated_at"] = utcnow()
     
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")

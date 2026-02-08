@@ -66,7 +66,21 @@ const refreshSupabaseAccessToken = async () => {
     return inFlightTokenRefresh;
   }
   inFlightTokenRefresh = (async () => {
-    const { data, error } = await supabase.auth.refreshSession();
+    const authClient = supabase.auth as {
+      refreshSession?: () => Promise<{
+        data: { session: { access_token?: string | null } | null };
+        error: unknown;
+      }>;
+      getSession: () => Promise<{
+        data: { session: { access_token?: string | null } | null };
+        error: unknown;
+      }>;
+    };
+    const refreshResult =
+      typeof authClient.refreshSession === "function"
+        ? await authClient.refreshSession()
+        : await authClient.getSession();
+    const { data, error } = refreshResult;
     if (error) {
       console.warn("[Auth] Failed to refresh auth session:", error);
       return null;

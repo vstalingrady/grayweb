@@ -107,6 +107,13 @@ FOLLOW_UP_CONTEXT_KEYWORDS = (
     "policy",
     "court",
 )
+WEB_ACCESS_DISCLAIMER_PATTERN = re.compile(
+    r"(?:\bi\s+(?:don['’]t|do not)\s+have\s+(?:real[\s-]?time|live)\s+access\b|"
+    r"\bi\s+(?:can['’]t|cannot)\s+browse\b|"
+    r"\bmy\s+knowledge\s+has\s+(?:a\s+)?cutoff\b|"
+    r"\bknowledge\s+cutoff\b)",
+    re.IGNORECASE,
+)
 
 
 def _is_low_information_search_turn(text: str) -> bool:
@@ -119,6 +126,47 @@ def _is_low_information_search_turn(text: str) -> bool:
     if len(words) <= 3 and any(token in normalized for token in ("search", "google", "lookup", "look up")):
         return True
     return False
+
+
+def _has_web_grounding(metadata: Optional[Dict[str, Any]]) -> bool:
+    if not isinstance(metadata, dict):
+        return False
+
+    queries = metadata.get("web_search_queries") or metadata.get("webSearchQueries")
+    if isinstance(queries, list) and any(isinstance(item, str) and item.strip() for item in queries):
+        return True
+
+    chunks = metadata.get("grounding_chunks") or metadata.get("groundingChunks")
+    if isinstance(chunks, list):
+        for chunk in chunks:
+            if isinstance(chunk, dict) and (chunk.get("web") or chunk.get("retrieved_context") or chunk.get("retrievedContext")):
+                return True
+
+    search_entry = metadata.get("search_entry_point") or metadata.get("searchEntryPoint")
+    if isinstance(search_entry, dict) and search_entry:
+        return True
+
+    return False
+
+
+def _strip_incorrect_web_access_disclaimer(
+    text: str,
+    *,
+    search_enabled: bool,
+    grounding_metadata: Optional[Dict[str, Any]],
+) -> str:
+    if not search_enabled or not text or not _has_web_grounding(grounding_metadata):
+        return text
+
+    paragraphs = [segment.strip() for segment in re.split(r"\n{2,}", text) if segment.strip()]
+    if not paragraphs:
+        return text
+
+    cleaned_paragraphs = [segment for segment in paragraphs if not WEB_ACCESS_DISCLAIMER_PATTERN.search(segment)]
+    if cleaned_paragraphs:
+        return "\n\n".join(cleaned_paragraphs)
+
+    return text
 
 def _resolve_conversation_memory_enabled(
     user_record: Optional[Dict[str, Any]],
@@ -151,6 +199,28 @@ def _resolve_web_search_enabled(
     return bool(chat_request.web_search_enabled)
 
 
+def _normalize_general_conversation_id(
+    requested_conversation_id: Optional[str],
+    authenticated_user_id: int,
+) -> Optional[str]:
+    """Prevent clients from targeting another user's general conversation id."""
+    general_user_id = _general_conversation_user_id(requested_conversation_id)
+    if general_user_id is None:
+        return requested_conversation_id
+    if general_user_id == authenticated_user_id:
+        return requested_conversation_id
+    api_logger.warning(
+        "Rejected mismatched general conversation id",
+        extra={
+            "event_type": "security_violation_general_chat_id_mismatch",
+            "requested_conversation_id": requested_conversation_id,
+            "authenticated_user_id": authenticated_user_id,
+            "requested_user_id": general_user_id,
+        },
+    )
+    return f"general:{authenticated_user_id}"
+
+
 def _build_effective_web_search_prompt(
     chat_request: ChatRequest,
     conversation_history: Optional[List[Dict[str, Any]]] = None,
@@ -164,7 +234,8 @@ def _build_effective_web_search_prompt(
         "Never run standalone generic queries such as 'other half', 'the rest', or 'what about him'. "
         "Keep the user domain intact; do not reinterpret ambiguous words into unrelated domains. "
         "For factual claims or rumor/verification style questions, if confidence is not high, run one targeted web search before concluding. "
-        "If the referent is still ambiguous, ask one clarifying question instead of broad generic searches."
+        "If the referent is still ambiguous, ask one clarifying question instead of broad generic searches. "
+        "Do not claim you cannot browse or that your knowledge is cutoff when web search is enabled."
     )
     if not conversation_history:
         return f"{base_prompt}\n\n{guidance}" if base_prompt else guidance
@@ -438,11 +509,12 @@ async def chat_route(
     api_logger.info("Chat request received", extra={
         "event_type": "chat_request_start",
         "user_id": chat_request.user_id,
-        "message_length": len(chat_request.message),
+        "message_length": len(chat_request.message or ""),
         "conversation_id": chat_request.conversation_id,
         "model": chat_request.model,
         "correlation_id": correlation_id
     })
+    effective_message = chat_request.message or ""
 
     # Initialize tools (currently unused in non-streaming endpoint, but required by generate_ai_response)
     tool_list = None
@@ -457,10 +529,14 @@ async def chat_route(
 
     try:
         # Generate a title for the chat session (only if requested)
-        session_title = _fallback_title_from_message(chat_request.message)
+        session_title = _fallback_title_from_message(effective_message)
 
         # Determine conversation_id (general conversations bypass thread creation).
-        requested_conversation_id = chat_request.conversation_id
+        requested_conversation_id = _normalize_general_conversation_id(
+            chat_request.conversation_id,
+            authenticated_user_id,
+        )
+        chat_request.conversation_id = requested_conversation_id
         general_user_id = _general_conversation_user_id(requested_conversation_id)
         valid_requested_conversation_id = _is_valid_uuid(requested_conversation_id)
         if general_user_id is not None:
@@ -517,6 +593,8 @@ async def chat_route(
                 api_logger.debug(f"Could not load general context: {e}", extra={"user_id": chat_request.user_id})
 
         prior_last_message_at = await load_last_user_message_at(db, chat_request.user_id)
+        if not effective_message.strip() and not conversation_history and not (chat_request.attachments or []):
+            effective_message = "Let's get started."
 
         # Save user message to local conversation store (after capturing prior history),
         # but avoid writing an identical message twice in a row (e.g., when a fallback
@@ -531,14 +609,14 @@ async def chat_route(
 
         user_message_payload: Dict[str, Any] = {
             "role": "user",
-            "text": chat_request.message,
+            "text": effective_message,
             "attachments": attachment_metadata or None,
         }
         last_history_entry: Optional[Dict[str, Any]] = conversation_history[-1] if conversation_history else None
         should_persist_user = not (
             last_history_entry
             and _row_get(last_history_entry, "role") in {"user", "assistant", "model"}
-            and (_row_get(last_history_entry, "text") or "") == chat_request.message
+            and (_row_get(last_history_entry, "text") or "") == effective_message
         )
         if is_general_conversation:
              # General chat messages are not handled by save_conversation_message
@@ -548,7 +626,7 @@ async def chat_route(
                  await _insert_general_conversation_message(
                      user_id=authenticated_user_id,
                      role="user",
-                     text=chat_request.message,
+                     text=effective_message,
                      attachments=attachment_metadata or None,
                  )
                  api_logger.debug(
@@ -623,7 +701,7 @@ async def chat_route(
 
         effective_system_prompt = _append_custom_instructions(chat_request.system_prompt, current_user)
 
-        supermemory_command = _parse_supermemory_command(chat_request.message)
+        supermemory_command = _parse_supermemory_command(effective_message)
         if supermemory_command:
             command_response = await _handle_supermemory_command(
                 command=supermemory_command["command"],
@@ -663,7 +741,7 @@ async def chat_route(
 
         # Generate AI response
         ai_response, grounding_metadata = await _generate_ai_response(
-            chat_request.message,
+            effective_message,
             conversation_history,
             chat_request.context,
             effective_system_prompt,
@@ -691,6 +769,11 @@ async def chat_route(
             provider_routing=chat_request.provider_routing,
             supermemory_overrides=supermemory_overrides,
         )
+        ai_response = _strip_incorrect_web_access_disclaimer(
+            ai_response,
+            search_enabled=search_enabled,
+            grounding_metadata=grounding_metadata,
+        )
 
         # Save AI response (including grounding metadata for downstream UI)
         assistant_message_payload: Dict[str, Any] = {
@@ -716,7 +799,7 @@ async def chat_route(
             create_logged_task(
                 SUPERMEMORY_SERVICE.capture_turn(
                     user_id=authenticated_user_id,
-                    user_message=chat_request.message,
+                    user_message=effective_message,
                     assistant_message=ai_response,
                     conversation_id=conversation_id,
                     plan_tier=memory_plan_tier,
@@ -732,7 +815,7 @@ async def chat_route(
         if chat_request.should_generate_title:
             try:
                 generated_title = await _generate_chat_title_inline(
-                    chat_request.message,
+                    effective_message,
                     ai_response,
                     prompt_locale=prompt_locale,
                     user_id=authenticated_user_id,
@@ -764,7 +847,7 @@ async def chat_route(
     except Exception as e:
         api_logger.error(f"CHAT_ERROR_DEBUG: Chat endpoint failed: {e}", exc_info=True, extra={"user_id": chat_request.user_id})
         clear_request_context()
-        raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Chat error.")
 
 
 ONBOARDING_SYSTEM_PROMPT = load_prompt_from_json(
@@ -789,7 +872,8 @@ async def chat_stream_route(
     db: databases.Database = Depends(get_database),
 ):
     """Stream an AI response token-by-token using Server-Sent Events."""
-    chat_request.user_id = current_user["id"]
+    authenticated_user_id = current_user["id"]
+    chat_request.user_id = authenticated_user_id
     start_time = utcnow()
     prompt_locale = _prompt_locale_from_request(request)
 
@@ -800,7 +884,7 @@ async def chat_stream_route(
     api_logger.info("Chat stream request received", extra={
         "event_type": "chat_stream_request_start",
         "user_id": chat_request.user_id,
-        "message_length": len(chat_request.message),
+        "message_length": len(chat_request.message or ""),
         "conversation_id": chat_request.conversation_id,
         "model": chat_request.model,
         "correlation_id": correlation_id
@@ -816,7 +900,11 @@ async def chat_stream_route(
 
         # 4. Start Conversation Setup (Async)
         t0_conv = time.perf_counter()
-        requested_conversation_id = chat_request.conversation_id
+        requested_conversation_id = _normalize_general_conversation_id(
+            chat_request.conversation_id,
+            authenticated_user_id,
+        )
+        chat_request.conversation_id = requested_conversation_id
         general_user_id = _general_conversation_user_id(requested_conversation_id)
         valid_requested_conversation_id = _is_valid_uuid(requested_conversation_id)
         conv_task: Optional[asyncio.Task] = None
@@ -1156,6 +1244,11 @@ async def chat_stream_route(
 
                 if final_response is None:
                     final_response = "".join(accumulated_chunks)
+                final_response = _strip_incorrect_web_access_disclaimer(
+                    final_response,
+                    search_enabled=search_enabled,
+                    grounding_metadata=grounding_metadata_payload,
+                )
                 
                 if reminders_payload:
                     yield _sse_event("reminders", {"reminders": reminders_payload})
@@ -1232,7 +1325,7 @@ async def chat_stream_route(
                 raise
             except Exception as stream_error:
                 api_logger.error(f"Stream loop error: {stream_error}", exc_info=True)
-                yield _sse_event("error", {"message": str(stream_error)})
+                yield _sse_event("error", {"message": "Chat stream failed."})
 
         headers = {"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
         clear_request_context()
@@ -1240,4 +1333,4 @@ async def chat_stream_route(
     except Exception as error:
         api_logger.error(f"Chat stream failed: {error}", exc_info=True)
         clear_request_context()
-        raise HTTPException(status_code=500, detail=str(error))
+        raise HTTPException(status_code=500, detail="Chat stream error.")

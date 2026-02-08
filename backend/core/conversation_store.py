@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any, Dict, List, Optional
+from threading import Lock
 
 from backend.time_utils import utcnow
 
@@ -37,6 +38,8 @@ def configure_conversation_store(
 
 GENERAL_CONVERSATION_PREFIX = "general:"
 _USER_DATA_CACHE = TTLCache(ttl_seconds=3600, max_size=1024)
+_CONVERSATION_CACHE_LOCK_GUARD = Lock()
+_CONVERSATION_CACHE_LOCKS: Dict[str, Lock] = {}
 
 
 def _conversation_store_available() -> bool:
@@ -71,6 +74,16 @@ async def get_cached_user(user_id: int):
     return await USER_CACHE.get(f"user_{user_id}", fetch)
 
 
+def _get_conversation_cache_lock(conversation_id: str) -> Lock:
+    with _CONVERSATION_CACHE_LOCK_GUARD:
+        existing_lock = _CONVERSATION_CACHE_LOCKS.get(conversation_id)
+        if existing_lock is not None:
+            return existing_lock
+        new_lock = Lock()
+        _CONVERSATION_CACHE_LOCKS[conversation_id] = new_lock
+        return new_lock
+
+
 def cache_conversation_history(
     conversation_id: str,
     user_id: Optional[int],
@@ -86,32 +99,35 @@ def append_to_conversation_cache(
     user_id: Optional[int],
     message: Dict[str, Any],
 ) -> None:
-    cached_history = CONVERSATION_HISTORY_CACHE.get(conversation_id)
-    if cached_history is None:
-        return
-    owner = CONVERSATION_OWNER_CACHE.get(conversation_id) or user_id
-    if user_id is not None and owner is not None and str(owner) != str(user_id):
-        return
-    normalized = {
-        "role": message.get("role"),
-        "text": message.get("text") or "",
-        "grounding_metadata": message.get("grounding_metadata")
-        or message.get("groundingMetadata"),
-        "attachments": message.get("attachments"),
-        "reminders": message.get("reminders"),
-    }
-    # Preserve timestamp if available
-    if message.get("timestamp"):
-        normalized["timestamp"] = message.get("timestamp")
-    new_history = cached_history + [normalized]
-    if owner is not None:
-        CONVERSATION_OWNER_CACHE.set(conversation_id, owner)
-    CONVERSATION_HISTORY_CACHE.set(conversation_id, new_history)
+    with _get_conversation_cache_lock(conversation_id):
+        cached_history = CONVERSATION_HISTORY_CACHE.get(conversation_id)
+        if cached_history is None:
+            return
+        owner = CONVERSATION_OWNER_CACHE.get(conversation_id) or user_id
+        if user_id is not None and owner is not None and str(owner) != str(user_id):
+            return
+        normalized = {
+            "role": message.get("role"),
+            "text": message.get("text") or "",
+            "grounding_metadata": message.get("grounding_metadata")
+            or message.get("groundingMetadata"),
+            "attachments": message.get("attachments"),
+            "reminders": message.get("reminders"),
+        }
+        # Preserve timestamp if available
+        if message.get("timestamp"):
+            normalized["timestamp"] = message.get("timestamp")
+        new_history = cached_history + [normalized]
+        if owner is not None:
+            CONVERSATION_OWNER_CACHE.set(conversation_id, owner)
+        CONVERSATION_HISTORY_CACHE.set(conversation_id, new_history)
 
 
 def invalidate_conversation_cache(conversation_id: str) -> None:
     CONVERSATION_OWNER_CACHE.invalidate(conversation_id)
     CONVERSATION_HISTORY_CACHE.invalidate(conversation_id)
+    with _CONVERSATION_CACHE_LOCK_GUARD:
+        _CONVERSATION_CACHE_LOCKS.pop(conversation_id, None)
 
 
 async def ensure_user_data_record(user_identifier: int) -> Optional[int]:

@@ -863,8 +863,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
   border-radius: 8px;
   border: 1px solid transparent;
   background: transparent;
@@ -1390,12 +1392,16 @@
   gap: 8px;
   opacity: 0;
   transform: translateY(-8px);
+  visibility: hidden;
+  pointer-events: none;
   transition: opacity 0.2s ease 0.05s, transform 0.2s ease 0.05s;
 }
 
 .chatMessage[data-actions-expanded="true"] .chatMessageFooterInner {
   opacity: 1;
   transform: translateY(0);
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .chatMessageFooterLeft {
@@ -1433,6 +1439,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 8px;
   cursor: pointer;
   color: inherit;
 }
@@ -1549,10 +1558,13 @@
 
 /* Icon-only, minimal affordance */
 .chatActionIconRow button {
-  width: auto;
-  height: auto;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
   padding: 0;
   border: none;
+  border-radius: 8px;
   background: transparent;
   display: inline-flex;
   align-items: center;

@@ -338,7 +338,7 @@ export function AddPlanHabitModal({
         className={styles.personalizationPanel}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="add-item-title"
+        aria-label={title}
         onClick={(event) => event.stopPropagation()}
         style={{ maxWidth: "520px" }}
       >

@@ -448,7 +448,8 @@ async def stream_ai_response(
     if provider == "openrouter" and search_enabled:
         runtime_context_parts.append(
             "You have access to web search. Use it for current events, news, and factual queries where your knowledge may be outdated. "
-            "Keep search queries concise and user-facing. Never expose chain-of-thought or <thinking> tags in the final answer."
+            "Keep search queries concise and user-facing. Never expose chain-of-thought or <thinking> tags in the final answer. "
+            "Do not claim that you cannot browse or that your knowledge is cutoff when web search is available."
         )
 
     workspace_with_cache = workspace_context
@@ -697,7 +698,7 @@ async def generate_ai_response(
                     None,
                     [
                         time_context,
-                        "You have access to web search. Use it for current events, news, and factual queries where your knowledge may be outdated. Keep search queries concise and user-facing. Never expose chain-of-thought or <thinking> tags in the final answer.",
+                        "You have access to web search. Use it for current events, news, and factual queries where your knowledge may be outdated. Keep search queries concise and user-facing. Never expose chain-of-thought or <thinking> tags in the final answer. Do not claim that you cannot browse or that your knowledge is cutoff when web search is available.",
                     ],
                 )
             )

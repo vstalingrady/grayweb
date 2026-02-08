@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties, type SyntheticEvent } from "react";
+import { useState, type SyntheticEvent } from "react";
 import { ChevronDown } from "lucide-react";
 import styles from "./ChatMessageGroundingPanel.module.css";
 import type { GroundingMetadata } from "@/lib/api";
@@ -46,7 +46,6 @@ type GroundingPanelCard = {
   previewImageUrl?: string;
   previewFallbackQueue?: string;
   initials: string;
-  fallbackSeed: string;
 };
 
 const normalizeSearchEntryImageUrl = (raw: string | null): string | null => {
@@ -346,28 +345,6 @@ const resolveThumbnailForSource = (
   return undefined;
 };
 
-const hashSeed = (seed: string): number => {
-  let hash = 0;
-  for (let index = 0; index < seed.length; index += 1) {
-    hash = (hash * 31 + seed.charCodeAt(index)) | 0;
-  }
-  return Math.abs(hash);
-};
-
-const buildDomainFallbackStyle = (seed: string): CSSProperties => {
-  const normalizedSeed = normalizeSearchEntryHost(seed) ?? seed.trim().toLowerCase();
-  const hash = hashSeed(normalizedSeed || "gray");
-  const hueA = hash % 360;
-  const hueB = (hueA + 30 + (hash % 53)) % 360;
-  const saturationA = 54 + (hash % 17);
-  const saturationB = 48 + (hash % 15);
-  const lightnessA = 30 + (hash % 12);
-  const lightnessB = 20 + (hash % 10);
-  return {
-    background: `linear-gradient(140deg, hsl(${hueA} ${saturationA}% ${lightnessA + 10}%), hsl(${hueB} ${saturationB}% ${lightnessB + 8}%))`,
-  };
-};
-
 const handleGroundingImageError = (event: SyntheticEvent<HTMLImageElement>) => {
   const target = event.currentTarget;
   const fallbackQueue = String(target.dataset.fallbackQueue ?? "")
@@ -503,7 +480,6 @@ export function ChatMessageGroundingPanel({ metadata, t }: ChatMessageGroundingP
       previewImageUrl: thumbnailResolution.primary,
       previewFallbackQueue: thumbnailResolution.fallbacks.join("|"),
       initials: buildGroundingSourceInitials(result.siteLabel ?? result.title),
-      fallbackSeed: result.siteLabel ?? result.href ?? result.title,
     });
   }
 
@@ -521,7 +497,6 @@ export function ChatMessageGroundingPanel({ metadata, t }: ChatMessageGroundingP
       previewImageUrl: thumbnailResolution.primary,
       previewFallbackQueue: thumbnailResolution.fallbacks.join("|"),
       initials: buildGroundingSourceInitials(source.siteLabel ?? source.title),
-      fallbackSeed: source.siteLabel ?? source.href ?? source.title,
     });
   }
 
@@ -542,10 +517,13 @@ export function ChatMessageGroundingPanel({ metadata, t }: ChatMessageGroundingP
   }
 
   const renderGroundingCard = (card: GroundingPanelCard) => {
-    const mediaStyle = card.previewImageUrl ? undefined : buildDomainFallbackStyle(card.fallbackSeed);
+    const mediaClassName = card.previewImageUrl
+      ? styles.chatGroundingCardMedia
+      : `${styles.chatGroundingCardMedia} ${styles.chatGroundingCardMediaNoPreview}`;
+    const showFaviconBackdrop = !card.previewImageUrl && Boolean(card.faviconUrl);
     const cardContent = (
       <>
-        <div className={styles.chatGroundingCardMedia} style={mediaStyle}>
+        <div className={mediaClassName}>
           {card.previewImageUrl ? (
             <>
               <span className={styles.chatGroundingCardMediaFallback}>{card.initials}</span>
@@ -561,22 +539,35 @@ export function ChatMessageGroundingPanel({ metadata, t }: ChatMessageGroundingP
               />
             </>
           ) : (
-            <div className={styles.chatGroundingCardMediaFallbackShell}>
-              <div className={styles.chatGroundingCardMediaFallbackBadge}>
-                <span className={styles.chatGroundingCardMediaFallbackText}>{card.initials}</span>
-                {card.faviconUrl ? (
-                  /* eslint-disable-next-line @next/next/no-img-element -- Remote favicon endpoints require direct img usage and fallback handling. */
-                  <img
-                    src={card.faviconUrl}
-                    alt=""
-                    referrerPolicy="no-referrer"
-                    className={styles.chatGroundingCardMediaFallbackFavicon}
-                    onLoad={handleGroundingImageLoad}
-                    onError={handleGroundingFaviconError}
-                  />
-                ) : null}
+            <>
+              {showFaviconBackdrop ? (
+                /* eslint-disable-next-line @next/next/no-img-element -- Remote favicon endpoints require direct img usage and fallback handling. */
+                <img
+                  src={card.faviconUrl}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                  className={styles.chatGroundingCardMediaFaviconBackdrop}
+                  onError={handleGroundingFaviconError}
+                />
+              ) : null}
+              <span className={styles.chatGroundingCardMediaBackdropShade} aria-hidden="true" />
+              <div className={styles.chatGroundingCardMediaFallbackShell}>
+                <div className={styles.chatGroundingCardMediaFallbackBadge}>
+                  <span className={styles.chatGroundingCardMediaFallbackText}>{card.initials}</span>
+                  {card.faviconUrl ? (
+                    /* eslint-disable-next-line @next/next/no-img-element -- Remote favicon endpoints require direct img usage and fallback handling. */
+                    <img
+                      src={card.faviconUrl}
+                      alt=""
+                      referrerPolicy="no-referrer"
+                      className={styles.chatGroundingCardMediaFallbackFavicon}
+                      onLoad={handleGroundingImageLoad}
+                      onError={handleGroundingFaviconError}
+                    />
+                  ) : null}
+                </div>
               </div>
-            </div>
+            </>
           )}
         </div>
         <div className={styles.chatGroundingCardMeta}>
@@ -630,15 +621,11 @@ export function ChatMessageGroundingPanel({ metadata, t }: ChatMessageGroundingP
           <div className={styles.chatGroundingSummaryToggleMeta}>
             <span className={styles.chatGroundingSummaryLabel}>{t("Searched")}</span>
             <div className={styles.chatGroundingSummaryQueries}>
-              {summaryChipQueries.length > 0 ? (
-                summaryChipQueries.map((query) => (
-                  <span key={query} className={styles.chatGroundingSummaryQueryChip}>
-                    {query}
-                  </span>
-                ))
-              ) : (
-                <span className={styles.chatGroundingSummaryFallbackChip}>{t("Web results")}</span>
-              )}
+              {summaryChipQueries.map((query) => (
+                <span key={query} className={styles.chatGroundingSummaryQueryChip}>
+                  {query}
+                </span>
+              ))}
             </div>
           </div>
           <ChevronDown

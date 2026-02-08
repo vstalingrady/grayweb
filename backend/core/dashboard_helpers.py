@@ -140,13 +140,26 @@ async def load_previous_dashboard_pulse(db: Any, user_id: int, current_date_key:
 
 def normalize_plan_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Ensure plan items have required fields for JSON storage."""
+    def _coerce_bool(value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return value != 0
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"true", "1", "yes", "y", "on"}:
+                return True
+            if normalized in {"false", "0", "no", "n", "off", ""}:
+                return False
+        return False
+
     normalized = []
     for item in items:
         normalized.append(
             {
                 "id": _row_get(item, "id"),
                 "label": str(_row_get(item, "label", "")),
-                "completed": bool(_row_get(item, "completed", False)),
+                "completed": _coerce_bool(_row_get(item, "completed", False)),
                 "deadline": _row_get(item, "deadline"),
             }
         )
@@ -155,6 +168,19 @@ def normalize_plan_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 def normalize_habit_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Ensure habit items have required fields for JSON storage."""
+    def _coerce_bool(value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return value != 0
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"true", "1", "yes", "y", "on"}:
+                return True
+            if normalized in {"false", "0", "no", "n", "off", ""}:
+                return False
+        return False
+
     normalized = []
     for item in items:
         previous_label = _row_get(item, "previous_label", _row_get(item, "previousLabel", ""))
@@ -163,7 +189,7 @@ def normalize_habit_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "id": _row_get(item, "id"),
                 "label": str(_row_get(item, "label", "")),
                 "previous_label": str(previous_label or ""),
-                "completed": bool(_row_get(item, "completed", False)),
+                "completed": _coerce_bool(_row_get(item, "completed", False)),
             }
         )
     return normalized

@@ -25,8 +25,8 @@ const MARKETING_DISALLOWS = [
   "/payment",
 ];
 
-export default function robots(): MetadataRoute.Robots {
-  const host = hostFromHeaders(headers());
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  const host = hostFromHeaders(await headers());
   const isProductHost = isGrayWorkspaceHost(host) || isPayHost(host);
 
   if (isProductHost) {

@@ -5,10 +5,12 @@ This router handles CRUD operations for dashboard pulses and summaries.
 """
 
 import re
+import sqlite3
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import databases
+import sqlalchemy
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 # Import models
@@ -157,24 +159,7 @@ async def create_dashboard_pulse(
         )
 
     now = utcnow()
-    existing = await _load_dashboard_pulse_by_date(db, user_id, pulse.date_key)
-
-    if existing:
-        await db.execute(
-            dashboard_pulses.update()
-            .where(dashboard_pulses.c.id == existing["id"])
-            .values(
-                timestamp=timestamp_dt,
-                plans=plans_payload,
-                habits=habits_payload,
-                proactivity=proactivity_payload,
-                updated_at=now,
-            )
-        )
-        record = await db.fetch_one(
-            dashboard_pulses.select().where(dashboard_pulses.c.id == existing["id"])
-        )
-    else:
+    try:
         pulse_id = await db.execute(
             dashboard_pulses.insert().values(
                 user_id=user_id,
@@ -189,6 +174,27 @@ async def create_dashboard_pulse(
         )
         record = await db.fetch_one(
             dashboard_pulses.select().where(dashboard_pulses.c.id == pulse_id)
+        )
+    except (sqlite3.IntegrityError, sqlalchemy.exc.IntegrityError):
+        await db.execute(
+            dashboard_pulses.update()
+            .where(
+                (dashboard_pulses.c.user_id == user_id)
+                & (dashboard_pulses.c.date_key == pulse.date_key)
+            )
+            .values(
+                timestamp=timestamp_dt,
+                plans=plans_payload,
+                habits=habits_payload,
+                proactivity=proactivity_payload,
+                updated_at=now,
+            )
+        )
+        record = await db.fetch_one(
+            dashboard_pulses.select().where(
+                (dashboard_pulses.c.user_id == user_id)
+                & (dashboard_pulses.c.date_key == pulse.date_key)
+            )
         )
 
     payload = _serialize_dashboard_pulse_record(record)

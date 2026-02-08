@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import { X } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { useI18n } from "@/contexts/I18nContext";
@@ -27,6 +27,8 @@ const toIsoOrNull = (value: string) => {
   }
   return parsed.toISOString();
 };
+
+const ADD_TYPE_OPTIONS: InlineAddType[] = ["plan", "habit", "reminder"];
 
 export function InlineAddPanel({ activeType, onTypeChange, onClose, onSuccess, disabled }: InlineAddPanelProps) {
   const { t } = useI18n();
@@ -57,6 +59,34 @@ export function InlineAddPanel({ activeType, onTypeChange, onClose, onSuccess, d
     setError(null);
     setIsSubmitting(false);
   }, [activeType]);
+
+  const handleTypeToggleKeyDown = useCallback((event: React.KeyboardEvent<HTMLButtonElement>, type: InlineAddType) => {
+    const currentIndex = ADD_TYPE_OPTIONS.indexOf(type);
+    if (currentIndex === -1) {
+      return;
+    }
+
+    let nextIndex: number | null = null;
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      nextIndex = (currentIndex + 1) % ADD_TYPE_OPTIONS.length;
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      nextIndex = (currentIndex - 1 + ADD_TYPE_OPTIONS.length) % ADD_TYPE_OPTIONS.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = ADD_TYPE_OPTIONS.length - 1;
+    }
+
+    if (nextIndex === null) {
+      return;
+    }
+
+    event.preventDefault();
+    const nextType = ADD_TYPE_OPTIONS[nextIndex];
+    onTypeChange(nextType);
+    const nextToggle = document.getElementById(`inline-add-type-${nextType}`);
+    nextToggle?.focus();
+  }, [onTypeChange]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -175,36 +205,45 @@ export function InlineAddPanel({ activeType, onTypeChange, onClose, onSuccess, d
             <X size={16} />
           </button>
         </div>
-        <div className={styles.dashboardTasksToggle} role="tablist" aria-label={t("Choose item type")}>
+        <div className={styles.dashboardTasksToggle} role="radiogroup" aria-label={t("Choose item type")}>
           <button
+            id="inline-add-type-plan"
             type="button"
             className={styles.dashboardTasksToggleButton}
-            role="tab"
-            aria-selected={activeType === "plan"}
+            role="radio"
+            aria-checked={activeType === "plan"}
+            tabIndex={activeType === "plan" ? 0 : -1}
             data-active={activeType === "plan" ? "true" : "false"}
             onClick={() => onTypeChange("plan")}
+            onKeyDown={(event) => handleTypeToggleKeyDown(event, "plan")}
             disabled={isDisabled}
           >
             {t("Plan")}
           </button>
           <button
+            id="inline-add-type-habit"
             type="button"
             className={styles.dashboardTasksToggleButton}
-            role="tab"
-            aria-selected={activeType === "habit"}
+            role="radio"
+            aria-checked={activeType === "habit"}
+            tabIndex={activeType === "habit" ? 0 : -1}
             data-active={activeType === "habit" ? "true" : "false"}
             onClick={() => onTypeChange("habit")}
+            onKeyDown={(event) => handleTypeToggleKeyDown(event, "habit")}
             disabled={isDisabled}
           >
             {t("Habit")}
           </button>
           <button
+            id="inline-add-type-reminder"
             type="button"
             className={styles.dashboardTasksToggleButton}
-            role="tab"
-            aria-selected={activeType === "reminder"}
+            role="radio"
+            aria-checked={activeType === "reminder"}
+            tabIndex={activeType === "reminder" ? 0 : -1}
             data-active={activeType === "reminder" ? "true" : "false"}
             onClick={() => onTypeChange("reminder")}
+            onKeyDown={(event) => handleTypeToggleKeyDown(event, "reminder")}
             disabled={isDisabled}
           >
             {t("Reminder")}

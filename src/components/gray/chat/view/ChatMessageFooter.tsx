@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import {
   CheckCircle2,
   ChevronLeft,
@@ -52,6 +53,7 @@ export function ChatMessageFooter({
   onCycleVariant,
   t,
 }: ChatMessageFooterProps) {
+  const metadataTooltipId = useId();
   const isMetadataAvailable = isAssistant && metadataRows.length > 0;
   const variants = isAssistant && Array.isArray(message.variants) ? message.variants : [];
   const hasVariants = variants.length > 1;
@@ -83,10 +85,15 @@ export function ChatMessageFooter({
           <div className={styles.chatActionIconRow}>
             {isMetadataAvailable ? (
               <div className={styles.chatMetadataControl}>
-                <button type="button" aria-label={t("Response details")} tabIndex={0}>
+                <button
+                  type="button"
+                  aria-label={t("Response details")}
+                  aria-describedby={metadataTooltipId}
+                  tabIndex={0}
+                >
                   <SignalHigh size={15} />
                 </button>
-                <div className={styles.chatMetadataPopover} role="tooltip" aria-hidden="true">
+                <div className={styles.chatMetadataPopover} role="tooltip" id={metadataTooltipId}>
                   {metadataRows.map((row) => (
                     <div key={row.label}>
                       <span>{row.label}</span>

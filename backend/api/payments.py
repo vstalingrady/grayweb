@@ -6,7 +6,8 @@ This router handles payment charge creation and webhook notifications.
 
 import os
 from urllib.parse import urlparse
-from datetime import datetime
+from datetime import datetime, timezone
+from uuid import uuid4
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
@@ -15,7 +16,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request,
 from backend.models import PaymentRequest, PaymentChargeResponse, MidtransNotification
 
 # Import dependencies
-from backend.database import database, transactions, users, get_database
+from backend.database import database, payment_webhook_events, transactions, users, get_database
 from backend.auth import get_current_user
 from backend.time_utils import utcnow
 from backend.compat_imports import row_get as _row_get
@@ -50,6 +51,8 @@ _PLAN_PRICING_USD: Dict[str, Dict[str, int]] = {
     "pioneer": {"monthly": 3700, "annual": 37700},
 }
 
+_ADAPTIVE_CURRENCY_MARKER = "ADAPTIVE"
+
 
 def _normalize_provider(provider: Optional[str]) -> str:
     if not provider:
@@ -69,11 +72,14 @@ def _get_plan_amount(
     billing_currency: Optional[str] = None,
 ) -> Tuple[int, str, str]:
     tier = (plan_tier or "").strip().lower()
-    cycle = "annual" if billing_cycle == "annual" else "monthly"
+    cycle = _normalize_billing_cycle_value(billing_cycle)
     currency = (billing_currency or "").strip().upper()
 
     if tier not in _PLAN_PRICING_IDR:
         raise HTTPException(status_code=400, detail="Invalid plan tier")
+
+    if currency and currency not in {"USD", "IDR"}:
+        raise HTTPException(status_code=400, detail=f"Unsupported billing currency: {currency}")
 
     if currency == "USD":
         pricing = _PLAN_PRICING_USD
@@ -93,7 +99,7 @@ def _get_dodo_product_id(
     billing_currency: Optional[str] = None,
 ) -> str:
     tier = (plan_tier or "").strip().upper()
-    cycle = "ANNUAL" if billing_cycle == "annual" else "MONTHLY"
+    cycle = _normalize_billing_cycle_value(billing_cycle).upper()
     currency = (billing_currency or "").strip().upper()
     base_key = f"DODO_PRODUCT_{tier}_{cycle}"
 
@@ -233,6 +239,48 @@ def _parse_amount(value: Any) -> Optional[int]:
         return None
 
 
+def _normalize_currency_code(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    normalized = str(value).strip().upper()
+    if not normalized:
+        return None
+    return normalized
+
+
+def _is_adaptive_currency_value(value: Any) -> bool:
+    normalized = _normalize_currency_code(value)
+    return normalized in {_ADAPTIVE_CURRENCY_MARKER, "AUTO"}
+
+
+def _parse_amount_for_success_validation(
+    raw_value: Any,
+    *,
+    provider: str,
+    order_id: Optional[str],
+    field_name: str,
+    app_logger,
+) -> Optional[int]:
+    if raw_value is None:
+        return None
+    if isinstance(raw_value, str) and not raw_value.strip():
+        return None
+
+    parsed_amount = _parse_amount(raw_value)
+    if parsed_amount is None:
+        app_logger.error(
+            "Invalid amount payload for success webhook",
+            extra={
+                "provider": provider,
+                "order_id": order_id,
+                "field_name": field_name,
+                "raw_value": str(raw_value),
+            },
+        )
+        raise HTTPException(status_code=409, detail="Invalid amount payload")
+    return parsed_amount
+
+
 def _get_dodo_session_value(session: Any, key: str) -> Optional[Any]:
     if isinstance(session, dict):
         return session.get(key)
@@ -258,14 +306,283 @@ def _extract_metadata(payload_data: Any) -> Dict[str, Any]:
     return {}
 
 
+def _generate_order_id(prefix: str, user_id: Any) -> str:
+    return f"{prefix}-{user_id}-{uuid4().hex}"
+
+
+def _normalize_billing_cycle_value(value: Optional[str]) -> str:
+    from backend.subscription_utils import normalize_billing_cycle
+
+    return normalize_billing_cycle(value)
+
+
+def _parse_provider_timestamp(raw_value: Any) -> Optional[datetime]:
+    if not raw_value:
+        return None
+    text = str(raw_value).strip()
+    if not text:
+        return None
+    normalized = text.replace("Z", "+00:00")
+    if len(normalized) >= 5 and normalized[-5] in ("+", "-") and normalized[-3] != ":":
+        normalized = f"{normalized[:-2]}:{normalized[-2:]}"
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed
+    return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _as_naive_utc_datetime(value: Any) -> Optional[datetime]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+    return _parse_provider_timestamp(value)
+
+
+def _midtrans_event_key(notification: MidtransNotification) -> str:
+    transaction_id = (notification.transaction_id or "").strip()
+    if transaction_id:
+        return transaction_id
+    return (
+        f"{notification.order_id}:{notification.transaction_status}:"
+        f"{notification.status_code}:{notification.gross_amount}:{notification.transaction_time}"
+    )
+
+
+def _dodo_event_key(
+    *,
+    headers: Dict[str, str],
+    payload: Dict[str, Any],
+    event_type: Optional[str],
+    order_id: Optional[str],
+) -> str:
+    header_id = (headers.get("webhook-id") or "").strip()
+    if header_id:
+        return header_id
+    payload_id = _event_value(payload, "id")
+    if payload_id:
+        return str(payload_id)
+    timestamp = (headers.get("webhook-timestamp") or "").strip()
+    signature = (headers.get("webhook-signature") or "").strip()
+    return f"{event_type or 'unknown'}:{order_id or ''}:{timestamp}:{signature[:48]}"
+
+
+async def _reserve_payment_webhook_event(
+    *,
+    provider: str,
+    event_key: str,
+    order_id: Optional[str],
+    event_type: Optional[str],
+) -> bool:
+    normalized_key = (event_key or "").strip()
+    if not normalized_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Malformed webhook event payload: missing event identifier.",
+        )
+    try:
+        await database.execute(
+            payment_webhook_events.insert().values(
+                provider=provider,
+                event_key=normalized_key,
+                order_id=order_id,
+                event_type=event_type,
+                created_at=utcnow(),
+            )
+        )
+        return True
+    except Exception as exc:
+        message = str(exc).lower()
+        if "unique" in message or "duplicate" in message:
+            # Retry-safe behavior for transient failures:
+            # if this order is still unresolved/non-final, allow re-processing.
+            if order_id:
+                existing_transaction = await database.fetch_one(
+                    transactions.select().where(transactions.c.order_id == order_id)
+                )
+                if existing_transaction is None:
+                    _get_logger().warning(
+                        "Allowing webhook retry because transaction is not yet visible",
+                        extra={
+                            "event_type": "payment_webhook_retry_allowed_missing_transaction",
+                            "provider": provider,
+                            "order_id": order_id,
+                            "event_key": normalized_key,
+                        },
+                    )
+                    return True
+
+                status_value = str(existing_transaction["status"] or "").strip().lower()
+                final_statuses = {
+                    "success",
+                    "failed",
+                    "cancelled",
+                    "expired",
+                    "refunded",
+                    "chargeback",
+                }
+                if status_value not in final_statuses:
+                    _get_logger().warning(
+                        "Allowing webhook retry for non-final transaction state",
+                        extra={
+                            "event_type": "payment_webhook_retry_allowed_non_final_transaction",
+                            "provider": provider,
+                            "order_id": order_id,
+                            "status": status_value,
+                            "event_key": normalized_key,
+                        },
+                    )
+                    return True
+            return False
+        raise
+
+
+async def _extend_user_subscription_atomic(
+    *,
+    user_id: int,
+    plan_tier: str,
+    billing_cycle: Optional[str],
+    now: Optional[datetime] = None,
+    max_retries: int = 5,
+) -> Tuple[datetime, datetime]:
+    from backend.subscription_utils import subscription_duration
+
+    normalized_cycle = _normalize_billing_cycle_value(billing_cycle)
+    extension_duration = subscription_duration(normalized_cycle)
+    now_value = _as_naive_utc_datetime(now) or utcnow()
+    normalized_plan = str(plan_tier or "").strip().lower() or "scout"
+
+    for _ in range(max_retries):
+        user_row = await database.fetch_one(users.select().where(users.c.id == user_id))
+        if user_row is None:
+            raise HTTPException(status_code=409, detail="Unknown user")
+
+        existing_expires_snapshot = user_row["subscription_expires_at"]
+        existing_expires_at = _as_naive_utc_datetime(existing_expires_snapshot)
+        subscription_starts_at = (
+            existing_expires_at if existing_expires_at and existing_expires_at > now_value else now_value
+        )
+        subscription_expires_at = subscription_starts_at + extension_duration
+
+        claim_query = (
+            users.update()
+            .where(users.c.id == user_id)
+            .values(
+                plan_tier=normalized_plan,
+                subscription_expires_at=subscription_expires_at,
+                updated_at=utcnow(),
+            )
+        )
+        if existing_expires_snapshot is None:
+            claim_query = claim_query.where(users.c.subscription_expires_at.is_(None))
+        else:
+            claim_query = claim_query.where(users.c.subscription_expires_at == existing_expires_snapshot)
+
+        claim = await database.fetch_one(claim_query.returning(users.c.subscription_expires_at))
+        if claim is not None:
+            updated_expires_at = _as_naive_utc_datetime(claim["subscription_expires_at"]) or subscription_expires_at
+            updated_starts_at = updated_expires_at - extension_duration
+            return updated_starts_at, updated_expires_at
+
+    raise HTTPException(status_code=409, detail="Concurrent subscription update conflict")
+
+
+async def _reconcile_user_plan_after_reversal(
+    *,
+    user_id: int,
+    reversed_order_id: Optional[str],
+    reason: str,
+    invalidate_user_cache,
+    invalidate_user_cache_redis,
+    app_logger,
+) -> None:
+    from backend.tier_utils import normalize_plan_tier
+
+    now = utcnow()
+    existing_user_row = await database.fetch_one(users.select().where(users.c.id == user_id))
+    active_success_tx = await database.fetch_one(
+        transactions.select()
+        .where(transactions.c.user_id == user_id)
+        .where(transactions.c.status == "success")
+        .where(transactions.c.subscription_ends_at.isnot(None))
+        .where(transactions.c.subscription_ends_at > now)
+        .where(transactions.c.order_id != reversed_order_id)
+        .order_by(transactions.c.subscription_ends_at.desc())
+    )
+
+    preserve_non_expiring_pioneer = False
+    if existing_user_row:
+        current_expires_at = existing_user_row["subscription_expires_at"]
+        current_plan_tier = normalize_plan_tier(
+            existing_user_row["plan_tier"],
+            subscription_expires_at=current_expires_at,
+        )
+        preserve_non_expiring_pioneer = (
+            current_plan_tier == "pioneer"
+            and current_expires_at is None
+            and active_success_tx is None
+        )
+
+    if active_success_tx:
+        next_plan = str(active_success_tx["plan_tier"] or "scout").strip().lower()
+        next_expires_at = active_success_tx["subscription_ends_at"]
+    elif preserve_non_expiring_pioneer:
+        next_plan = str(existing_user_row["plan_tier"] or "pioneer").strip().lower()
+        next_expires_at = None
+    else:
+        next_plan = "scout"
+        next_expires_at = None
+
+    await database.execute(
+        users.update()
+        .where(users.c.id == user_id)
+        .values(
+            plan_tier=next_plan,
+            subscription_expires_at=next_expires_at,
+            updated_at=utcnow(),
+        )
+    )
+
+    try:
+        user_row = await database.fetch_one(users.select().where(users.c.id == user_id))
+        user_email = user_row["email"] if user_row else None
+        if isinstance(user_email, str) and user_email.strip():
+            normalized_email = user_email.strip().lower()
+            invalidate_user_cache(normalized_email)
+            await invalidate_user_cache_redis(normalized_email)
+    except Exception as exc:
+        app_logger.warning(
+            "Failed to invalidate auth cache after subscription reversal",
+            extra={"user_id": user_id, "error": str(exc), "reason": reason},
+        )
+
+    app_logger.info(
+        "Applied subscription reversal reconciliation",
+        extra={
+            "user_id": user_id,
+            "reason": reason,
+            "reversed_order_id": reversed_order_id,
+            "next_plan_tier": next_plan,
+            "next_subscription_expires_at": next_expires_at.isoformat() if next_expires_at else None,
+        },
+    )
+
+
 async def _create_midtrans_charge(request: PaymentRequest, user: Dict[str, Any]) -> PaymentChargeResponse:
     from backend.payment_utils import create_core_api_transaction
 
     app_logger = _get_logger()
-    amount, item_name, _ = _get_plan_amount(request.plan_tier, request.billing_cycle)
+    normalized_plan = (request.plan_tier or "").strip().lower()
+    normalized_billing_cycle = _normalize_billing_cycle_value(request.billing_cycle)
+    amount, item_name, _ = _get_plan_amount(normalized_plan, normalized_billing_cycle)
     item_details = [
         {
-            "id": f"{request.plan_tier}_{request.billing_cycle}",
+            "id": f"{normalized_plan}_{normalized_billing_cycle}",
             "price": amount,
             "quantity": 1,
             "name": item_name,
@@ -286,7 +603,7 @@ async def _create_midtrans_charge(request: PaymentRequest, user: Dict[str, Any])
         "email": email,
     }
 
-    order_id = f"ORDER-{user_id}-{int(datetime.now().timestamp())}"
+    order_id = _generate_order_id("ORDER", user_id)
 
     bank_args = None
     token_id = None
@@ -316,8 +633,8 @@ async def _create_midtrans_charge(request: PaymentRequest, user: Dict[str, Any])
             currency="IDR",
             status="pending",
             payment_type=payment_type,
-            plan_tier=request.plan_tier,
-            billing_cycle=request.billing_cycle,
+            plan_tier=normalized_plan,
+            billing_cycle=normalized_billing_cycle,
             created_at=utcnow(),
             updated_at=utcnow(),
         )
@@ -375,11 +692,13 @@ async def _create_dodo_checkout(request: PaymentRequest, user: Dict[str, Any]) -
 
     billing_currency = request.billing_currency.strip().upper() if request.billing_currency else None
     normalized_plan = (request.plan_tier or "").strip().lower()
-    amount, _, currency = _get_plan_amount(normalized_plan, request.billing_cycle, billing_currency)
-    product_id = _get_dodo_product_id(normalized_plan, request.billing_cycle, billing_currency)
+    normalized_billing_cycle = _normalize_billing_cycle_value(request.billing_cycle)
+    amount, _, _ = _get_plan_amount(normalized_plan, normalized_billing_cycle, billing_currency)
+    product_id = _get_dodo_product_id(normalized_plan, normalized_billing_cycle, billing_currency)
     metadata_currency = billing_currency or "adaptive"
+    stored_currency = billing_currency or _ADAPTIVE_CURRENCY_MARKER
 
-    order_id = f"DODO-{user_id}-{int(datetime.now().timestamp())}"
+    order_id = _generate_order_id("DODO", user_id)
 
     full_name = (_row_get(user, "full_name") or "").strip()
     email = (_row_get(user, "email") or "").strip()
@@ -387,7 +706,7 @@ async def _create_dodo_checkout(request: PaymentRequest, user: Dict[str, Any]) -
         "order_id": order_id,
         "user_id": str(user_id),
         "plan_tier": normalized_plan,
-        "billing_cycle": request.billing_cycle or "monthly",
+        "billing_cycle": normalized_billing_cycle,
         "currency": metadata_currency,
     }
 
@@ -396,11 +715,11 @@ async def _create_dodo_checkout(request: PaymentRequest, user: Dict[str, Any]) -
             user_id=user_id,
             order_id=order_id,
             amount=amount,
-            currency=currency,
+            currency=stored_currency,
             status="pending",
             payment_type="dodo_checkout",
             plan_tier=normalized_plan,
-            billing_cycle=request.billing_cycle,
+            billing_cycle=normalized_billing_cycle,
             created_at=utcnow(),
             updated_at=utcnow(),
         )
@@ -507,6 +826,20 @@ async def handle_payment_notification(notification: MidtransNotification, backgr
             )
         raise HTTPException(status_code=400, detail="Invalid signature")
 
+    event_key = _midtrans_event_key(notification)
+    event_reserved = await _reserve_payment_webhook_event(
+        provider="midtrans",
+        event_key=event_key,
+        order_id=notification.order_id,
+        event_type=notification.transaction_status,
+    )
+    if not event_reserved:
+        app_logger.info(
+            "Ignoring duplicate Midtrans webhook event",
+            extra={"order_id": notification.order_id, "event_key": event_key},
+        )
+        return {"status": "ignored"}
+
     # 2. Update Transaction Status
     existing_transaction = await database.fetch_one(
         transactions.select().where(transactions.c.order_id == notification.order_id)
@@ -518,26 +851,116 @@ async def handle_payment_notification(notification: MidtransNotification, backgr
         "settlement": "success", 
         "pending": "pending",
         "deny": "failed",
+        "refund": "refunded",
+        "partial_refund": "refunded",
+        "chargeback": "chargeback",
+        "partial_chargeback": "chargeback",
         "expire": "expired",
         "cancel": "cancelled"
     }
-    
-    new_status = status_mapping.get(notification.transaction_status, "pending")
-    
-    if notification.transaction_status == "capture" and notification.fraud_status == "challenge":
-        new_status = "challenge"
+    if notification.transaction_status not in status_mapping:
+        app_logger.warning(
+            "Ignoring Midtrans webhook with unknown transaction_status",
+            extra={
+                "order_id": notification.order_id,
+                "transaction_status": notification.transaction_status,
+            },
+        )
+        return {"status": "ignored"}
 
-    should_notify_success = new_status == "success" and previous_status != "success"
+    new_status = status_mapping[notification.transaction_status]
+    if notification.transaction_status == "capture":
+        fraud_status = (notification.fraud_status or "").strip().lower()
+        if fraud_status == "challenge":
+            new_status = "challenge"
+        elif fraud_status == "deny":
+            new_status = "failed"
+
+    if (
+        existing_transaction is not None
+        and str(previous_status or "").strip().lower() == "success"
+        and new_status not in {"refunded", "chargeback"}
+    ):
+        app_logger.warning(
+            "Ignoring stale Midtrans webhook that would regress a successful transaction",
+            extra={
+                "order_id": notification.order_id,
+                "previous_status": previous_status,
+                "incoming_status": new_status,
+                "transaction_status": notification.transaction_status,
+            },
+        )
+        return {"status": "ignored"}
 
     try:
-        amount_value = _parse_amount(notification.gross_amount)
-        paid_at = existing_transaction["paid_at"] if existing_transaction and existing_transaction["paid_at"] else utcnow()
+        amount_value = (
+            _parse_amount_for_success_validation(
+                notification.gross_amount,
+                provider="midtrans",
+                order_id=notification.order_id,
+                field_name="gross_amount",
+                app_logger=app_logger,
+            )
+            if new_status == "success"
+            else _parse_amount(notification.gross_amount)
+        )
+        currency_value = (_normalize_currency_code(notification.currency) or "IDR")
+        expected_amount = existing_transaction["amount"] if existing_transaction else None
+        expected_currency = (
+            (_normalize_currency_code(existing_transaction["currency"]) or currency_value)
+            if existing_transaction
+            else currency_value
+        )
+
+        if new_status == "success":
+            if existing_transaction is None:
+                app_logger.error(
+                    "Midtrans success webhook has no matching local transaction",
+                    extra={"order_id": notification.order_id},
+                )
+                raise HTTPException(status_code=409, detail="Unknown order_id")
+            if (
+                expected_amount is not None
+                and amount_value is not None
+                and int(expected_amount) != int(amount_value)
+            ):
+                app_logger.error(
+                    "Midtrans amount mismatch",
+                    extra={
+                        "order_id": notification.order_id,
+                        "expected_amount": expected_amount,
+                        "received_amount": amount_value,
+                    },
+                )
+                raise HTTPException(status_code=409, detail="Amount mismatch")
+            if amount_value is None:
+                app_logger.error(
+                    "Midtrans success webhook missing gross_amount",
+                    extra={"order_id": notification.order_id},
+                )
+                raise HTTPException(status_code=409, detail="Missing amount")
+            if expected_currency and currency_value and expected_currency != currency_value:
+                app_logger.error(
+                    "Midtrans currency mismatch",
+                    extra={
+                        "order_id": notification.order_id,
+                        "expected_currency": expected_currency,
+                        "received_currency": currency_value,
+                    },
+                )
+                raise HTTPException(status_code=409, detail="Currency mismatch")
+
+        provider_paid_at = _parse_provider_timestamp(notification.transaction_time)
+        paid_at = (
+            provider_paid_at
+            or (existing_transaction["paid_at"] if existing_transaction and existing_transaction["paid_at"] else None)
+            or utcnow()
+        )
         updated_amount = (
             amount_value
             if amount_value is not None
-            else existing_transaction["amount"] if existing_transaction else 0
+            else expected_amount if expected_amount is not None else 0
         )
-        currency_value = notification.currency or "IDR"
         updated_currency = (
             currency_value
             if new_status == "success"
@@ -557,38 +980,39 @@ async def handle_payment_notification(notification: MidtransNotification, backgr
             paid_at=updated_paid_at,
             updated_at=utcnow(),
         )
-        await database.execute(query)
-        
-        # 3. Provision Plan if Success
+        transitioned_to_success = False
         if new_status == "success":
+            transition_claim = await database.fetch_one(
+                query.where(transactions.c.status != "success").returning(transactions.c.id)
+            )
+            transitioned_to_success = transition_claim is not None
+        else:
+            await database.execute(query)
+
+        should_provision_success = (
+            new_status == "success"
+            and transitioned_to_success
+            and existing_transaction is not None
+        )
+        should_notify_success = should_provision_success
+
+        # 3. Provision plan only on the first transition to success.
+        if should_provision_success:
             trans_query = transactions.select().where(transactions.c.order_id == notification.order_id)
             transaction = await database.fetch_one(trans_query)
             
             if transaction:
                 user_id = transaction["user_id"]
                 plan_tier = transaction["plan_tier"]
-                
-                from backend.subscription_utils import calculate_subscription_period
 
-                now = utcnow()
-                user_record = await database.fetch_one(users.select().where(users.c.id == user_id))
-                existing_expires_at = user_record["subscription_expires_at"] if user_record else None
-                
                 billing_val = transaction["billing_cycle"] if "billing_cycle" in transaction else None
-                billing_cycle = billing_val or "monthly"
-                
-                subscription_starts_at, subscription_expires_at = calculate_subscription_period(
+                billing_cycle = _normalize_billing_cycle_value(billing_val)
+                subscription_starts_at, subscription_expires_at = await _extend_user_subscription_atomic(
+                    user_id=int(user_id),
+                    plan_tier=str(plan_tier or "").strip().lower(),
                     billing_cycle=billing_cycle,
-                    existing_expires_at=existing_expires_at,
-                    now=now,
+                    now=utcnow(),
                 )
-                
-                user_update = users.update().where(users.c.id == user_id).values(
-                    plan_tier=plan_tier,
-                    subscription_expires_at=subscription_expires_at,
-                    updated_at=utcnow()
-                )
-                await database.execute(user_update)
 
                 await database.execute(
                     transactions.update()
@@ -651,22 +1075,7 @@ async def handle_payment_notification(notification: MidtransNotification, backgr
                             "transaction_id": notification.transaction_id,
                         },
                     )
-            elif should_notify_success:
-                from backend.discord_notifier import notify_payment_success
-                background_tasks.add_task(
-                    notify_payment_success,
-                    provider="midtrans",
-                    status=notification.transaction_status,
-                    order_id=notification.order_id,
-                    amount=notification.gross_amount,
-                    currency=notification.currency,
-                    extra={
-                        "payment_type": notification.payment_type,
-                        "transaction_id": notification.transaction_id,
-                        "note": "No matching local transaction row",
-                    },
-                )
-        elif new_status in ("failed", "deny", "expired", "cancelled"):
+        elif new_status in ("failed", "expired", "cancelled", "challenge", "refunded", "chargeback"):
             if audit:
                 trans_query = transactions.select().where(transactions.c.order_id == notification.order_id)
                 transaction = await database.fetch_one(trans_query)
@@ -680,7 +1089,21 @@ async def handle_payment_notification(notification: MidtransNotification, backgr
                     },
                     severity="warning"
                 )
-        
+            if (
+                new_status in {"refunded", "chargeback"}
+                and existing_transaction is not None
+                and previous_status != new_status
+            ):
+                await _reconcile_user_plan_after_reversal(
+                    user_id=int(existing_transaction["user_id"]),
+                    reversed_order_id=notification.order_id,
+                    reason=f"midtrans_{new_status}",
+                    invalidate_user_cache=invalidate_user_cache,
+                    invalidate_user_cache_redis=invalidate_user_cache_redis,
+                    app_logger=app_logger,
+                )
+    except HTTPException:
+        raise
     except Exception as e:
         app_logger.error(f"Error processing payment notification: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -710,6 +1133,10 @@ async def handle_dodo_webhook(request: Request, background_tasks: BackgroundTask
         "webhook-signature": request.headers.get("webhook-signature", ""),
         "webhook-timestamp": request.headers.get("webhook-timestamp", ""),
     }
+
+    if not os.getenv("DODO_PAYMENTS_WEBHOOK_KEY"):
+        app_logger.error("Dodo webhook key missing")
+        raise HTTPException(status_code=503, detail="Dodo webhook verification is not configured")
 
     try:
         client = get_dodo_client()
@@ -748,18 +1175,42 @@ async def handle_dodo_webhook(request: Request, background_tasks: BackgroundTask
         or (data.get("reference_id") if isinstance(data, dict) else None)
         or (data.get("referenceId") if isinstance(data, dict) else None)
     )
+    event_type_normalized = str(event_type or "").strip().lower()
+    dodo_event_key = _dodo_event_key(
+        headers=headers,
+        payload=payload,
+        event_type=event_type,
+        order_id=order_id,
+    )
+    event_reserved = await _reserve_payment_webhook_event(
+        provider="dodo",
+        event_key=dodo_event_key,
+        order_id=order_id,
+        event_type=event_type_normalized or None,
+    )
+    if not event_reserved:
+        app_logger.info(
+            "Ignoring duplicate Dodo webhook event",
+            extra={"order_id": order_id, "event_key": dodo_event_key, "event_type": event_type},
+        )
+        return {"status": "ignored"}
 
     user_id = metadata.get("user_id") or metadata.get("userId")
-    plan_tier = metadata.get("plan_tier") or metadata.get("planTier")
-    billing_cycle = metadata.get("billing_cycle") or metadata.get("billingCycle")
+    plan_tier_raw = metadata.get("plan_tier") or metadata.get("planTier")
+    plan_tier = (
+        plan_tier_raw.strip().lower()
+        if isinstance(plan_tier_raw, str)
+        else plan_tier_raw
+    )
+    billing_cycle = _normalize_billing_cycle_value(
+        metadata.get("billing_cycle") or metadata.get("billingCycle")
+    )
 
     if not plan_tier and isinstance(data, dict):
         plan_from_product, cycle_from_product = _resolve_plan_from_product_id(data.get("product_id"))
         plan_tier = plan_from_product
-        billing_cycle = billing_cycle or cycle_from_product
-
-    if not billing_cycle:
-        billing_cycle = "monthly"
+        if cycle_from_product:
+            billing_cycle = _normalize_billing_cycle_value(cycle_from_product)
 
     customer_email = None
     if isinstance(data, dict):
@@ -784,18 +1235,30 @@ async def handle_dodo_webhook(request: Request, background_tasks: BackgroundTask
         user_id_int = None
 
     existing_transaction = None
-    previous_status = None
     if order_id:
         existing_transaction = await database.fetch_one(
             transactions.select().where(transactions.c.order_id == order_id)
         )
-        previous_status = existing_transaction["status"] if existing_transaction else None
+        if existing_transaction:
+            txn_user_id = int(existing_transaction["user_id"])
+            if user_id_int is None:
+                user_id_int = txn_user_id
+            elif user_id_int != txn_user_id:
+                app_logger.error(
+                    "Dodo webhook user_id mismatch with local transaction",
+                    extra={"order_id": order_id, "metadata_user_id": user_id_int, "transaction_user_id": txn_user_id},
+                )
+                raise HTTPException(status_code=409, detail="User mismatch")
+            plan_tier = str(existing_transaction["plan_tier"]).strip().lower()
+            txn_billing_cycle = existing_transaction["billing_cycle"]
+            if txn_billing_cycle:
+                billing_cycle = _normalize_billing_cycle_value(txn_billing_cycle)
 
     subscription_status = None
     if event_type in ("subscription.updated", "subscription.created") and isinstance(data, dict):
         subscription_status = (data.get("status") or "").strip().lower() or None
 
-    subscription_success_states = {"active", "trialing", "paid", "succeeded", "success"}
+    subscription_success_states = {"paid", "succeeded", "success"}
     subscription_failure_states = {"failed", "canceled", "cancelled"}
 
     is_subscription_success = (
@@ -808,56 +1271,151 @@ async def handle_dodo_webhook(request: Request, background_tasks: BackgroundTask
     )
 
     is_payment_success = event_type in ("payment.succeeded", "payment.success")
+    is_payment_reversal = event_type_normalized in {
+        "payment.refunded",
+        "payment.partial_refunded",
+        "payment.chargeback",
+        "payment.dispute",
+        "payment.disputed",
+        "payment.reversed",
+    } or ("refund" in event_type_normalized) or ("chargeback" in event_type_normalized)
     if is_payment_success or is_subscription_success:
-        new_status = "success"
-        # Only notify on payment success events to avoid duplicate Discord messages.
-        should_notify_success = is_payment_success and previous_status != "success"
+        if not order_id or not existing_transaction:
+            app_logger.error(
+                "Dodo success webhook has no matching local transaction",
+                extra={"event_type": event_type, "order_id": order_id},
+            )
+            raise HTTPException(status_code=409, detail="Unknown order_id")
+        if user_id_int is None or not plan_tier:
+            app_logger.error(
+                "Dodo success webhook missing user or plan metadata",
+                extra={"event_type": event_type, "order_id": order_id, "user_id": user_id_int, "plan_tier": plan_tier},
+            )
+            raise HTTPException(status_code=409, detail="Missing user or plan metadata")
+        if str(plan_tier).strip().lower() not in _PLAN_PRICING_IDR:
+            app_logger.error(
+                "Dodo success webhook has invalid plan_tier",
+                extra={"event_type": event_type, "order_id": order_id, "plan_tier": plan_tier},
+            )
+            raise HTTPException(status_code=409, detail="Invalid plan_tier")
 
-        if order_id:
-            amount_value = _parse_amount(data.get("amount") if isinstance(data, dict) else None)
-            paid_at = existing_transaction["paid_at"] if existing_transaction and existing_transaction["paid_at"] else utcnow()
-            updated_amount = (
-                amount_value
-                if amount_value is not None
-                else existing_transaction["amount"] if existing_transaction else 0
-            )
-            currency_value = (data.get("currency") if isinstance(data, dict) else None) or (
-                existing_transaction["currency"] if existing_transaction else None
-            )
-            await database.execute(
-                transactions.update()
-                .where(transactions.c.order_id == order_id)
-                .values(
-                    status=new_status,
-                    amount=updated_amount,
-                    currency=currency_value,
-                    paid_at=paid_at,
-                    updated_at=utcnow(),
+        amount_field_name = "amount"
+        raw_amount_value = None
+        if isinstance(data, dict):
+            for candidate_field in ("amount", "total_amount", "gross_amount"):
+                candidate_value = data.get(candidate_field)
+                if candidate_value is None:
+                    continue
+                if isinstance(candidate_value, str) and not candidate_value.strip():
+                    continue
+                raw_amount_value = candidate_value
+                amount_field_name = candidate_field
+                break
+        amount_value = _parse_amount_for_success_validation(
+            raw_amount_value,
+            provider="dodo",
+            order_id=order_id,
+            field_name=amount_field_name,
+            app_logger=app_logger,
+        )
+        stored_amount = existing_transaction["amount"]
+        received_currency = _normalize_currency_code(
+            data.get("currency") if isinstance(data, dict) else None
+        )
+        stored_currency = _normalize_currency_code(existing_transaction["currency"])
+        adaptive_currency_checkout = (
+            _is_adaptive_currency_value(stored_currency)
+            or str(metadata.get("currency") or "").strip().lower() == "adaptive"
+        )
+        expected_amount = stored_amount
+        expected_currency = stored_currency or received_currency or "USD"
+
+        if adaptive_currency_checkout:
+            if not received_currency:
+                app_logger.error(
+                    "Dodo adaptive currency webhook missing currency",
+                    extra={"order_id": order_id, "event_type": event_type},
                 )
+                raise HTTPException(status_code=409, detail="Missing currency")
+            try:
+                adaptive_expected_amount, adaptive_expected_currency, _ = _get_plan_amount(
+                    str(plan_tier),
+                    billing_cycle,
+                    received_currency,
+                )
+            except HTTPException:
+                app_logger.error(
+                    "Dodo adaptive currency webhook has unsupported currency",
+                    extra={
+                        "order_id": order_id,
+                        "received_currency": received_currency,
+                        "plan_tier": plan_tier,
+                        "billing_cycle": billing_cycle,
+                    },
+                )
+                raise HTTPException(status_code=409, detail="Unsupported currency")
+            expected_amount = adaptive_expected_amount
+            expected_currency = adaptive_expected_currency
+
+        if expected_amount is not None and amount_value is not None and int(expected_amount) != int(amount_value):
+            app_logger.error(
+                "Dodo amount mismatch",
+                extra={"order_id": order_id, "expected_amount": expected_amount, "received_amount": amount_value},
             )
+            raise HTTPException(status_code=409, detail="Amount mismatch")
 
-        if user_id_int and plan_tier and previous_status != "success":
-            from backend.subscription_utils import calculate_subscription_period
+        if (
+            expected_currency
+            and received_currency
+            and not adaptive_currency_checkout
+            and expected_currency != received_currency
+        ):
+            app_logger.error(
+                "Dodo currency mismatch",
+                extra={
+                    "order_id": order_id,
+                    "expected_currency": expected_currency,
+                    "received_currency": received_currency,
+                },
+            )
+            raise HTTPException(status_code=409, detail="Currency mismatch")
+        currency_for_storage = received_currency or expected_currency
 
-            user_record = await database.fetch_one(users.select().where(users.c.id == user_id_int))
-            existing_expires_at = user_record["subscription_expires_at"] if user_record else None
+        provider_paid_at = _parse_provider_timestamp(
+            data.get("paid_at") if isinstance(data, dict) else None
+        ) or _parse_provider_timestamp(
+            data.get("updated_at") if isinstance(data, dict) else None
+        ) or _parse_provider_timestamp(
+            data.get("created_at") if isinstance(data, dict) else None
+        )
+        paid_at = provider_paid_at or existing_transaction["paid_at"] or utcnow()
+        updated_amount = amount_value if amount_value is not None else stored_amount
 
-            subscription_starts_at, subscription_expires_at = calculate_subscription_period(
+        transition_claim = await database.fetch_one(
+            transactions.update()
+            .where(transactions.c.order_id == order_id)
+            .where(transactions.c.status != "success")
+            .values(
+                status="success",
+                amount=updated_amount,
+                currency=currency_for_storage,
+                paid_at=paid_at,
+                updated_at=utcnow(),
+            )
+            .returning(transactions.c.id)
+        )
+        transitioned_to_success = transition_claim is not None
+        should_provision_success = bool(transitioned_to_success and user_id_int is not None and plan_tier)
+        # Only notify on payment success events to avoid duplicate Discord messages.
+        should_notify_success = is_payment_success and should_provision_success
+
+        if should_provision_success:
+            subscription_starts_at, subscription_expires_at = await _extend_user_subscription_atomic(
+                user_id=int(user_id_int),
+                plan_tier=str(plan_tier or "").strip().lower(),
                 billing_cycle=billing_cycle,
-                existing_expires_at=existing_expires_at,
                 now=utcnow(),
             )
-
-            await database.execute(
-                users.update()
-                .where(users.c.id == user_id_int)
-                .values(
-                    plan_tier=plan_tier,
-                    subscription_expires_at=subscription_expires_at,
-                    updated_at=utcnow(),
-                )
-            )
-
             if order_id:
                 await database.execute(
                     transactions.update()
@@ -918,16 +1476,53 @@ async def handle_dodo_webhook(request: Request, background_tasks: BackgroundTask
         "payment.canceled",
         "subscription.canceled",
         "subscription.cancelled",
-    ) or is_subscription_failure:
+    ) or is_subscription_failure or is_payment_reversal:
+        if (
+            existing_transaction is not None
+            and str(existing_transaction["status"] or "").strip().lower() == "success"
+            and not is_payment_reversal
+        ):
+            app_logger.warning(
+                "Ignoring stale Dodo failure/cancel webhook for successful transaction",
+                extra={
+                    "order_id": order_id,
+                    "event_type": event_type,
+                    "subscription_status": subscription_status,
+                },
+            )
+            return {"status": "ignored"}
+
         status_value = "failed" if event_type == "payment.failed" else "cancelled"
         if is_subscription_failure and subscription_status == "failed":
             status_value = "failed"
+        if is_payment_reversal:
+            status_value = "chargeback" if "chargeback" in event_type_normalized else "refunded"
         if order_id:
-            await database.execute(
-                transactions.update()
-                .where(transactions.c.order_id == order_id)
-                .values(status=status_value, updated_at=utcnow())
-            )
+            transitioned_to_reversal = False
+            if is_payment_reversal:
+                reversal_claim = await database.fetch_one(
+                    transactions.update()
+                    .where(transactions.c.order_id == order_id)
+                    .where(transactions.c.status != status_value)
+                    .values(status=status_value, updated_at=utcnow())
+                    .returning(transactions.c.id)
+                )
+                transitioned_to_reversal = reversal_claim is not None
+            else:
+                await database.execute(
+                    transactions.update()
+                    .where(transactions.c.order_id == order_id)
+                    .values(status=status_value, updated_at=utcnow())
+                )
+            if is_payment_reversal and transitioned_to_reversal and existing_transaction:
+                await _reconcile_user_plan_after_reversal(
+                    user_id=int(existing_transaction["user_id"]),
+                    reversed_order_id=order_id,
+                    reason=f"dodo_{status_value}",
+                    invalidate_user_cache=invalidate_user_cache,
+                    invalidate_user_cache_redis=invalidate_user_cache_redis,
+                    app_logger=app_logger,
+                )
 
         if audit:
             await audit.log(

@@ -3,6 +3,8 @@
 -- explicit record that owns its chat threads, and each thread stores its
 -- messages in a dedicated table.
 
+create extension if not exists pgcrypto;
+
 create table if not exists public.user_data (
     id bigserial primary key,
     user_identifier bigint not null unique,
@@ -51,12 +53,6 @@ create policy "user_data_service_role_full_access"
     using (true)
     with check (true);
 
-create policy "user_data_anon_full_access"
-    on public.user_data
-    for all
-    to anon
-    using (true)
-    with check (true);
 
 
 create table if not exists public.user_chat_threads (
@@ -112,12 +108,6 @@ create policy "user_chat_threads_service_role_full_access"
     using (true)
     with check (true);
 
-create policy "user_chat_threads_anon_full_access"
-    on public.user_chat_threads
-    for all
-    to anon
-    using (true)
-    with check (true);
 
 
 create table if not exists public.user_chat_messages (
@@ -167,12 +157,6 @@ create policy "user_chat_messages_service_role_full_access"
     using (true)
     with check (true);
 
-create policy "user_chat_messages_anon_full_access"
-    on public.user_chat_messages
-    for all
-    to anon
-    using (true)
-    with check (true);
 
 
 -- Backfill user-centric records from the legacy chat tables when they exist.
@@ -266,12 +250,29 @@ begin
             cm.text,
             cm.grounding_metadata,
             null,
-            coalesce(cm.created_at, now())
-        from public.chat_thread_messages cm;
+            coalesce(cm.created_at, 'epoch'::timestamptz)
+        from public.chat_thread_messages cm
+        where not exists (
+            select 1
+            from public.user_chat_messages existing
+            where existing.thread_id = cm.conversation_id
+              and existing.role = cm.role
+              and existing.text = cm.text
+              and coalesce(existing.created_at, 'epoch'::timestamptz)
+                    = coalesce(cm.created_at, 'epoch'::timestamptz)
+              and existing.grounding_metadata is not distinct from cm.grounding_metadata
+        );
     end if;
 end $$;
 
 
 -- Drop the Discord-focused tables now that the user-centric schema exists.
-drop table if exists public.chat_thread_messages cascade;
-drop table if exists public.chat_threads cascade;
+do $$
+begin
+    if current_setting('app.chat_schema_cleanup_confirmed', true) = 'true' then
+        drop table if exists public.chat_thread_messages cascade;
+        drop table if exists public.chat_threads cascade;
+    else
+        raise notice 'Skipping chat legacy table cleanup. Set app.chat_schema_cleanup_confirmed=true to execute drops.';
+    end if;
+end $$;

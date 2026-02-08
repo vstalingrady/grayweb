@@ -4,7 +4,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import databases
 import sqlalchemy
 import os
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 import logging
 from datetime import datetime, timezone
 
@@ -41,15 +41,29 @@ _redis_client = get_redis_client()
 _NODE_ENV = os.getenv("NODE_ENV", "").strip().lower()
 _ENVIRONMENT = os.getenv("ENVIRONMENT", "").strip().lower()
 _IS_PRODUCTION = _NODE_ENV == "production" or _ENVIRONMENT == "production"
+_LOCAL_ENV_VALUES = {"development", "dev", "local", "test"}
+_IS_EXPLICIT_LOCAL_ENV = (
+    _NODE_ENV in _LOCAL_ENV_VALUES or _ENVIRONMENT in _LOCAL_ENV_VALUES
+)
+_IS_PUBLIC_ENV = not _IS_EXPLICIT_LOCAL_ENV
+
+_ENFORCE_SUPABASE_LIVE_VALIDATION_RAW = os.getenv("ENFORCE_SUPABASE_LIVE_VALIDATION", "").strip().lower()
+if _ENFORCE_SUPABASE_LIVE_VALIDATION_RAW in ("1", "true", "yes", "on"):
+    _ENFORCE_SUPABASE_LIVE_VALIDATION = True
+elif _ENFORCE_SUPABASE_LIVE_VALIDATION_RAW in ("0", "false", "no", "off"):
+    _ENFORCE_SUPABASE_LIVE_VALIDATION = False
+else:
+    # Public/non-local environments should attempt live validation to reduce stale-token risk.
+    _ENFORCE_SUPABASE_LIVE_VALIDATION = _IS_PUBLIC_ENV
 
 _ALLOW_INSECURE_JWT_FALLBACK_FLAG = (
     os.getenv("ALLOW_INSECURE_JWT_FALLBACK", "").strip().lower() in ("1", "true", "yes")
 )
-_ALLOW_INSECURE_JWT_FALLBACK = _ALLOW_INSECURE_JWT_FALLBACK_FLAG and not _IS_PRODUCTION
+_ALLOW_INSECURE_JWT_FALLBACK = _ALLOW_INSECURE_JWT_FALLBACK_FLAG and _IS_EXPLICIT_LOCAL_ENV
 
-if _ALLOW_INSECURE_JWT_FALLBACK_FLAG and _IS_PRODUCTION:
+if _ALLOW_INSECURE_JWT_FALLBACK_FLAG and not _IS_EXPLICIT_LOCAL_ENV:
     logger.error(
-        "ALLOW_INSECURE_JWT_FALLBACK is enabled in production; ignoring for safety.",
+        "ALLOW_INSECURE_JWT_FALLBACK is enabled outside explicit local dev/test; ignoring for safety.",
         extra={"event_type": "auth_insecure_fallback_disabled"},
     )
 
@@ -186,6 +200,54 @@ def _derive_full_name(email: Optional[str], metadata: Dict[str, Any]) -> str:
 from backend.supabase_utils import create_supabase_client, resolve_supabase_credentials
 
 
+def _build_auth_payload(
+    sub: Optional[Any],
+    email: Optional[Any],
+    user_metadata: Optional[Any],
+) -> Dict[str, Any]:
+    return {
+        "sub": str(sub) if sub is not None else None,
+        "email": _normalize_email(email) if isinstance(email, str) else None,
+        "user_metadata": user_metadata if isinstance(user_metadata, dict) else {},
+    }
+
+
+def _validate_token_with_supabase(token: str) -> Tuple[Optional[Dict[str, Any]], bool, Optional[str]]:
+    """
+    Validate token against Supabase Auth.
+
+    This live check acts as a revocation/session-invalidated token check.
+    Returns (payload, validation_attempted, error_message).
+    """
+    supabase = create_supabase_client()
+    if not supabase:
+        logger.warning("Supabase client not initialized (missing credentials?), cannot verify token via API")
+        return None, False, "supabase_client_unavailable"
+
+    try:
+        response = supabase.auth.get_user(token)
+    except Exception as supabase_exc:
+        supabase_error = str(supabase_exc)
+        logger.debug(f"Supabase token validation failed: {supabase_error}")
+        if "Invalid API key" in supabase_error:
+            logger.error("CRITICAL: Supabase API rejected the configured SUPABASE_KEY. Please check your .env file.")
+        return None, False, supabase_error
+
+    if response and response.user:
+        return (
+            _build_auth_payload(
+                response.user.id,
+                response.user.email,
+                response.user.user_metadata,
+            ),
+            True,
+            None,
+        )
+
+    # Request completed but no active user/session was found for this token.
+    return None, True, None
+
+
 # =============================================================================
 # JWT VERIFICATION USING JWKS (Public Key Verification)
 # =============================================================================
@@ -199,6 +261,18 @@ from backend.supabase_utils import create_supabase_client, resolve_supabase_cred
 # =============================================================================
 
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")  # Legacy, optional
+_SUPABASE_URL_FOR_JWT, _, _ = resolve_supabase_credentials()
+_SUPABASE_EXPECTED_ISSUER = (
+    f"{_SUPABASE_URL_FOR_JWT.rstrip('/')}/auth/v1"
+    if _SUPABASE_URL_FOR_JWT
+    else None
+)
+_SUPABASE_JWT_AUDIENCE_RAW = os.getenv("SUPABASE_JWT_AUDIENCE", "authenticated").strip()
+_SUPABASE_EXPECTED_AUDIENCES = tuple(
+    value.strip()
+    for value in _SUPABASE_JWT_AUDIENCE_RAW.split(",")
+    if value.strip()
+)
 
 _JWKS_CACHE_TTL_SECONDS = 600  # 10 minutes - aligns with Supabase usage
 _jwk_client: Optional[Any] = None
@@ -212,6 +286,29 @@ def _get_jwks_url() -> Optional[str]:
         return None
     base = url.rstrip("/")
     return f"{base}/auth/v1/.well-known/jwks.json"
+
+
+def _jwt_decode_kwargs(algorithms: list[str]) -> Dict[str, Any]:
+    """Build consistent JWT decode requirements for user access tokens."""
+    options: Dict[str, Any] = {
+        "verify_exp": True,
+        "verify_signature": True,
+        "require": ["exp", "sub"],
+    }
+    kwargs: Dict[str, Any] = {
+        "algorithms": algorithms,
+        "options": options,
+    }
+    if _SUPABASE_EXPECTED_ISSUER:
+        options["verify_iss"] = True
+        kwargs["issuer"] = _SUPABASE_EXPECTED_ISSUER
+    if _SUPABASE_EXPECTED_AUDIENCES:
+        options["verify_aud"] = True
+        kwargs["audience"] = list(_SUPABASE_EXPECTED_AUDIENCES)
+    else:
+        # Allow explicit audience opt-out only when SUPABASE_JWT_AUDIENCE is unset/empty.
+        options["verify_aud"] = False
+    return kwargs
 
 def _get_jwk_client() -> Optional[Any]:
     """Get a cached PyJWKClient instance for the current Supabase JWKS URL."""
@@ -249,8 +346,7 @@ def _verify_with_jwks(token: str) -> Optional[Dict[str, Any]]:
         payload = jwt.decode(
             token,
             signing_key.key,
-            algorithms=["ES256", "RS256", "EdDSA"],
-            options={"verify_exp": True}
+            **_jwt_decode_kwargs(["ES256", "RS256", "EdDSA"]),
         )
         logger.debug(f"JWKS verification succeeded for sub={payload.get('sub')}")
         return payload
@@ -285,8 +381,11 @@ def _verify_session_cookie(cookie_value: str) -> Optional[Dict[str, Any]]:
         ""
     )
     if not secret:
-        if _IS_PRODUCTION:
-            logger.error("Missing AUTH_COOKIE_SECRET in production; cookie auth disabled.")
+        if not _IS_EXPLICIT_LOCAL_ENV:
+            logger.error(
+                "Missing AUTH_COOKIE_SECRET outside explicit local dev/test; cookie auth disabled.",
+                extra={"event_type": "auth_cookie_secret_missing"},
+            )
             return None
         secret = "development-gray-session-secret"
         
@@ -324,7 +423,7 @@ def _verify_session_cookie(cookie_value: str) -> Optional[Dict[str, Any]]:
 
 # Token cache to avoid hitting Supabase Auth on every request
 _token_cache: Dict[str, tuple[Dict[str, Any], float]] = {}
-_TOKEN_CACHE_TTL = 60.0  # 60 seconds
+_TOKEN_CACHE_TTL = 5.0 if _ENFORCE_SUPABASE_LIVE_VALIDATION else 60.0
 
 def _get_cached_token_payload(token: str) -> Optional[Dict[str, Any]]:
     if token in _token_cache:
@@ -351,7 +450,7 @@ async def verify_supabase_token(token: str) -> Dict[str, Any]:
     Verification order (fastest to slowest):
     1. JWKS (public key verification) - recommended
     2. Legacy JWT secret (HS256) - if configured
-    3. Supabase Auth API call - fallback
+    3. Supabase Auth API call (live validation / revocation check)
     
     Args:
         token: JWT token from Authorization header
@@ -367,41 +466,35 @@ async def verify_supabase_token(token: str) -> Dict[str, Any]:
     if cached_payload:
         return cached_payload
 
-    decoded_payload: Optional[Dict[str, Any]] = None
+    locally_verified_payload: Optional[Dict[str, Any]] = None
+    local_verification_source: Optional[str] = None
 
     # PRIORITY 1: Try JWKS verification (modern, recommended)
     jwks_payload = _verify_with_jwks(token)
     if jwks_payload:
-        payload = {
-            "sub": jwks_payload.get("sub"),
-            "email": jwks_payload.get("email"),
-            "user_metadata": jwks_payload.get("user_metadata") or {}
-        }
-        _cache_token_payload(token, payload)
-        logger.debug("Token verified via JWKS")
-        return payload
-
-    decoded_payload = None
+        locally_verified_payload = _build_auth_payload(
+            jwks_payload.get("sub"),
+            jwks_payload.get("email"),
+            jwks_payload.get("user_metadata"),
+        )
+        local_verification_source = "jwks"
 
     # PRIORITY 2: Try legacy JWT secret (if configured)
-    if hasattr(jwt, "decode"):
+    if not locally_verified_payload and hasattr(jwt, "decode"):
         if SUPABASE_JWT_SECRET:
             try:
                 decoded_payload = jwt.decode(
                     token, 
                     SUPABASE_JWT_SECRET, 
-                    algorithms=["HS256"], 
-                    options={"verify_exp": True}
+                    **_jwt_decode_kwargs(["HS256"]),
                 )
                 if decoded_payload:
-                    payload = {
-                        "sub": decoded_payload.get("sub"),
-                        "email": decoded_payload.get("email"),
-                        "user_metadata": decoded_payload.get("user_metadata") or {}
-                    }
-                    _cache_token_payload(token, payload)
-                    logger.debug("Token verified via legacy JWT secret")
-                    return payload
+                    locally_verified_payload = _build_auth_payload(
+                        decoded_payload.get("sub"),
+                        decoded_payload.get("email"),
+                        decoded_payload.get("user_metadata"),
+                    )
+                    local_verification_source = "legacy_jwt_secret"
             except InvalidTokenError as e:
                 logger.warning(f"Legacy JWT verification failed: {e}")
             except Exception as e:
@@ -409,75 +502,103 @@ async def verify_supabase_token(token: str) -> Dict[str, Any]:
         else:
             logger.debug("Skipping legacy JWT verification: SUPABASE_JWT_SECRET not configured")
 
-    # PRIORITY 3: Fall back to Supabase Auth API call
+    # PRIORITY 3: Supabase Auth API call (live validation / revocation check)
     try:
-        supabase = create_supabase_client()
-        supabase_error: Optional[str] = None
+        supabase_payload, supabase_validation_attempted, supabase_error = _validate_token_with_supabase(token)
 
-        # Verify token with Supabase
-        if supabase:
-            try:
-                response = supabase.auth.get_user(token)
-            except Exception as supabase_exc:
-                supabase_error = str(supabase_exc)
-                response = None
-                logger.debug(f"Supabase token validation failed: {supabase_error}")
-                if "Invalid API key" in supabase_error:
-                    logger.error("CRITICAL: Supabase API rejected the configured SUPABASE_KEY. Please check your .env file.")
-        else:
-            response = None
-            logger.warning("Supabase client not initialized (missing credentials?), cannot verify token via API")
+        if supabase_payload:
+            if locally_verified_payload:
+                local_sub = locally_verified_payload.get("sub")
+                live_sub = supabase_payload.get("sub")
+                if local_sub and live_sub and str(local_sub) != str(live_sub):
+                    logger.warning(
+                        "Rejected token: local signature sub mismatch with Supabase live validation",
+                        extra={
+                            "event_type": "auth_token_sub_mismatch",
+                            "local_sub": local_sub,
+                            "live_sub": live_sub,
+                            "local_source": local_verification_source,
+                        },
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Invalid authentication token",
+                    )
+            _cache_token_payload(token, supabase_payload)
+            return supabase_payload
 
-        if response and response.user:
-            payload = {
-                "sub": response.user.id,
-                "email": response.user.email,
-                "user_metadata": response.user.user_metadata or {}
-            }
-            _cache_token_payload(token, payload)
-            return payload
-        
-        # Fallback: if we already validated the signature locally, trust the decoded payload
-        if decoded_payload and SUPABASE_JWT_SECRET:
-            sub = decoded_payload.get("sub")
-            if not sub:
+        if locally_verified_payload:
+            local_sub = locally_verified_payload.get("sub")
+            if not local_sub:
+                logger.warning(
+                    "Rejected locally verified token missing sub claim",
+                    extra={
+                        "event_type": "auth_token_missing_sub",
+                        "local_source": local_verification_source,
+                    },
+                )
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid authentication token"
+                    detail="Invalid authentication token",
                 )
-            logger.warning("Supabase validation failed; falling back to local JWT verification")
-            payload = {
-                "sub": sub,
-                "email": decoded_payload.get("email"),
-                "user_metadata": decoded_payload.get("user_metadata") or {}
-            }
-            _cache_token_payload(token, payload)
-            return payload
+
+            if _ENFORCE_SUPABASE_LIVE_VALIDATION and supabase_validation_attempted:
+                logger.warning(
+                    "Rejected locally verified token because live Supabase validation returned no active user",
+                    extra={
+                        "event_type": "auth_token_live_validation_rejected",
+                        "sub": local_sub,
+                        "local_source": local_verification_source,
+                    },
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid authentication token",
+                )
+
+            if _ENFORCE_SUPABASE_LIVE_VALIDATION and not supabase_validation_attempted and _IS_PUBLIC_ENV:
+                logger.warning(
+                    "Live Supabase validation unavailable; accepting locally verified token",
+                    extra={
+                        "event_type": "auth_live_validation_unavailable",
+                        "sub": local_sub,
+                        "local_source": local_verification_source,
+                        "supabase_error": supabase_error,
+                    },
+                )
+
+            _cache_token_payload(token, locally_verified_payload)
+            logger.debug("Token verified via %s", local_verification_source)
+            return locally_verified_payload
 
         # Fallback #2 (opt‑in, insecure): recover payload without signature if Supabase session lookup failed.
         # This is intentionally gated behind an env flag for local development only.
         if _ALLOW_INSECURE_JWT_FALLBACK:
-            decoded_fallback = decoded_payload or _decode_token_without_signature(token)
+            decoded_fallback = _decode_token_without_signature(token)
             if decoded_fallback and decoded_fallback.get("sub"):
                 logger.warning(
                     "Supabase validation failed; using decoded JWT payload via insecure fallback "
-                    "(ALLOW_INSECURE_JWT_FALLBACK enabled). Do NOT use this mode in production.",
-                    extra={"error": supabase_error},
+                    "(ALLOW_INSECURE_JWT_FALLBACK enabled for explicit local development only).",
+                    extra={"event_type": "auth_insecure_fallback_used", "error": supabase_error},
                 )
-                payload = {
-                    "sub": decoded_fallback.get("sub"),
-                    "email": decoded_fallback.get("email"),
-                    "user_metadata": decoded_fallback.get("user_metadata") or {},
-                }
+                payload = _build_auth_payload(
+                    decoded_fallback.get("sub"),
+                    decoded_fallback.get("email"),
+                    decoded_fallback.get("user_metadata"),
+                )
                 _cache_token_payload(token, payload)
                 return payload
 
-        logger.debug("Invalid token: user not found")
+        logger.warning(
+            "Rejected token: no cryptographic verification path succeeded",
+            extra={"event_type": "auth_token_rejected_no_valid_path"},
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication token"
         )
-        
+    except HTTPException:
+        raise
     except Exception as e:
         logger.debug(f"Token verification failed: {str(e)}")
         raise HTTPException(
@@ -519,7 +640,7 @@ async def get_current_user(
     token = credentials.credentials if credentials else None
     if token:
         payload = await verify_supabase_token(token)
-        auth_user_id = payload.get("sub")
+        auth_user_id = str(payload.get("sub")) if payload.get("sub") is not None else None
         email = _normalize_email(payload.get("email"))
     else:
         # Fallback to session cookie
@@ -532,49 +653,146 @@ async def get_current_user(
                 # auth_user_id might not be in the session cookie, 
                 # but we'll lookup by email in the DB.
 
-    if not email:
+    if not email and not auth_user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required"
         )
     
-    # Check L1 (in-memory) cache first
-    cached_user = _get_cached_user(email)
-    if cached_user:
-        logger.debug(f"[AUTH PERF] L1 cache hit for user {email}, took {(time.time() - perf_start) * 1000:.2f}ms")
-        return cached_user
+    # Check L1 (in-memory) cache first when we have an email key.
+    if email:
+        cached_user = _get_cached_user(email)
+        if cached_user:
+            cached_auth_user_id = _row_get(cached_user, "auth_user_id")
+            if auth_user_id and cached_auth_user_id and str(cached_auth_user_id) != str(auth_user_id):
+                logger.warning(
+                    "Rejected cached auth identity mismatch",
+                    extra={
+                        "event_type": "auth_identity_mismatch_cached",
+                        "email": email,
+                        "token_sub": auth_user_id,
+                        "cached_auth_user_id": str(cached_auth_user_id),
+                    },
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid authentication token",
+                )
+
+            # If auth_user_id is present but cache has no binding yet, force DB lookup to bind safely.
+            if not auth_user_id or cached_auth_user_id:
+                logger.debug(
+                    f"[AUTH PERF] L1 cache hit for user {email}, took {(time.time() - perf_start) * 1000:.2f}ms"
+                )
+                return cached_user
     
     # Check L2 (Redis) cache
-    redis_cached_user = await _get_cached_user_redis(email)
-    if redis_cached_user:
-        # Promote to L1 cache
-        _cache_user(email, redis_cached_user)
-        logger.debug(f"[AUTH PERF] L2 (Redis) cache hit for user {email}, took {(time.time() - perf_start) * 1000:.2f}ms")
-        return redis_cached_user
-    
-    # Fetch user from database by email (single source of truth).
-    user = await database.fetch_one(
-        users.select().where(sqlalchemy.func.lower(users.c.email) == email)
-    )
+    if email:
+        redis_cached_user = await _get_cached_user_redis(email)
+        if redis_cached_user:
+            redis_auth_user_id = _row_get(redis_cached_user, "auth_user_id")
+            if auth_user_id and redis_auth_user_id and str(redis_auth_user_id) != str(auth_user_id):
+                logger.warning(
+                    "Rejected Redis-cached auth identity mismatch",
+                    extra={
+                        "event_type": "auth_identity_mismatch_redis_cache",
+                        "email": email,
+                        "token_sub": auth_user_id,
+                        "cached_auth_user_id": str(redis_auth_user_id),
+                    },
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid authentication token",
+                )
 
-    if user and auth_user_id:
+            # If auth_user_id is present but cache has no binding yet, force DB lookup to bind safely.
+            if not auth_user_id or redis_auth_user_id:
+                _cache_user(email, redis_cached_user)
+                logger.debug(
+                    f"[AUTH PERF] L2 (Redis) cache hit for user {email}, took {(time.time() - perf_start) * 1000:.2f}ms"
+                )
+                return redis_cached_user
+    
+    # Fetch user from database with stable identity preference:
+    # 1) auth_user_id/sub
+    # 2) email
+    user = None
+    user_by_auth_user_id = None
+    user_by_email = None
+
+    if auth_user_id:
+        user_by_auth_user_id = await database.fetch_one(
+            users.select().where(users.c.auth_user_id == auth_user_id)
+        )
+
+    if email:
+        user_by_email = await database.fetch_one(
+            users.select().where(sqlalchemy.func.lower(users.c.email) == email)
+        )
+
+    if auth_user_id and user_by_email:
+        existing_auth_user_id = _row_get(user_by_email, "auth_user_id")
+        if existing_auth_user_id and str(existing_auth_user_id) != str(auth_user_id):
+            logger.warning(
+                "Rejected auth identity rebind attempt: email already bound to different sub",
+                extra={
+                    "event_type": "auth_identity_rebind_rejected",
+                    "email": email,
+                    "token_sub": auth_user_id,
+                    "existing_auth_user_id": str(existing_auth_user_id),
+                },
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication token",
+            )
+
+    if auth_user_id and user_by_auth_user_id and user_by_email and str(user_by_auth_user_id["id"]) != str(user_by_email["id"]):
+        logger.warning(
+            "Rejected auth identity mismatch: sub and email map to different users",
+            extra={
+                "event_type": "auth_identity_cross_account_mismatch",
+                "token_sub": auth_user_id,
+                "email": email,
+                "sub_user_id": user_by_auth_user_id["id"],
+                "email_user_id": user_by_email["id"],
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication token",
+        )
+
+    if user_by_auth_user_id:
+        user = user_by_auth_user_id
+    elif user_by_email:
+        user = user_by_email
         existing_auth_user_id = _row_get(user, "auth_user_id")
-        if not existing_auth_user_id or str(existing_auth_user_id) != str(auth_user_id):
+        if auth_user_id and not existing_auth_user_id:
             await database.execute(
                 users.update()
                 .where(users.c.id == user["id"])
                 .values(auth_user_id=auth_user_id, updated_at=utcnow())
             )
-            user = await database.fetch_one(
-                users.select().where(sqlalchemy.func.lower(users.c.email) == email)
-            )
+            user = await database.fetch_one(users.select().where(users.c.id == user["id"]))
             logger.info(
-                "Synced auth_user_id to existing user",
+                "Bound auth_user_id to previously unbound user",
                 extra={"auth_user_id": auth_user_id, "user_id": user["id"] if user else None},
             )
 
     # Create new user if still not found
     if not user:
+        if not email:
+            logger.warning(
+                "User not found for sub without email claim",
+                extra={"event_type": "auth_user_not_found_without_email", "token_sub": auth_user_id},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found"
+            )
+
         full_name = _derive_full_name(email, payload.get("user_metadata") or {})
         try:
             now = utcnow()
@@ -604,17 +822,22 @@ async def get_current_user(
             )
 
     if not user:
-        logger.warning(f"User not found for email: {email}")
+        logger.warning(
+            "User not found after auth identity resolution",
+            extra={"event_type": "auth_user_not_found", "email": email, "token_sub": auth_user_id},
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found"
         )
 
     user_dict = dict(user)
+    cache_email = _normalize_email(_row_get(user_dict, "email")) or email
 
     # Cache the user in L1 (in-memory) and L2 (Redis)
-    _cache_user(email, user_dict)
-    await _cache_user_redis(email, user_dict)
+    if cache_email:
+        _cache_user(cache_email, user_dict)
+        await _cache_user_redis(cache_email, user_dict)
     
     perf_duration = (time.time() - perf_start) * 1000
     logger.debug(f"[AUTH PERF] get_current_user took {perf_duration:.2f}ms (DB fetch)")

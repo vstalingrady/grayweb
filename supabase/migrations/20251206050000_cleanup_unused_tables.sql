@@ -1,56 +1,61 @@
 -- =============================================================================
--- SUPABASE AUTH-ONLY MIGRATION (2025-12-06)
+-- SUPABASE AUTH-ONLY CLEANUP (DESTRUCTIVE, EXPLICIT OPT-IN)
 -- =============================================================================
--- This migration removes ALL data tables from Supabase.
--- Supabase is now used ONLY for authentication (auth.users).
--- All application data is stored in local SQLite.
--- 
--- WARNING: This is a DESTRUCTIVE migration. All data in these tables will be lost.
--- Ensure you have backed up any needed data before running this.
+-- This migration is now guarded and does nothing by default.
+--
+-- To run destructive cleanup intentionally, set the Postgres setting below in
+-- the same session before applying migrations:
+--   SELECT set_config('app.supabase_cleanup_confirmed', 'true', false);
 -- =============================================================================
 
--- Drop all application data tables (in dependency order)
+do $$
+begin
+    if coalesce(current_setting('app.supabase_cleanup_confirmed', true), 'false') <> 'true' then
+        raise notice 'Skipping destructive Supabase cleanup migration (app.supabase_cleanup_confirmed != true).';
+        return;
+    end if;
 
--- Chat/messaging tables
-DROP TABLE IF EXISTS public.user_chat_messages CASCADE;
-DROP TABLE IF EXISTS public.general_chat_messages CASCADE;
-DROP TABLE IF EXISTS public.user_chat_threads CASCADE;
-DROP TABLE IF EXISTS public.conversation_messages CASCADE;
-DROP TABLE IF EXISTS public.conversations CASCADE;
-DROP TABLE IF EXISTS public.chat_sessions CASCADE;
+    if current_user not in ('supabase_admin', 'postgres') then
+        raise notice 'Skipping destructive Supabase cleanup migration (current_user is not privileged).';
+        return;
+    end if;
 
--- User data tables  
-DROP TABLE IF EXISTS public.user_data CASCADE;
-DROP TABLE IF EXISTS public.user_streaks CASCADE;
-DROP TABLE IF EXISTS public.users CASCADE;
+    -- Chat/messaging tables
+    drop table if exists public.user_chat_messages cascade;
+    drop table if exists public.general_chat_messages cascade;
+    drop table if exists public.user_chat_threads cascade;
+    drop table if exists public.conversation_messages cascade;
+    drop table if exists public.conversations cascade;
+    drop table if exists public.chat_sessions cascade;
 
--- Plans/habits/reminders
-DROP TABLE IF EXISTS public.plans CASCADE;
-DROP TABLE IF EXISTS public.habits CASCADE;
-DROP TABLE IF EXISTS public.reminders CASCADE;
+    -- User data tables
+    drop table if exists public.user_data cascade;
+    drop table if exists public.user_streaks cascade;
+    drop table if exists public.users cascade;
 
--- Proactivity tables
-DROP TABLE IF EXISTS public.proactivity_settings CASCADE;
-DROP TABLE IF EXISTS public.proactive_notifications CASCADE;
-DROP TABLE IF EXISTS public.proactivity_logs CASCADE;
-DROP TABLE IF EXISTS public.proactivity_push_subscriptions CASCADE;
+    -- Plans/habits/reminders
+    drop table if exists public.plans cascade;
+    drop table if exists public.habits cascade;
+    drop table if exists public.reminders cascade;
 
--- Dashboard/calendar tables
-DROP TABLE IF EXISTS public.dashboard_pulses CASCADE;
-DROP TABLE IF EXISTS public.calendars CASCADE;
-DROP TABLE IF EXISTS public.calendar_events CASCADE;
+    -- Proactivity tables
+    drop table if exists public.proactivity_settings cascade;
+    drop table if exists public.proactive_notifications cascade;
+    drop table if exists public.proactivity_logs cascade;
+    drop table if exists public.proactivity_push_subscriptions cascade;
 
--- Utility tables
-DROP TABLE IF EXISTS public.context_cache CASCADE;
-DROP TABLE IF EXISTS public.file_search_stores CASCADE;
-DROP TABLE IF EXISTS public.media_uploads CASCADE;
-DROP TABLE IF EXISTS public.timezone_names_cache CASCADE;
+    -- Dashboard/calendar tables
+    drop table if exists public.dashboard_pulses cascade;
+    drop table if exists public.calendars cascade;
+    drop table if exists public.calendar_events cascade;
 
--- Drop any associated functions
-DROP FUNCTION IF EXISTS public.refresh_timezone_names_cache() CASCADE;
-DROP FUNCTION IF EXISTS public.get_cached_timezone_names() CASCADE;
+    -- Utility tables
+    drop table if exists public.context_cache cascade;
+    drop table if exists public.file_search_stores cascade;
+    drop table if exists public.media_uploads cascade;
+    drop table if exists public.timezone_names_cache cascade;
 
--- =============================================================================
--- Supabase is now auth-only. The auth.users table is managed by Supabase Auth
--- and should NOT be touched by this migration.
--- =============================================================================
+    -- Associated functions
+    drop function if exists public.refresh_timezone_names_cache() cascade;
+    drop function if exists public.get_cached_timezone_names() cascade;
+end $$;

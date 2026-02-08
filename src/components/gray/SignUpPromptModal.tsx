@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import styles from "./SignUpPromptModal.module.css";
@@ -21,6 +21,8 @@ export function SignUpPromptModal({
 }: SignUpPromptModalProps) {
     const { t } = useI18n();
     const router = useRouter();
+    const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+    const previousFocusRef = useRef<HTMLElement | null>(null);
 
     const handleSignUp = useCallback(() => {
         router.push("/login?redirect=/g");
@@ -30,14 +32,38 @@ export function SignUpPromptModal({
         router.push("/login?redirect=/g");
     }, [router]);
 
+    useEffect(() => {
+        if (!isOpen) {
+            return;
+        }
+        previousFocusRef.current =
+            document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        const rafId = window.requestAnimationFrame(() => {
+            closeButtonRef.current?.focus();
+        });
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                onClose();
+            }
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => {
+            window.cancelAnimationFrame(rafId);
+            window.removeEventListener("keydown", handleKeyDown);
+            previousFocusRef.current?.focus();
+        };
+    }, [isOpen, onClose]);
+
     if (!isOpen) {
         return null;
     }
 
     return (
-        <div className={styles.signUpPromptOverlay} role="dialog" aria-modal="true">
+        <div className={styles.signUpPromptOverlay} role="dialog" aria-modal="true" aria-labelledby="sign-up-prompt-title">
             <div className={styles.signUpPromptContainer}>
                 <button
+                    ref={closeButtonRef}
                     type="button"
                     className={styles.signUpPromptClose}
                     onClick={onClose}
@@ -47,7 +73,7 @@ export function SignUpPromptModal({
                 </button>
 
                 <div className={styles.signUpPromptContent}>
-                    <h2 className={styles.signUpPromptTitle}>
+                    <h2 id="sign-up-prompt-title" className={styles.signUpPromptTitle}>
                         {t("You've used all your free messages")}
                     </h2>
                     <p className={styles.signUpPromptDescription}>

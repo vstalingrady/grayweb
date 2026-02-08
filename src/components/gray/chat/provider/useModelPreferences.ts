@@ -158,7 +158,7 @@ export const useModelPreferences = ({
       visibleModelIdsHydratedRef.current = true;
       return;
     }
-    const key = `${VISIBLE_MODEL_IDS_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
+    const key = `${VISIBLE_MODEL_IDS_STORAGE_PREFIX}:anon`;
     const raw = window.localStorage.getItem(key);
     if (!raw) {
       setVisibleModelIds(null);
@@ -183,13 +183,13 @@ export const useModelPreferences = ({
     if (user) {
       return;
     }
-    const key = `${VISIBLE_MODEL_IDS_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
+    const key = `${VISIBLE_MODEL_IDS_STORAGE_PREFIX}:anon`;
     if (visibleModelIds === null) {
       window.localStorage.removeItem(key);
       return;
     }
     window.localStorage.setItem(key, JSON.stringify(visibleModelIds));
-  }, [user, user?.id, visibleModelIds]);
+  }, [user, visibleModelIds]);
 
   // Persist visible models preference to the backend (so it survives browser resets / multi-device).
   useEffect(() => {

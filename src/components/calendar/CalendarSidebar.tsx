@@ -21,6 +21,7 @@ type CalendarSidebarProps = {
   showTodayButton?: boolean;
   onGoToday?: () => void;
   showCreateAction?: boolean;
+  onCreateAction?: () => void;
   integrationActionLabel?: string;
   onIntegrationAction?: () => void;
   className?: string;
@@ -47,6 +48,7 @@ export function CalendarSidebar({
   showTodayButton = false,
   onGoToday,
   showCreateAction = false,
+  onCreateAction,
   integrationActionLabel = "Connect to Google Calendar",
   onIntegrationAction,
   className,
@@ -59,7 +61,7 @@ export function CalendarSidebar({
     .join(" ");
   const shouldShowMonthNav = Boolean(showMonthNavigation && onNavigate);
   const shouldShowToday = Boolean(showTodayButton && onGoToday);
-  const shouldShowCreate = Boolean(showCreateAction);
+  const shouldShowCreate = Boolean(showCreateAction && onCreateAction);
   const shouldRenderHeaderActions = shouldShowToday || shouldShowCreate;
 
   return (
@@ -81,6 +83,7 @@ export function CalendarSidebar({
                 <button
                   type="button"
                   className={styles.calendarSidebarCreate}
+                  onClick={() => onCreateAction?.()}
                 >
                   + {t("Create")}
                 </button>

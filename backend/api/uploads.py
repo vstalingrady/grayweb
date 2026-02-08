@@ -63,7 +63,14 @@ async def upload_media(
         storage_path=str(storage_path_for_db),
         created_at=now,
     )
-    media_record_id = await db.execute(query)
+    try:
+        media_record_id = await db.execute(query)
+    except Exception as exc:
+        storage_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to persist upload metadata.",
+        ) from exc
 
     public_url: str | None
     if STORAGE_BASE_URL:
@@ -102,16 +109,27 @@ async def list_user_uploads(
     records = await db.fetch_all(query)
     
     result = []
+    stale_upload_ids: List[int] = []
     for record in records:
+        record_id = int(record["id"])
+        try:
+            storage_path = _resolve_storage_path_from_record(record["storage_path"])
+            if not storage_path.exists():
+                stale_upload_ids.append(record_id)
+                continue
+        except HTTPException:
+            stale_upload_ids.append(record_id)
+            continue
+
         public_url = None
         if STORAGE_BASE_URL and record["storage_path"]:
             storage_name = Path(record["storage_path"]).name
             public_url = f"{STORAGE_BASE_URL.rstrip('/')}/{storage_name}"
         else:
-            public_url = f"/api/uploads/{record['id']}/file"
+            public_url = f"/api/uploads/{record_id}/file"
         
         result.append(MediaUpload(
-            id=record["id"],
+            id=record_id,
             user_id=record["user_id"],
             filename=record["filename"],
             mime_type=record["mime_type"],
@@ -119,6 +137,14 @@ async def list_user_uploads(
             created_at=record["created_at"],
             public_url=public_url,
         ))
+
+    if stale_upload_ids:
+        await db.execute(
+            media_uploads.delete().where(
+                (media_uploads.c.user_id == user_id)
+                & (media_uploads.c.id.in_(stale_upload_ids))
+            )
+        )
     
     return result
 

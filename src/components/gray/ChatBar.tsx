@@ -55,18 +55,33 @@ export function GrayChatBar({
 
   // We trigger a re-render/check on mount to ensure mobile detection if needed, 
   // but for TextareaAutosize we mainly just need the component.
-  // The original code had isMobile state to prevent enter-submit on mobile.
-  const [isMobile, setIsMobile] = useState(false);
+  // Prefer pointer/hover capability over viewport width when deciding Enter behavior.
+  const [isTouchPrimaryInput, setIsTouchPrimaryInput] = useState(false);
 
   useEffect(() => {
-    const handleResize = () => {
-      // Use width to determine mobile behavior (Enter = newline vs submit)
-      // Pointer: coarse is unreliable on touch-capable laptops
-      setIsMobile(window.matchMedia("(max-width: 768px)").matches);
+    const coarsePointerQuery = window.matchMedia("(pointer: coarse)");
+    const hoverNoneQuery = window.matchMedia("(hover: none)");
+
+    const updateInputMode = () => {
+      setIsTouchPrimaryInput(coarsePointerQuery.matches && hoverNoneQuery.matches);
     };
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    updateInputMode();
+    if (typeof coarsePointerQuery.addEventListener === "function") {
+      coarsePointerQuery.addEventListener("change", updateInputMode);
+      hoverNoneQuery.addEventListener("change", updateInputMode);
+    } else {
+      coarsePointerQuery.addListener(updateInputMode);
+      hoverNoneQuery.addListener(updateInputMode);
+    }
+    return () => {
+      if (typeof coarsePointerQuery.removeEventListener === "function") {
+        coarsePointerQuery.removeEventListener("change", updateInputMode);
+        hoverNoneQuery.removeEventListener("change", updateInputMode);
+      } else {
+        coarsePointerQuery.removeListener(updateInputMode);
+        hoverNoneQuery.removeListener(updateInputMode);
+      }
+    };
   }, []);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -75,7 +90,8 @@ export function GrayChatBar({
       return;
     }
     if (event.key === "Enter" && !event.shiftKey) {
-      if (!isMobile) {
+      const explicitlySubmit = event.metaKey || event.ctrlKey;
+      if (explicitlySubmit || !isTouchPrimaryInput) {
         event.preventDefault();
         if (!computedDisabled) {
           // Create a synthetic event to match the expected signature
@@ -85,7 +101,7 @@ export function GrayChatBar({
           onSubmit(syntheticEvent);
         }
       }
-      // On mobile, let default behavior happen (newline)
+      // On touch-primary devices, Enter inserts a newline by default unless explicitly submitted.
     }
   };
 

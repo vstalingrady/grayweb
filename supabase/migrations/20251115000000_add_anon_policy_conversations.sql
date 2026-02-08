@@ -1,9 +1,3 @@
--- Allow anonymous access to conversations table for the backend application
--- This enables the backend to read/write conversation data using the anon key
-
-create policy "conversations_anon_full_access"
-    on public.conversations
-    for all
-    to anon
-    using (true)
-    with check (true);
+-- Security hardening: never grant broad anon access to conversations.
+-- Keep backend access scoped to service_role policies.
+drop policy if exists "conversations_anon_full_access" on public.conversations;

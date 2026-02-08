@@ -1,4 +1,9 @@
 import os
+import base64
+import hashlib
+import hmac
+import json
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -13,7 +18,6 @@ from backend.core.file_utils import (
     DOCUMENT_MIME_TYPES,
     MAX_MEDIA_UPLOAD_SIZE_BYTES,
     MEDIA_UPLOAD_ROOT,
-    STORAGE_BASE_URL,
     persist_upload_file,
     resolve_storage_path_from_record,
 )
@@ -29,7 +33,18 @@ from backend.time_utils import utcnow
 from backend.auth import get_current_user_optional, require_admin
 
 router = APIRouter(tags=["hiring"])
-_HIRING_RESUME_TOKEN = (os.getenv("HIRING_RESUME_TOKEN") or "").strip()
+_HIRING_RESUME_SIGNING_SECRET = (
+    os.getenv("HIRING_RESUME_SIGNING_SECRET")
+    or os.getenv("HIRING_RESUME_TOKEN")
+    or ""
+).strip()
+try:
+    _HIRING_RESUME_TOKEN_TTL_SECONDS = max(
+        300,
+        int((os.getenv("HIRING_RESUME_TOKEN_TTL_SECONDS") or "604800").strip() or "604800"),
+    )
+except ValueError:
+    _HIRING_RESUME_TOKEN_TTL_SECONDS = 604800
 
 
 class HireApplicationRequest(BaseModel):
@@ -83,41 +98,85 @@ def _ensure_word_limit(value: Optional[str], limit: int, label: str) -> None:
         )
 
 
-def _resume_token_suffix() -> str:
-    if not _HIRING_RESUME_TOKEN:
-        return ""
-    return f"?token={_HIRING_RESUME_TOKEN}"
+def _b64url_encode(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _b64url_decode(value: str) -> bytes:
+    padding = "=" * (-len(value) % 4)
+    return base64.urlsafe_b64decode(f"{value}{padding}")
+
+
+def _build_resume_access_token(*, application_id: int, scope: str) -> Optional[str]:
+    if not _HIRING_RESUME_SIGNING_SECRET:
+        return None
+    payload = {
+        "application_id": int(application_id),
+        "scope": scope,
+        "exp": int(time.time()) + _HIRING_RESUME_TOKEN_TTL_SECONDS,
+    }
+    payload_bytes = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    payload_part = _b64url_encode(payload_bytes)
+    signature = hmac.new(
+        _HIRING_RESUME_SIGNING_SECRET.encode("utf-8"),
+        payload_part.encode("utf-8"),
+        hashlib.sha256,
+    ).digest()
+    signature_part = _b64url_encode(signature)
+    return f"{payload_part}.{signature_part}"
+
+
+def _verify_resume_access_token(
+    token: str,
+    *,
+    application_id: int,
+    scope: str,
+) -> bool:
+    if not _HIRING_RESUME_SIGNING_SECRET:
+        return False
+    if "." not in token:
+        return False
+    payload_part, signature_part = token.split(".", 1)
+    if not payload_part or not signature_part:
+        return False
+    expected_sig = hmac.new(
+        _HIRING_RESUME_SIGNING_SECRET.encode("utf-8"),
+        payload_part.encode("utf-8"),
+        hashlib.sha256,
+    ).digest()
+    try:
+        provided_sig = _b64url_decode(signature_part)
+    except Exception:
+        return False
+    if not hmac.compare_digest(provided_sig, expected_sig):
+        return False
+    try:
+        payload = json.loads(_b64url_decode(payload_part).decode("utf-8"))
+    except Exception:
+        return False
+    if not isinstance(payload, dict):
+        return False
+    if int(payload.get("application_id", -1)) != int(application_id):
+        return False
+    if str(payload.get("scope", "")) != scope:
+        return False
+    exp = payload.get("exp")
+    if not isinstance(exp, int):
+        return False
+    return exp >= int(time.time())
 
 
 def _build_resume_url(*, application_id: int, storage_name: str) -> Optional[str]:
-    if not _HIRING_RESUME_TOKEN:
+    del storage_name  # Explicitly unused for security; route access is token-gated.
+    token = _build_resume_access_token(application_id=application_id, scope="resume")
+    if not token:
         return None
-    if STORAGE_BASE_URL:
-        return f"{STORAGE_BASE_URL.rstrip('/')}/{storage_name}"
 
-    backend_api_url = (os.getenv("BACKEND_API_URL") or "").strip()
-    if backend_api_url:
-        return f"{backend_api_url.rstrip('/')}/api/hire/applications/{application_id}/resume{_resume_token_suffix()}"
-
-    site_url = (
-        os.getenv("NEXT_PUBLIC_SITE_URL")
-        or os.getenv("SITE_URL")
-        or os.getenv("NEXT_PUBLIC_MAIN_SITE_URL")
-        or ""
-    ).strip()
-    if site_url:
-        return f"{site_url.rstrip('/')}/api/p/api/hire/applications/{application_id}/resume{_resume_token_suffix()}"
-    return None
-
-
-def _build_resume_preview_url(*, application_id: int) -> Optional[str]:
-    if not _HIRING_RESUME_TOKEN:
-        return None
     backend_api_url = (os.getenv("BACKEND_API_URL") or "").strip()
     if backend_api_url:
         return (
             f"{backend_api_url.rstrip('/')}/api/hire/applications/"
-            f"{application_id}/resume-preview{_resume_token_suffix()}"
+            f"{application_id}/resume?token={token}"
         )
 
     site_url = (
@@ -129,17 +188,48 @@ def _build_resume_preview_url(*, application_id: int) -> Optional[str]:
     if site_url:
         return (
             f"{site_url.rstrip('/')}/api/p/api/hire/applications/"
-            f"{application_id}/resume-preview{_resume_token_suffix()}"
+            f"{application_id}/resume?token={token}"
+        )
+    return None
+
+
+def _build_resume_preview_url(*, application_id: int) -> Optional[str]:
+    token = _build_resume_access_token(application_id=application_id, scope="preview")
+    if not token:
+        return None
+    backend_api_url = (os.getenv("BACKEND_API_URL") or "").strip()
+    if backend_api_url:
+        return (
+            f"{backend_api_url.rstrip('/')}/api/hire/applications/"
+            f"{application_id}/resume-preview?token={token}"
+        )
+
+    site_url = (
+        os.getenv("NEXT_PUBLIC_SITE_URL")
+        or os.getenv("SITE_URL")
+        or os.getenv("NEXT_PUBLIC_MAIN_SITE_URL")
+        or ""
+    ).strip()
+    if site_url:
+        return (
+            f"{site_url.rstrip('/')}/api/p/api/hire/applications/"
+            f"{application_id}/resume-preview?token={token}"
         )
     return None
 
 
 def _require_resume_access(
+    application_id: int,
+    scope: str,
     token: Optional[str],
     current_user: Optional[Dict[str, Any]],
 ) -> None:
-    if _HIRING_RESUME_TOKEN:
-        if token == _HIRING_RESUME_TOKEN:
+    if _HIRING_RESUME_SIGNING_SECRET:
+        if token and _verify_resume_access_token(
+            token,
+            application_id=application_id,
+            scope=scope,
+        ):
             return
         if current_user:
             require_admin(current_user)
@@ -196,7 +286,7 @@ async def get_hire_resume(
     db: databases.Database = Depends(get_database),
     current_user: Optional[Dict[str, Any]] = Depends(get_current_user_optional),
 ) -> FileResponse:
-    _require_resume_access(token, current_user)
+    _require_resume_access(application_id, "resume", token, current_user)
 
     record = await db.fetch_one(hire_applications.select().where(hire_applications.c.id == application_id))
     if not record or not record["resume_storage_path"]:
@@ -229,7 +319,7 @@ async def get_hire_resume_preview(
     db: databases.Database = Depends(get_database),
     current_user: Optional[Dict[str, Any]] = Depends(get_current_user_optional),
 ) -> Response:
-    _require_resume_access(token, current_user)
+    _require_resume_access(application_id, "preview", token, current_user)
 
     record = await db.fetch_one(hire_applications.select().where(hire_applications.c.id == application_id))
     if not record or not record["resume_storage_path"]:

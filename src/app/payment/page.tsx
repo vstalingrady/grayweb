@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, Suspense, useMemo, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Script from "next/script";
 import dynamic from "next/dynamic";
@@ -20,6 +20,7 @@ const ParticleSphere = dynamic(
 
 type PaymentStatus = "idle" | "loading" | "success" | "pending" | "error";
 type PaymentProvider = "midtrans" | "dodo";
+type MethodGroup = "global" | "wallet" | "va";
 type PaymentMethod = {
     id: string;
     label: string;
@@ -164,7 +165,7 @@ function PaymentContent() {
     // State
     const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">((cycleParam as "monthly" | "annual") || "monthly");
     const [selectedMethodId, setSelectedMethodId] = useState<string>("gopay");
-    const [methodGroup, setMethodGroup] = useState<"global" | "wallet" | "va">("wallet");
+    const [methodGroup, setMethodGroup] = useState<MethodGroup>("wallet");
     const [bankSearch, setBankSearch] = useState<string>("");
     const [isIndonesia, setIsIndonesia] = useState<boolean | null>(null);
 
@@ -195,6 +196,21 @@ function PaymentContent() {
             )
             : activeMethods;
 
+    const applyMethodGroupSelection = useCallback((group: MethodGroup) => {
+        setMethodGroup(group);
+        if (group === "global") {
+            setSelectedMethodId(defaultGlobalId);
+            setBankSearch("");
+            return;
+        }
+        if (group === "wallet") {
+            setSelectedMethodId(defaultWalletId);
+            setBankSearch("");
+            return;
+        }
+        setSelectedMethodId(defaultVaId);
+    }, [defaultGlobalId, defaultVaId, defaultWalletId]);
+
     // Check geo on mount
     useEffect(() => {
         fetch("/api/geo")
@@ -207,7 +223,18 @@ function PaymentContent() {
 
     // Show Dodo for international, Midtrans for Indonesia
     const showGlobalMethods = isIndonesia === false;
-    const showLocalMethods = isIndonesia === true;
+    const showLocalMethods = isIndonesia !== false;
+
+    const methodGroupOptions = useMemo(() => {
+        const groups: MethodGroup[] = [];
+        if (showGlobalMethods) {
+            groups.push("global");
+        }
+        if (showLocalMethods) {
+            groups.push("wallet", "va");
+        }
+        return groups;
+    }, [showGlobalMethods, showLocalMethods]);
 
     useEffect(() => {
         if (selectedMethodId === "dodo_card") {
@@ -224,14 +251,42 @@ function PaymentContent() {
     useEffect(() => {
         if (isIndonesia === false) {
             // International: use Dodo
-            setMethodGroup("global");
-            setSelectedMethodId(defaultGlobalId);
+            applyMethodGroupSelection("global");
         } else if (isIndonesia === true) {
             // Indonesia: use Midtrans wallet by default
-            setMethodGroup("wallet");
-            setSelectedMethodId(defaultWalletId);
+            applyMethodGroupSelection("wallet");
         }
-    }, [isIndonesia, defaultGlobalId, defaultWalletId]);
+    }, [applyMethodGroupSelection, isIndonesia]);
+
+    const handleMethodGroupKeyDown = useCallback((event: React.KeyboardEvent<HTMLButtonElement>, group: MethodGroup) => {
+        if (methodGroupOptions.length <= 1) {
+            return;
+        }
+        const currentIndex = methodGroupOptions.indexOf(group);
+        if (currentIndex === -1) {
+            return;
+        }
+
+        let nextIndex: number | null = null;
+        if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+            nextIndex = (currentIndex + 1) % methodGroupOptions.length;
+        } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+            nextIndex = (currentIndex - 1 + methodGroupOptions.length) % methodGroupOptions.length;
+        } else if (event.key === "Home") {
+            nextIndex = 0;
+        } else if (event.key === "End") {
+            nextIndex = methodGroupOptions.length - 1;
+        }
+
+        if (nextIndex === null) {
+            return;
+        }
+        event.preventDefault();
+        const nextGroup = methodGroupOptions[nextIndex];
+        applyMethodGroupSelection(nextGroup);
+        const tab = document.getElementById(`payment-method-group-${nextGroup}`);
+        tab?.focus();
+    }, [applyMethodGroupSelection, methodGroupOptions]);
 
 
     // Derived Data
@@ -696,21 +751,20 @@ function PaymentContent() {
                                 <h3 className={styles.activePaymentMethodsTitle}>Active payment methods</h3>
                                 <div
                                     className={styles.methodGroupTabs}
-                                    role="tablist"
+                                    role="radiogroup"
                                     aria-label="Payment method type"
                                     data-has-global={showGlobalMethods ? "true" : "false"}
                                 >
                                     {showGlobalMethods && (
                                         <button
+                                            id="payment-method-group-global"
                                             type="button"
-                                            role="tab"
+                                            role="radio"
                                             data-active={methodGroup === "global"}
-                                            aria-selected={methodGroup === "global"}
-                                            onClick={() => {
-                                                setMethodGroup("global");
-                                                setSelectedMethodId(defaultGlobalId);
-                                                setBankSearch("");
-                                            }}
+                                            aria-checked={methodGroup === "global"}
+                                            tabIndex={methodGroup === "global" ? 0 : -1}
+                                            onClick={() => applyMethodGroupSelection("global")}
+                                            onKeyDown={(event) => handleMethodGroupKeyDown(event, "global")}
                                         >
                                             Card & Global (Dodo)
                                         </button>
@@ -718,27 +772,26 @@ function PaymentContent() {
                                     {showLocalMethods && (
                                         <>
                                             <button
+                                                id="payment-method-group-wallet"
                                                 type="button"
-                                                role="tab"
+                                                role="radio"
                                                 data-active={methodGroup === "wallet"}
-                                                aria-selected={methodGroup === "wallet"}
-                                                onClick={() => {
-                                                    setMethodGroup("wallet");
-                                                    setSelectedMethodId(defaultWalletId);
-                                                    setBankSearch("");
-                                                }}
+                                                aria-checked={methodGroup === "wallet"}
+                                                tabIndex={methodGroup === "wallet" ? 0 : -1}
+                                                onClick={() => applyMethodGroupSelection("wallet")}
+                                                onKeyDown={(event) => handleMethodGroupKeyDown(event, "wallet")}
                                             >
                                                 E‑Wallet & QRIS
                                             </button>
                                             <button
+                                                id="payment-method-group-va"
                                                 type="button"
-                                                role="tab"
+                                                role="radio"
                                                 data-active={methodGroup === "va"}
-                                                aria-selected={methodGroup === "va"}
-                                                onClick={() => {
-                                                    setMethodGroup("va");
-                                                    setSelectedMethodId(defaultVaId);
-                                                }}
+                                                aria-checked={methodGroup === "va"}
+                                                tabIndex={methodGroup === "va" ? 0 : -1}
+                                                onClick={() => applyMethodGroupSelection("va")}
+                                                onKeyDown={(event) => handleMethodGroupKeyDown(event, "va")}
                                             >
                                                 Virtual Accounts
                                             </button>
@@ -762,11 +815,13 @@ function PaymentContent() {
                                 )}
 
                                 {methodGroup !== "global" && (
-                                    <div className={styles.methodGrid} role="tabpanel">
+                                    <div className={styles.methodGrid} role="radiogroup" aria-label="Payment method">
                                         {filteredActiveMethods.map((method) => (
                                             <button
                                                 key={method.id}
                                                 type="button"
+                                                role="radio"
+                                                aria-checked={selectedMethodId === method.id}
                                                 className={styles.methodOption}
                                                 data-selected={selectedMethodId === method.id}
                                                 onClick={() => setSelectedMethodId(method.id)}

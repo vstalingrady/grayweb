@@ -422,6 +422,14 @@ async def _require_conversation_owner(conversation_id: str, current_user: Dict[s
                 f"Conversation ownership check failed for {conversation_id}: {e}",
                 extra={"conversation_id": conversation_id, "user_id": _row_get(current_user, "id"), "error": str(e)}
             )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Conversation storage is not available.",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found",
+        )
     else:
         # Non-UUID IDs are treated as local-only; require the current user context.
         require_same_user(current_user["id"], current_user)

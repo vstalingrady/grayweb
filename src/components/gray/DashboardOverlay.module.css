@@ -36,11 +36,11 @@
     right: 16px;
     z-index: 10;
     background: rgba(0, 0, 0, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    color: rgba(255, 255, 255, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.82);
     cursor: pointer;
-    padding: 8px;
-    border-radius: 8px;
+    padding: 10px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -50,13 +50,18 @@
 
 .closeButton:hover {
     background: rgba(255, 255, 255, 0.15);
-    color: rgba(255, 255, 255, 0.9);
-    border-color: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.96);
+    border-color: rgba(255, 255, 255, 0.24);
+}
+
+.closeButton:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.85);
+    outline-offset: 2px;
 }
 
 .overlayContent {
     flex: 1;
-    overflow: hidden;
+    overflow: auto;
     position: relative;
     display: flex;
     flex-direction: column;
@@ -88,5 +93,25 @@
     to {
         opacity: 1;
         transform: scale(1) translateY(0);
+    }
+}
+
+@media (max-width: 900px) {
+    .overlayBackdrop {
+        align-items: stretch;
+        justify-content: stretch;
+        padding: 0;
+    }
+
+    .overlayContainer {
+        width: 100vw;
+        height: 100dvh;
+        border-radius: 0;
+        border: none;
+    }
+
+    .closeButton {
+        top: 12px;
+        right: 12px;
     }
 }

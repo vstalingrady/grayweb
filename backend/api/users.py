@@ -29,6 +29,9 @@ from backend.database import (
     proactive_notifications,
     google_calendar_credentials,
     proactivity_push_subscriptions,
+    user_data,
+    user_chat_threads,
+    user_chat_messages,
     get_database,
 )
 
@@ -478,58 +481,60 @@ async def delete_user_account(
 
     delete_supabase_user_records(user_id)
 
-    # Delete from Supabase Auth using a service-role client when available
+    # Delete from Supabase Auth before local deletion; if this fails,
+    # abort to avoid partial account state.
     admin_client = supabase_admin or supabase
     service_sources = {"SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY", "SUPABASE_SECRET_KEY"}
-    anon_sources = {"SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY"}
-
-    if admin_client and (supabase_admin is not None or SUPABASE_KEY_SOURCE in service_sources):
+    if auth_user_id or user_email:
+        if not admin_client or not (supabase_admin is not None or SUPABASE_KEY_SOURCE in service_sources):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Account deletion is temporarily unavailable (missing Supabase service-role credentials).",
+            )
         try:
             if auth_user_id:
-                # Convert UUID to string if needed
-                auth_user_id_str = str(auth_user_id) if auth_user_id else None
+                auth_user_id_str = str(auth_user_id)
                 admin_client.auth.admin.delete_user(auth_user_id_str)
                 api_logger.info(
                     f"Deleted Supabase Auth user {auth_user_id_str}",
-                    extra={"user_id": user_id, "auth_user_id": auth_user_id_str}
+                    extra={"user_id": user_id, "auth_user_id": auth_user_id_str},
                 )
             else:
-                # Fallback to email search only if auth_id is missing (legacy users)
                 api_logger.warning(
                     f"auth_user_id missing for user {user_id}, attempting fallback search by email",
-                    extra={"user_id": user_id}
+                    extra={"user_id": user_id},
                 )
                 auth_users_response = admin_client.auth.admin.list_users()
                 auth_users = getattr(auth_users_response, "users", []) or []
-                
+
                 found_id = None
                 for auth_user in auth_users:
                     if hasattr(auth_user, "email") and auth_user.email == user_email:
                         found_id = auth_user.id
                         break
-                
+
                 if found_id:
                     admin_client.auth.admin.delete_user(found_id)
                     api_logger.info(
                         f"Deleted Supabase Auth user {found_id} (via fallback)",
-                        extra={"user_id": user_id, "auth_user_id": found_id}
+                        extra={"user_id": user_id, "auth_user_id": found_id},
                     )
                 else:
                     api_logger.warning(
                         f"Could not find Supabase Auth user for email {user_email}",
-                        extra={"user_id": user_id}
+                        extra={"user_id": user_id},
                     )
         except Exception as e:
-            api_logger.error(
-                f"Failed to delete Supabase Auth user: {e}",
-                extra={"user_id": user_id, "error": str(e)}
-            )
-
-    elif admin_client and SUPABASE_KEY_SOURCE in anon_sources:
-        api_logger.warning(
-            "Supabase service-role key missing; skipped Supabase Auth deletion",
-            extra={"user_id": user_id, "event_type": "account_deletion_skipped_auth"},
-        )
+            message = str(e).lower()
+            if "not found" not in message:
+                api_logger.error(
+                    f"Failed to delete Supabase Auth user: {e}",
+                    extra={"user_id": user_id, "error": str(e), "event_type": "account_deletion_auth_failed"},
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Failed to delete authentication account; no local data was removed.",
+                ) from e
 
     # Delete from all related tables
     deletion_tables = [
@@ -549,17 +554,41 @@ async def delete_user_account(
         proactivity_push_subscriptions,
     ]
 
-    for table in deletion_tables:
-        await db.execute(table.delete().where(table.c.user_id == user_id))
-
-    # Delete from raw SQL tables
     try:
-        await db.execute("DELETE FROM general_chat_messages WHERE user_id = :user_id", {"user_id": user_id})
-    except Exception:
-        # Table might not exist or other error, ignore
-        pass
+        async with db.transaction():
+            for table in deletion_tables:
+                await db.execute(table.delete().where(table.c.user_id == user_id))
 
-    await db.execute(users.delete().where(users.c.id == user_id))
+            try:
+                await db.execute("DELETE FROM general_chat_messages WHERE user_id = :user_id", {"user_id": user_id})
+            except Exception as exc:
+                if "no such table" not in str(exc).lower():
+                    raise
+
+            # Delete user-centric chat tables to avoid orphaned user history after account deletion.
+            await db.execute(
+                user_chat_messages.delete().where(
+                    user_chat_messages.c.thread_id.in_(
+                        sqlalchemy.select(user_chat_threads.c.id).where(
+                            user_chat_threads.c.user_identifier == user_id
+                        )
+                    )
+                )
+            )
+            await db.execute(user_chat_threads.delete().where(user_chat_threads.c.user_identifier == user_id))
+            await db.execute(user_data.delete().where(user_data.c.user_identifier == user_id))
+            await db.execute(users.delete().where(users.c.id == user_id))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        api_logger.error(
+            "Failed to delete local user data transactionally",
+            extra={"user_id": user_id, "error": str(exc), "event_type": "account_deletion_local_failed"},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete account data.",
+        ) from exc
     
     # Clear session cookies to prevent auth loop
     response.delete_cookie("sb-access-token", path="/", domain=None)

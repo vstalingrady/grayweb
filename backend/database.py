@@ -361,6 +361,18 @@ transactions = sqlalchemy.Table(
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
 
+payment_webhook_events = sqlalchemy.Table(
+    "payment_webhook_events",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+    sqlalchemy.Column("provider", sqlalchemy.String, nullable=False, index=True),
+    sqlalchemy.Column("event_key", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("order_id", sqlalchemy.String, nullable=True, index=True),
+    sqlalchemy.Column("event_type", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.UniqueConstraint("provider", "event_key", name="uq_payment_webhook_events_provider_key"),
+)
+
 # Chat tables
 user_data = sqlalchemy.Table(
     "user_data",
@@ -453,6 +465,7 @@ proactivity_logs = sqlalchemy.Table(
     sqlalchemy.Column("notes", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+    sqlalchemy.UniqueConstraint("user_id", "activity_date", name="uq_proactivity_logs_user_activity_date"),
 )
 
 proactivity_push_subscriptions = sqlalchemy.Table(
@@ -479,6 +492,7 @@ dashboard_pulses = sqlalchemy.Table(
     sqlalchemy.Column("proactivity", sqlalchemy.JSON, default=dict),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+    sqlalchemy.UniqueConstraint("user_id", "date_key", name="uq_dashboard_pulses_user_date"),
 )
 
 reminders = sqlalchemy.Table(

@@ -252,6 +252,15 @@ async def save_conversation_message(
 
     # Regular thread message
     try:
+        thread_row = await database.fetch_one(
+            user_chat_threads.select().where(user_chat_threads.c.id == conversation_id)
+        )
+        if not thread_row:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        owner_id = thread_row["user_identifier"]
+        if user_id is not None and str(owner_id) != str(user_id):
+            raise HTTPException(status_code=403, detail="You can only access your own conversations")
+
         insert_query = user_chat_messages.insert().values(
             thread_id=conversation_id,
             role=role,
@@ -280,6 +289,8 @@ async def save_conversation_message(
         )
         return message_id
         
+    except HTTPException:
+        raise
     except Exception as error:
         _handle_conversation_store_error("Error saving message", error)
         logger.error(f"Failed to save message to thread {conversation_id}: {error}")

@@ -105,7 +105,7 @@ export default function LoginForm({
   const [pendingEmailConfirmation, setPendingEmailConfirmation] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [shouldUseCaptcha, setShouldUseCaptcha] = useState(false);
-  const turnstileRef = useRef<TurnstileInstance>();
+  const turnstileRef = useRef<TurnstileInstance | null>(null);
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() ?? "";
   const supabaseHost = hostFromUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
 

@@ -30,13 +30,42 @@ def _is_localhost_request(request: Request) -> bool:
         except ValueError:
             return None
 
-    client_host = request.client.host if request.client else ""
+    forwarded_headers = (
+        "x-forwarded-for",
+        "x-real-ip",
+        "forwarded",
+        "cf-connecting-ip",
+        "true-client-ip",
+        "x-client-ip",
+    )
+    for header_name in forwarded_headers:
+        if request.headers.get(header_name):
+            return False
 
-    if client_host in {"127.0.0.1", "::1", "localhost"}:
-        return True
-
+    client_host = (request.client.host if request.client else "") or ""
     client_ip = _parse_ip(client_host)
-    return bool(client_ip and client_ip.is_loopback)
+    if client_host not in {"127.0.0.1", "::1", "localhost"} and not (
+        client_ip and client_ip.is_loopback
+    ):
+        return False
+
+    host_header = (request.headers.get("host") or "").split(":", 1)[0].strip().lower()
+    if host_header.startswith("[") and host_header.endswith("]"):
+        host_header = host_header[1:-1]
+    host_ip = _parse_ip(host_header)
+    if host_header not in {"127.0.0.1", "::1", "localhost"} and not (
+        host_ip and host_ip.is_loopback
+    ):
+        return False
+
+    request_hostname = (request.url.hostname or "").strip().lower()
+    request_ip = _parse_ip(request_hostname)
+    if request_hostname not in {"127.0.0.1", "::1", "localhost"} and not (
+        request_ip and request_ip.is_loopback
+    ):
+        return False
+
+    return True
 
 def _count_error_entries(since: datetime) -> Dict[str, Any]:
     """Placeholder for error counting - not yet implemented."""

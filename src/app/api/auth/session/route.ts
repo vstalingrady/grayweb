@@ -24,17 +24,8 @@ const ALLOWED_FETCH_SITES = new Set(["same-origin", "same-site"]);
 const ALLOWED_FETCH_MODES = new Set(["cors", "same-origin"]);
 
 const resolveExpectedOrigin = (request: NextRequest): string | null => {
-  const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
-  const forwardedHost = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-  const rawHost = forwardedHost?.split(",")[0]?.trim();
-  const protocol = forwardedProto || request.nextUrl.protocol.replace(":", "") || "http";
-
-  if (rawHost) {
-    return `${protocol}://${rawHost}`;
-  }
-
   try {
-    return new URL(request.url).origin;
+    return request.nextUrl.origin || new URL(request.url).origin;
   } catch {
     return null;
   }

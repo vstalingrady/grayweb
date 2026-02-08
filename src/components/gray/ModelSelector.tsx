@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useMemo, useState, useRef, useEffect } from "react";
+import { memo, useCallback, useMemo, useState, useRef, useEffect, useId, type MouseEvent as ReactMouseEvent } from "react";
 import { Zap, Lock, ChevronUp, Grid, ChevronRight, Check, Atom, Settings, Box, Calendar } from "lucide-react";
 import Image from "next/image";
 import { useChatStore } from "@/components/gray/ChatProvider";
@@ -48,6 +48,8 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
   const [isToolsExpanded, setIsToolsExpanded] = useState(false);
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+  const toolsPanelId = `${menuId}-tools`;
 
   const currentTier = normalizePlanTier(user);
   const currentLevel = PLAN_TIER_LEVELS[currentTier] ?? 0;
@@ -147,10 +149,24 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
     [currentLevel, setModelTier, setSelectedModelId]
   );
 
-  const toggleAllModels = useCallback((event: React.MouseEvent) => {
+  const toggleAllModels = useCallback((event: ReactMouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
     setShowAllModels((prev) => !prev);
   }, []);
+
+  const isAllModelsLocked = currentLevel < PLAN_TIER_LEVELS["pathfinder"];
+
+  const handleAllModelsClick = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      if (isAllModelsLocked) {
+        event.preventDefault();
+        window.location.assign("/pricing");
+        return;
+      }
+      toggleAllModels(event);
+    },
+    [isAllModelsLocked, toggleAllModels]
+  );
 
   const handleGroupToggle = useCallback((groupId: string) => {
     setExpandedGroupId((prev) => (prev === groupId ? null : groupId));
@@ -180,7 +196,8 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
         className={`${styles.trigger} ${className || ""}`}
         onClick={() => setIsOpen(!isOpen)}
         aria-expanded={isOpen}
-        aria-haspopup="menu"
+        aria-haspopup="dialog"
+        aria-controls={menuId}
         aria-label={t("Select model")}
         type="button"
       >
@@ -194,11 +211,18 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
       </button>
 
       {/* Dropup Menu */}
-      <div className={`${styles.menu} ${isOpen ? styles.menuOpen : ""}`}>
+      <div
+        id={menuId}
+        className={`${styles.menu} ${isOpen ? styles.menuOpen : ""}`}
+        role="dialog"
+        aria-label={t("Model options")}
+        aria-hidden={isOpen ? "false" : "true"}
+      >
         {showAllModels ? (
           <div className={styles.menuContent}>
             <button
               className={styles.backButton}
+              type="button"
               onClick={() => setShowAllModels(false)}
             >
               <ChevronRight size={16} style={{ transform: 'rotate(180deg)' }} />
@@ -271,6 +295,8 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                 <button
                   className={`${styles.menuItem} ${isToolsExpanded ? styles.menuItemExpanded : ""}`}
                   onClick={() => setIsToolsExpanded(!isToolsExpanded)}
+                  aria-expanded={isToolsExpanded}
+                  aria-controls={toolsPanelId}
                   type="button"
                 >
                   <div className={styles.itemIconWrapper}>
@@ -288,7 +314,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                 </button>
 
                 {isToolsExpanded && (
-                  <div className={styles.groupModels}>
+                  <div className={styles.groupModels} id={toolsPanelId}>
                     {/* Reasoning Toggle */}
                     <button
                       className={`${styles.menuItem} ${styles.subMenuItem} ${isReasoningToggleDisabled ? styles.menuItemLocked : ""}`}
@@ -297,6 +323,8 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                         setReasoningMode(!reasoningMode);
                       }}
                       disabled={isReasoningToggleDisabled}
+                      aria-pressed={reasoningMode}
+                      aria-label={t("Toggle reasoning")}
                       type="button"
                     >
                       <div className={styles.itemIconWrapper}>
@@ -321,6 +349,8 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                     <button
                       className={`${styles.menuItem} ${styles.subMenuItem}`}
                       onClick={toggleWebSearchEnabled}
+                      aria-pressed={webSearchEnabled}
+                      aria-label={t("Toggle web search")}
                       type="button"
                     >
                       <div className={styles.itemIconWrapper}>
@@ -339,6 +369,8 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                     <button
                       className={`${styles.menuItem} ${styles.subMenuItem}`}
                       onClick={toggleRemindersEnabled}
+                      aria-pressed={remindersEnabled}
+                      aria-label={t("Toggle reminders and plans")}
                       type="button"
                     >
                       <div className={styles.itemIconWrapper}>
@@ -392,20 +424,16 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
               <button
                 className={styles.actionItem}
                 type="button"
-                onClick={toggleAllModels}
+                onClick={handleAllModelsClick}
               >
                 <Box size={16} />
                 <span>{t("All Models")}</span>
-                {currentLevel < PLAN_TIER_LEVELS["pathfinder"] ? (
+                {isAllModelsLocked ? (
                   <span className={styles.actionUpgradeRight}>
-                    <a
-                      href="/pricing"
-                      className={styles.upgradePill}
-                      onClick={(event) => event.stopPropagation()}
-                    >
+                    <span className={styles.upgradePill}>
                       <span>{t("Upgrade")}</span>
                       <Lock size={14} className={styles.upgradePillIcon} />
-                    </a>
+                    </span>
                     <ChevronRight size={14} className={styles.actionUpgradeArrow} />
                   </span>
                 ) : (
@@ -417,7 +445,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
               {shouldShowSelectedModel && (
                 <>
                   <div className={styles.divider} />
-                  <button className={`${styles.menuItem} ${styles.menuItemActive}`} disabled>
+                  <button className={`${styles.menuItem} ${styles.menuItemActive}`} type="button" disabled>
                     {/* We use activeOption.icon here which I will update in useMemo to be the group icon */}
                     <div className={styles.itemIconWrapper}>
                       {/* Dynamically render icon component or image if strictly needed, 

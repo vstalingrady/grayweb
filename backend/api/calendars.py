@@ -17,7 +17,7 @@ from backend.models import (
 )
 
 # Import dependencies
-from backend.database import calendars, calendar_events, get_database
+from backend.database import calendars, calendar_events, habits, get_database
 from backend.auth import get_current_user, require_same_user
 from backend.time_utils import utcnow
 from backend.tier_utils import normalize_plan_tier
@@ -64,6 +64,62 @@ def _require_calendar_access(current_user: Dict[str, Any]) -> None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Calendar access requires a Voyager or Pioneer plan.",
+        )
+
+
+def _validate_event_time_range(start_time: datetime, end_time: datetime) -> None:
+    if end_time < start_time:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="end_time must be greater than or equal to start_time.",
+        )
+
+
+def _validate_reminder_minutes_before(reminder_minutes_before: Optional[int]) -> None:
+    if reminder_minutes_before is not None and reminder_minutes_before < 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="reminder_minutes_before must be non-negative.",
+        )
+
+
+async def _ensure_calendar_owned_by_user(
+    db: databases.Database,
+    *,
+    user_id: int,
+    calendar_id: Optional[int],
+) -> None:
+    if calendar_id is None:
+        return
+    calendar_row = await db.fetch_one(
+        calendars.select().where(
+            (calendars.c.id == calendar_id) & (calendars.c.user_id == user_id)
+        )
+    )
+    if not calendar_row:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="calendar_id must reference one of the user's calendars.",
+        )
+
+
+async def _ensure_habit_owned_by_user(
+    db: databases.Database,
+    *,
+    user_id: int,
+    habit_id: Optional[int],
+) -> None:
+    if habit_id is None:
+        return
+    habit_row = await db.fetch_one(
+        habits.select().where(
+            (habits.c.id == habit_id) & (habits.c.user_id == user_id)
+        )
+    )
+    if not habit_row:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="habit_id must reference one of the user's habits.",
         )
 
 
@@ -209,6 +265,10 @@ async def create_calendar_event(
     user_id = current_user["id"]
     require_same_user(user_id, current_user)
     _require_calendar_access(current_user)
+    _validate_event_time_range(event.start_time, event.end_time)
+    _validate_reminder_minutes_before(event.reminder_minutes_before)
+    await _ensure_calendar_owned_by_user(db, user_id=user_id, calendar_id=event.calendar_id)
+    await _ensure_habit_owned_by_user(db, user_id=user_id, habit_id=event.habit_id)
     now = utcnow()
     resolved_reminder_at = _resolve_event_reminder_at(
         event.start_time,
@@ -287,10 +347,50 @@ async def update_calendar_event(
     if not existing:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
 
+    proposed_start_time = update_data.get("start_time", _row_get(existing, "start_time"))
+    proposed_end_time = update_data.get("end_time", _row_get(existing, "end_time"))
+    if isinstance(proposed_start_time, datetime) and isinstance(proposed_end_time, datetime):
+        _validate_event_time_range(proposed_start_time, proposed_end_time)
+
+    _validate_reminder_minutes_before(update_data.get("reminder_minutes_before"))
+    if "calendar_id" in update_data:
+        await _ensure_calendar_owned_by_user(
+            db,
+            user_id=user_id,
+            calendar_id=update_data.get("calendar_id"),
+        )
+    if "habit_id" in update_data:
+        await _ensure_habit_owned_by_user(
+            db,
+            user_id=user_id,
+            habit_id=update_data.get("habit_id"),
+        )
+
     if not sqlite_update_data and "reminder_at" not in update_data:
         return existing
 
     if sqlite_update_data:
+        editable_keys = {
+            "title",
+            "description",
+            "start_time",
+            "end_time",
+            "calendar_id",
+            "color",
+            "reminder_minutes_before",
+            "entry_type",
+            "is_completed",
+            "recurrence",
+            "habit_id",
+            "reminder_at",
+        }
+        sqlite_update_data = {
+            key: value for key, value in sqlite_update_data.items() if key in editable_keys
+        }
+        # If caller explicitly sets/clears reminder_at, treat it as authoritative.
+        if "reminder_at" in update_data and "reminder_minutes_before" not in update_data:
+            sqlite_update_data["reminder_minutes_before"] = None
+
         await db.execute(
             calendar_events.update()
             .where((calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id))
@@ -327,16 +427,19 @@ async def update_calendar_event(
         if should_resolve_reminder:
             # Resolve from the persisted row to avoid clearing existing absolute reminders
             # when only start_time changes.
-            resolved_reminder_at = _resolve_event_reminder_at(
-                rec_dict.get("start_time"),
-                rec_dict.get("reminder_at"),
-                rec_dict.get("reminder_minutes_before"),
-            )
-            await db.execute(
-                calendar_events.update()
-                .where((calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id))
-                .values(reminder_at=resolved_reminder_at)
-            )
+            if "reminder_at" in update_data:
+                resolved_reminder_at = rec_dict.get("reminder_at")
+            else:
+                resolved_reminder_at = _resolve_event_reminder_at(
+                    rec_dict.get("start_time"),
+                    rec_dict.get("reminder_at"),
+                    rec_dict.get("reminder_minutes_before"),
+                )
+                await db.execute(
+                    calendar_events.update()
+                    .where((calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id))
+                    .values(reminder_at=resolved_reminder_at)
+                )
 
         # Keep reminder payload (label/description/color) in sync on event edits
         # whenever an active reminder exists or reminder timing changed.

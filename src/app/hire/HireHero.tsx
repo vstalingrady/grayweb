@@ -85,7 +85,7 @@ export default function HireHero() {
   const logoImageRef = useRef<HTMLImageElement | null>(null);
   const isMobileRef = useRef(false);
   const contentRef = useRef<HTMLDivElement>(null);
-  const turnstileRef = useRef<TurnstileInstance>();
+  const turnstileRef = useRef<TurnstileInstance | null>(null);
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() ?? "";
   const shouldUseCaptcha = Boolean(turnstileSiteKey);
 

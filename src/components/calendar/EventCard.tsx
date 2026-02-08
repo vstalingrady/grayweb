@@ -1,4 +1,10 @@
-import { CSSProperties, HTMLAttributes, MouseEvent, memo, useMemo } from "react";
+import {
+  CSSProperties,
+  HTMLAttributes,
+  MouseEvent,
+  memo,
+  useMemo,
+} from "react";
 import { Check } from "lucide-react";
 
 import styles from "./GrayDashboardCalendar.module.css";
@@ -183,6 +189,13 @@ export const EventCard = memo(function EventCard({
 
   const resizeStartProps = resizeProps?.(event, "start");
   const resizeEndProps = resizeProps?.(event, "end");
+  const eventActionAriaLabel = tooltipLabel.replace(/\s*\n+\s*/g, " ").trim();
+  const handleEventActionClick = (domEvent: MouseEvent<HTMLButtonElement>) => {
+    const anchorRect =
+      domEvent.currentTarget.parentElement?.getBoundingClientRect() ??
+      domEvent.currentTarget.getBoundingClientRect();
+    onClick?.(event, anchorRect, domEvent);
+  };
 
   return (
     <div
@@ -196,13 +209,6 @@ export const EventCard = memo(function EventCard({
       data-task-completed={taskCompleted ? "true" : undefined}
       data-task-disabled={taskAction?.disabled ? "true" : undefined}
       style={cardStyle}
-      role="button"
-      tabIndex={0}
-      onClick={(domEvent) => {
-        const anchorRect = domEvent.currentTarget.getBoundingClientRect();
-        onClick?.(event, anchorRect, domEvent);
-      }}
-      title={tooltipLabel}
       {...draggableProps}
     >
       {!isPreview && !isDragging && (
@@ -211,18 +217,26 @@ export const EventCard = memo(function EventCard({
           <div className={styles.resizeHandle} data-edge="end" {...resizeEndProps} />
         </>
       )}
-      <div className={styles.eventCardText}>
-        <strong
-          className={styles.eventCardTitle}
-          data-task-completed={taskCompleted ? "true" : undefined}
-        >
-          {event.title}
-        </strong>
-        <span className={styles.eventCardTime}>{timeLabel}</span>
-        {detailText ? (
-          <span className={styles.eventCardDetails}>{detailText}</span>
-        ) : null}
-      </div>
+      <button
+        type="button"
+        className={styles.eventCardAction}
+        onClick={handleEventActionClick}
+        title={tooltipLabel}
+        aria-label={eventActionAriaLabel}
+      >
+        <div className={styles.eventCardText}>
+          <strong
+            className={styles.eventCardTitle}
+            data-task-completed={taskCompleted ? "true" : undefined}
+          >
+            {event.title}
+          </strong>
+          <span className={styles.eventCardTime}>{timeLabel}</span>
+          {detailText ? (
+            <span className={styles.eventCardDetails}>{detailText}</span>
+          ) : null}
+        </div>
+      </button>
       {taskAction ? (
         <button
           type="button"

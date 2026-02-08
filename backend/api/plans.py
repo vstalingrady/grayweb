@@ -178,7 +178,15 @@ async def update_plan(
     if not existing:
         raise HTTPException(status_code=404, detail="Plan not found")
     if not update_data and not reminder_at_provided:
-        return existing
+        response_payload = dict(existing)
+        reminder_map = await _get_pending_entity_reminder_map(
+            user_id=user_id,
+            entity_type="plan",
+            entity_ids=[int(plan_id)],
+            db=db,
+        )
+        response_payload["reminder_at"] = reminder_map.get(int(plan_id))
+        return response_payload
     update_data["updated_at"] = utcnow()
     if update_data:
         await db.execute(
@@ -384,7 +392,15 @@ async def update_habit(
     if not existing:
         raise HTTPException(status_code=404, detail="Habit not found")
     if not update_data and not reminder_at_provided:
-        return existing
+        response_payload = _serialize_habit_record(existing)
+        reminder_map = await _get_pending_entity_reminder_map(
+            user_id=user_id,
+            entity_type="habit",
+            entity_ids=[int(habit_id)],
+            db=db,
+        )
+        response_payload["reminder_at"] = reminder_map.get(int(habit_id))
+        return response_payload
     update_data["updated_at"] = utcnow()
     if update_data:
         await db.execute(

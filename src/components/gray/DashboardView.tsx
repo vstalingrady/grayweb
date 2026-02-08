@@ -31,6 +31,7 @@ const CALENDAR_PANEL_MAX_HEIGHT_WITH_CHAT =
 const CALENDAR_PANEL_MAX_HEIGHT_NO_CHAT =
   "clamp(420px, calc(100vh - clamp(48px, 6vh, 120px)), calc(100vh - clamp(32px, 4vh, 96px)))";
 const CALENDAR_PANEL_HOUR_HEIGHT = 72;
+const MOBILE_CALENDAR_PANEL_HOUR_HEIGHT = 84;
 const CALENDAR_PANEL_MIN_HEIGHT_PX = 420;
 const CALENDAR_PANEL_HEIGHT_STORAGE_KEY = "gray.dashboard.calendarPanelHeightPx";
 
@@ -211,6 +212,10 @@ export function GrayDashboardView({
   const panelResizeRef = useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null);
   const [isPanelResizing, setIsPanelResizing] = useState(false);
   const [isMobileQuickActionsOpen, setIsMobileQuickActionsOpen] = useState(false);
+  const mobileQuickActionFirstButtonRef = useRef<HTMLButtonElement | null>(null);
+  const mobileQuickActionsMenuRef = useRef<HTMLDivElement | null>(null);
+  const mobileQuickActionsFabRef = useRef<HTMLButtonElement | null>(null);
+  const mobileQuickActionsLastFocusedRef = useRef<HTMLElement | null>(null);
   const [quickComposerEntryType, setQuickComposerEntryType] = useState<"plan" | null>(null);
   const [quickComposerStartDate, setQuickComposerStartDate] = useState<Date | null>(null);
 
@@ -409,28 +414,79 @@ export function GrayDashboardView({
     [handleComposerDeleteInternal, resetQuickComposerSeed]
   );
 
-  const isMobileCalendarView = isCompactLayout && activeTab === "calendar";
+  const isMobileDashboardView = isCompactLayout && (activeTab === "calendar" || activeTab === "pulse");
 
   useEffect(() => {
-    if (!isMobileCalendarView || composerOpen || !hasCalendarAccess) {
+    if (!isMobileDashboardView || composerOpen) {
       Promise.resolve().then(() => setIsMobileQuickActionsOpen(false));
     }
-  }, [composerOpen, hasCalendarAccess, isMobileCalendarView]);
+  }, [composerOpen, isMobileDashboardView]);
 
   useEffect(() => {
     if (!isMobileQuickActionsOpen) {
       return;
     }
 
+    const fabElement = mobileQuickActionsFabRef.current;
+    mobileQuickActionsLastFocusedRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    const focusFirstAction = () => {
+      mobileQuickActionFirstButtonRef.current?.focus();
+    };
+
+    const frame = window.requestAnimationFrame(focusFirstAction);
+
+    const getFocusableActionButtons = () => {
+      const menu = mobileQuickActionsMenuRef.current;
+      if (!menu) {
+        return [] as HTMLButtonElement[];
+      }
+      return Array.from(menu.querySelectorAll<HTMLButtonElement>("button:not([disabled])"));
+    };
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setIsMobileQuickActionsOpen(false);
+        return;
+      }
+
+      if (event.key !== "Tab") {
+        return;
+      }
+
+      const actionButtons = getFocusableActionButtons();
+      if (actionButtons.length === 0) {
+        event.preventDefault();
+        return;
+      }
+
+      const first = actionButtons[0];
+      const last = actionButtons[actionButtons.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+
+      if (event.shiftKey) {
+        if (!active || active === first) {
+          event.preventDefault();
+          last.focus();
+        }
+        return;
+      }
+
+      if (active === last) {
+        event.preventDefault();
+        first.focus();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => {
+      window.cancelAnimationFrame(frame);
       window.removeEventListener("keydown", handleKeyDown);
+      const restoreTarget = mobileQuickActionsLastFocusedRef.current ?? fabElement;
+      if (restoreTarget && document.contains(restoreTarget)) {
+        restoreTarget.focus();
+      }
     };
   }, [isMobileQuickActionsOpen]);
 
@@ -584,6 +640,9 @@ export function GrayDashboardView({
     onDelete: handleComposerDelete,
     onStateChange: setComposerDraft,
   };
+  const calendarHourHeight = isCompactLayout
+    ? MOBILE_CALENDAR_PANEL_HOUR_HEIGHT
+    : CALENDAR_PANEL_HOUR_HEIGHT;
   const baseCalendarProps = {
     initialDate: currentDate,
     currentDate,
@@ -598,7 +657,7 @@ export function GrayDashboardView({
     onSelectedDateChange: onCalendarSelectedDateChange,
     composerState: calendarComposerState,
     composerHandlers: calendarComposerHandlers,
-    hourHeight: CALENDAR_PANEL_HOUR_HEIGHT,
+    hourHeight: calendarHourHeight,
     onIntegrationAction,
     dashboardTab: "calendar" as const,
     onSelectDashboardTab: () => {},
@@ -634,7 +693,7 @@ export function GrayDashboardView({
       : isCompactLayout
         ? compactCalendarContent
         : calendarContent;
-  const shouldShowMobileQuickActions = isMobileCalendarView && hasCalendarAccess && !composerOpen;
+  const shouldShowMobileQuickActions = isMobileDashboardView && !composerOpen;
 
   return (
     <>
@@ -684,18 +743,20 @@ export function GrayDashboardView({
           aria-label={t("Close quick actions")}
         />
       ) : null}
-      {shouldShowMobileQuickActions ? (
+      {shouldShowMobileQuickActions && isMobileQuickActionsOpen ? (
         <div
           id="dashboard-mobile-quick-actions-menu"
+          ref={mobileQuickActionsMenuRef}
           className={styles.mobileQuickActionsMenu}
-          data-open={isMobileQuickActionsOpen ? "true" : "false"}
+          data-open="true"
           data-chat-visible={isChatBarVisible ? "true" : "false"}
-          role="menu"
+          role="dialog"
+          aria-modal="true"
           aria-label={t("Quick actions")}
         >
           <button
+            ref={mobileQuickActionFirstButtonRef}
             type="button"
-            role="menuitem"
             className={styles.mobileQuickActionButton}
             onClick={() => handleMobileQuickActionSelect("plan")}
           >
@@ -703,7 +764,6 @@ export function GrayDashboardView({
           </button>
           <button
             type="button"
-            role="menuitem"
             className={styles.mobileQuickActionButton}
             onClick={() => handleMobileQuickActionSelect("event")}
           >
@@ -713,11 +773,12 @@ export function GrayDashboardView({
       ) : null}
       {shouldShowMobileQuickActions ? (
         <button
+          ref={mobileQuickActionsFabRef}
           type="button"
           className={styles.mobileQuickActionsFab}
           data-open={isMobileQuickActionsOpen ? "true" : "false"}
           data-chat-visible={isChatBarVisible ? "true" : "false"}
-          aria-haspopup="menu"
+          aria-haspopup="dialog"
           aria-expanded={isMobileQuickActionsOpen}
           aria-controls="dashboard-mobile-quick-actions-menu"
           aria-label={isMobileQuickActionsOpen ? t("Close quick actions") : t("Open quick actions")}

@@ -190,7 +190,13 @@ def rename_sqlite_column_if_needed(table: str, old_name: str, new_name: str) -> 
         )
 
 
-def ensure_sqlite_unique_index(table: str, index_name: str, columns: str) -> None:
+def ensure_sqlite_unique_index(
+    table: str,
+    index_name: str,
+    columns: str,
+    *,
+    auto_dedupe: bool = False,
+) -> None:
     """Create a UNIQUE index if it doesn't exist and the table has no duplicates."""
     db_path = _get_db_path()
     if not db_path:
@@ -225,10 +231,57 @@ def ensure_sqlite_unique_index(table: str, index_name: str, columns: str) -> Non
                     return
 
             placeholder_cols = ", ".join(quote(col) for col in normalized_columns)
+            non_null_predicate = " AND ".join(f"{quote(col)} IS NOT NULL" for col in normalized_columns)
             duplicates_query = (
-                f"SELECT 1 FROM {quote(table)} GROUP BY {placeholder_cols} HAVING COUNT(*) > 1 LIMIT 1"
+                f"SELECT 1 FROM {quote(table)} "
+                f"WHERE {non_null_predicate} "
+                f"GROUP BY {placeholder_cols} "
+                f"HAVING COUNT(*) > 1 LIMIT 1"
             )
-            if conn.execute(duplicates_query).fetchone() is not None:
+            has_duplicates = conn.execute(duplicates_query).fetchone() is not None
+            if has_duplicates and auto_dedupe:
+                delete_duplicates_query = f"""
+                    DELETE FROM {quote(table)}
+                    WHERE rowid IN (
+                        SELECT dup.rowid
+                        FROM {quote(table)} AS dup
+                        WHERE {non_null_predicate}
+                          AND dup.rowid NOT IN (
+                              SELECT MIN(base.rowid)
+                              FROM {quote(table)} AS base
+                              WHERE {non_null_predicate}
+                              GROUP BY {placeholder_cols}
+                          )
+                    )
+                """
+                try:
+                    result = conn.execute(delete_duplicates_query)
+                    conn.commit()
+                    deleted_rows = result.rowcount if result.rowcount is not None and result.rowcount >= 0 else 0
+                    app_logger.warning(
+                        "Deduplicated %s rows before creating UNIQUE index %s on %s",
+                        deleted_rows,
+                        index_name,
+                        table,
+                        extra={
+                            "event_type": "sqlite_unique_index_deduplicated",
+                            "table": table,
+                            "deleted_rows": deleted_rows,
+                        },
+                    )
+                except sqlite3.Error as exc:
+                    app_logger.error(
+                        "Failed to deduplicate rows before UNIQUE index creation",
+                        extra={
+                            "event_type": "sqlite_unique_index_deduplicate_failed",
+                            "table": table,
+                            "index": index_name,
+                            "error": str(exc),
+                        },
+                    )
+                has_duplicates = conn.execute(duplicates_query).fetchone() is not None
+
+            if has_duplicates:
                 app_logger.warning(
                     "Skipping UNIQUE index %s on %s because duplicates exist",
                     index_name,
@@ -305,6 +358,22 @@ def rebuild_sqlite_table_without_columns(table: str, columns_to_drop: set) -> No
             if not keep_columns:
                 return
 
+            retained_index_sql: List[str] = []
+            index_rows = list(conn.execute(f"PRAGMA index_list({quote(table)})"))
+            for _, index_name, *_ in index_rows:
+                if str(index_name).startswith("sqlite_autoindex"):
+                    continue
+                index_info = list(conn.execute(f"PRAGMA index_info({quote(str(index_name))})"))
+                index_columns = {info_row[2] for info_row in index_info if len(info_row) >= 3 and info_row[2]}
+                if index_columns & columns_to_drop:
+                    continue
+                index_sql_row = conn.execute(
+                    "SELECT sql FROM sqlite_master WHERE type='index' AND name=?",
+                    (str(index_name),),
+                ).fetchone()
+                if index_sql_row and index_sql_row[0]:
+                    retained_index_sql.append(str(index_sql_row[0]))
+
             temp_table = f"{table}__tmp_{uuid4().hex[:8]}"
 
             column_defs: List[str] = []
@@ -333,6 +402,8 @@ def rebuild_sqlite_table_without_columns(table: str, columns_to_drop: set) -> No
             )
             conn.execute(f"DROP TABLE {quote(table)}")
             conn.execute(f"ALTER TABLE {quote(temp_table)} RENAME TO {quote(table)}")
+            for index_sql in retained_index_sql:
+                conn.execute(index_sql)
             conn.commit()
         except Exception:
             conn.rollback()

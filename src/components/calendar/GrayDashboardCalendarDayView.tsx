@@ -72,6 +72,29 @@ export function GrayDashboardCalendarDayView({
   } as CSSProperties;
 
   const isToday = nowReference ? isSameDay(selectedDate, nowReference) : false;
+  const createActionDateLabel = selectedDate.toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+
+  const handleColumnSurfaceClick = (
+    event: MouseEvent<HTMLButtonElement>,
+    day: Date
+  ) => {
+    if (event.detail === 0) {
+      const bounds = event.currentTarget.getBoundingClientRect();
+      const syntheticEvent = {
+        currentTarget: event.currentTarget,
+        target: event.currentTarget,
+        clientY: bounds.top + bounds.height / 2,
+      } as unknown as MouseEvent<HTMLDivElement>;
+      onColumnClick(syntheticEvent, day);
+      return;
+    }
+
+    onColumnClick(event as unknown as MouseEvent<HTMLDivElement>, day);
+  };
 
   return (
     <div className={styles.calendarGrid} style={calendarGridStyle}>
@@ -90,21 +113,45 @@ export function GrayDashboardCalendarDayView({
                 />
               </div>
             )}
-            <div className={`${styles.calendarSurfaceNavArrows} ${styles.calendarMonthNavArrows}`}>
-              <button
-                type="button"
-                aria-label={t("Previous {range}", { range: rangeNavigationLabel })}
-                onClick={() => onNavigateRange(-1)}
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <button
-                type="button"
-                aria-label={t("Next {range}", { range: rangeNavigationLabel })}
-                onClick={() => onNavigateRange(1)}
-              >
-                <ChevronRight size={16} />
-              </button>
+            <div className={styles.calendarMonthControls}>
+              {showViewSelect && (
+                <div className={styles.calendarMobileViewToggle} role="group" aria-label={t("View mode")}>
+                  <button
+                    type="button"
+                    className={styles.calendarMobileViewToggleButton}
+                    data-active="false"
+                    aria-pressed="false"
+                    onClick={() => onUpdateViewMode("week")}
+                  >
+                    {t("Week")}
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.calendarMobileViewToggleButton}
+                    data-active="true"
+                    aria-pressed="true"
+                    onClick={() => onUpdateViewMode("day")}
+                  >
+                    {t("Day")}
+                  </button>
+                </div>
+              )}
+              <div className={`${styles.calendarSurfaceNavArrows} ${styles.calendarMonthNavArrows}`}>
+                <button
+                  type="button"
+                  aria-label={t("Previous {range}", { range: rangeNavigationLabel })}
+                  onClick={() => onNavigateRange(-1)}
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <button
+                  type="button"
+                  aria-label={t("Next {range}", { range: rangeNavigationLabel })}
+                  onClick={() => onNavigateRange(1)}
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -132,7 +179,13 @@ export function GrayDashboardCalendarDayView({
             ))}
           </div>
           <div className={styles.calendarDayColumn} data-selected="true" data-today={isToday ? "true" : "false"}>
-            <div className={styles.calendarColumnScroller} onClick={(event) => onColumnClick(event, selectedDate)}>
+            <div className={styles.calendarColumnScroller}>
+              <button
+                type="button"
+                className={styles.calendarColumnSurfaceButton}
+                aria-label={t("Create event on {date}", { date: createActionDateLabel })}
+                onClick={(event) => handleColumnSurfaceClick(event, selectedDate)}
+              />
               <div className={styles.calendarHourGrid} aria-hidden="true">
                 {HOURS.map((hour) => (
                   <div key={hour} className={styles.calendarHourRow} />

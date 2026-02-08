@@ -75,6 +75,24 @@ export function GrayDashboardCalendarWeekView({
     "--calendar-grid-columns": "7",
   } as CSSProperties;
 
+  const handleColumnSurfaceClick = (
+    event: MouseEvent<HTMLButtonElement>,
+    day: Date
+  ) => {
+    if (event.detail === 0) {
+      const bounds = event.currentTarget.getBoundingClientRect();
+      const syntheticEvent = {
+        currentTarget: event.currentTarget,
+        target: event.currentTarget,
+        clientY: bounds.top + bounds.height / 2,
+      } as unknown as MouseEvent<HTMLDivElement>;
+      onColumnClick(syntheticEvent, day);
+      return;
+    }
+
+    onColumnClick(event as unknown as MouseEvent<HTMLDivElement>, day);
+  };
+
   return (
     <div className={styles.calendarGrid} style={calendarGridStyle}>
       <div className={styles.calendarBody}>
@@ -94,21 +112,45 @@ export function GrayDashboardCalendarWeekView({
                     />
                   </div>
                 )}
-                <div className={`${styles.calendarSurfaceNavArrows} ${styles.calendarMonthNavArrows}`}>
-                  <button
-                    type="button"
-                    aria-label={t("Previous {range}", { range: rangeNavigationLabel })}
-                    onClick={() => onNavigateRange(-1)}
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={t("Next {range}", { range: rangeNavigationLabel })}
-                    onClick={() => onNavigateRange(1)}
-                  >
-                    <ChevronRight size={16} />
-                  </button>
+                <div className={styles.calendarMonthControls}>
+                  {showViewSelect && (
+                    <div className={styles.calendarMobileViewToggle} role="group" aria-label={t("View mode")}>
+                      <button
+                        type="button"
+                        className={styles.calendarMobileViewToggleButton}
+                        data-active="true"
+                        aria-pressed="true"
+                        onClick={() => onUpdateViewMode("week")}
+                      >
+                        {t("Week")}
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.calendarMobileViewToggleButton}
+                        data-active="false"
+                        aria-pressed="false"
+                        onClick={() => onUpdateViewMode("day")}
+                      >
+                        {t("Day")}
+                      </button>
+                    </div>
+                  )}
+                  <div className={`${styles.calendarSurfaceNavArrows} ${styles.calendarMonthNavArrows}`}>
+                    <button
+                      type="button"
+                      aria-label={t("Previous {range}", { range: rangeNavigationLabel })}
+                      onClick={() => onNavigateRange(-1)}
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={t("Next {range}", { range: rangeNavigationLabel })}
+                      onClick={() => onNavigateRange(1)}
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -167,7 +209,19 @@ export function GrayDashboardCalendarWeekView({
                   data-today={isToday ? "true" : "false"}
                   data-selected={isSameDay(day, selectedDate) ? "true" : "false"}
                 >
-                  <div className={styles.calendarColumnScroller} onClick={(event) => onColumnClick(event, day)}>
+                  <div className={styles.calendarColumnScroller}>
+                    <button
+                      type="button"
+                      className={styles.calendarColumnSurfaceButton}
+                      aria-label={t("Create event on {date}", {
+                        date: day.toLocaleDateString(undefined, {
+                          weekday: "long",
+                          month: "long",
+                          day: "numeric",
+                        }),
+                      })}
+                      onClick={(event) => handleColumnSurfaceClick(event, day)}
+                    />
                     <div className={styles.calendarHourGrid} aria-hidden="true">
                       {HOURS.map((hour) => (
                         <div key={hour} className={styles.calendarHourRow} />

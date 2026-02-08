@@ -396,7 +396,7 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
         return;
       }
 
-      const registration = await navigator.serviceWorker.register("/sw-proactivity.js");
+      const registration = await navigator.serviceWorker.register("/sw.js");
       const subscribeOptions = {
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(
@@ -414,7 +414,7 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
       if (!p256dh || !auth) return;
 
       const apiBase = resolveProactivityApiBase();
-      const response = await fetch(`${apiBase}/users/${userId}/push/subscribe?token=${encodeURIComponent(token)}`, {
+      const response = await fetch(`${apiBase}/users/${userId}/push/subscribe`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

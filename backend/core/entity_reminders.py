@@ -63,7 +63,7 @@ async def get_pending_entity_reminder_map(
             continue
         if entity_id in reminder_map:
             continue
-        remind_at = _row_get(row, "remind_at")
+        remind_at = normalize_remind_at(_row_get(row, "remind_at"))
         if isinstance(remind_at, datetime):
             reminder_map[entity_id] = remind_at
     return reminder_map
@@ -160,6 +160,71 @@ async def delete_all_entity_reminders(
         )
 
 
+async def _collapse_pending_entity_reminders(
+    *,
+    user_id: int,
+    entity_type: str,
+    entity_id: int,
+    db: databases.Database,
+) -> Optional[int]:
+    """Keep at most one pending reminder row for an entity and return its id."""
+    global reminder_scheduler
+
+    pending_rows = await db.fetch_all(
+        reminders.select()
+        .where(
+            (reminders.c.user_id == user_id)
+            & (reminders.c.entity_type == entity_type)
+            & (reminders.c.entity_id == entity_id)
+            & (reminders.c.status == "pending")
+        )
+        .order_by(reminders.c.updated_at.desc(), reminders.c.created_at.desc(), reminders.c.id.desc())
+    )
+    if not pending_rows:
+        return None
+
+    keeper_id = int(pending_rows[0]["id"])
+    duplicate_ids = [int(row["id"]) for row in pending_rows[1:] if _row_get(row, "id") is not None]
+    if not duplicate_ids:
+        return keeper_id
+
+    for duplicate_id in duplicate_ids:
+        try:
+            if reminder_scheduler:
+                await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=duplicate_id)
+        except Exception as exc:
+            api_logger.warning(
+                "Failed to cancel duplicate pending reminder scheduler job",
+                extra={
+                    "event_type": "entity_reminder_cancel_job_failed",
+                    "user_id": user_id,
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
+                    "reminder_id": duplicate_id,
+                    "error": str(exc),
+                },
+            )
+
+    await db.execute(
+        reminders.delete().where(
+            (reminders.c.user_id == user_id)
+            & (reminders.c.id.in_(duplicate_ids))
+        )
+    )
+    api_logger.warning(
+        "Removed duplicate pending entity reminders",
+        extra={
+            "event_type": "entity_reminder_duplicates_removed",
+            "user_id": user_id,
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+            "duplicate_count": len(duplicate_ids),
+            "keeper_id": keeper_id,
+        },
+    )
+    return keeper_id
+
+
 async def upsert_entity_reminder(
     *,
     user_id: int,
@@ -215,6 +280,14 @@ async def upsert_entity_reminder(
             .where((reminders.c.id == reminder_id) & (reminders.c.user_id == user_id))
             .values(**base_values)
         )
+        canonical_reminder_id = await _collapse_pending_entity_reminders(
+            user_id=user_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            db=db,
+        )
+        if canonical_reminder_id is not None:
+            reminder_id = canonical_reminder_id
         try:
             if reminder_scheduler:
                 await reminder_scheduler.refresh_job(
@@ -273,12 +346,28 @@ async def upsert_entity_reminder(
         "created_at": now,
         **base_values,
     }
-    reminder_id = await db.execute(reminders.insert().values(**insert_values))
+    inserted_reminder_id = int(await db.execute(reminders.insert().values(**insert_values)))
+    reminder_id = inserted_reminder_id
+    canonical_reminder_id = await _collapse_pending_entity_reminders(
+        user_id=user_id,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        db=db,
+    )
+    if canonical_reminder_id is not None:
+        reminder_id = canonical_reminder_id
+    if reminder_id != inserted_reminder_id:
+        # Another concurrent write won; converge the retained row to the newest payload.
+        await db.execute(
+            reminders.update()
+            .where((reminders.c.id == reminder_id) & (reminders.c.user_id == user_id))
+            .values(**base_values)
+        )
     try:
         if reminder_scheduler:
             await reminder_scheduler.refresh_job(
                 user_id=user_id,
-                reminder_id=int(reminder_id),
+                reminder_id=reminder_id,
                 remind_at=normalized_remind_at,
             )
     except Exception as exc:
@@ -293,4 +382,4 @@ async def upsert_entity_reminder(
                 "error": str(exc),
             },
         )
-    return int(reminder_id)
+    return reminder_id

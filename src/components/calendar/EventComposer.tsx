@@ -91,6 +91,7 @@ export function EventComposer({
   });
   const cardRef = useRef<HTMLDivElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
+  const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
   const colorPickerRef = useRef<HTMLDivElement | null>(null);
   const colorPickerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const colorPickerPopoverRef = useRef<HTMLDivElement | null>(null);
@@ -327,13 +328,62 @@ export function EventComposer({
       return undefined;
     }
 
+    previouslyFocusedElementRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    const focusInitialField = () => {
+      const card = cardRef.current;
+      if (!card) return;
+      const firstFocusable = card.querySelector<HTMLElement>(
+        "input[type='text'], button:not([disabled]), select:not([disabled]), input[type='time']:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
+      );
+      firstFocusable?.focus();
+    };
+    const animationFrame = window.requestAnimationFrame(focusInitialField);
+
     const handleKeyDown = (event: KeyboardEvent) => {
+      const card = cardRef.current;
+      const target = event.target as EventTarget | null;
+      const isTextInputTarget =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement && target.isContentEditable);
+
+      if (event.key === "Tab" && card) {
+        const focusables = Array.from(
+          card.querySelectorAll<HTMLElement>(
+            "button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
+          )
+        ).filter((element) => element.offsetParent !== null || element === document.activeElement);
+
+        if (focusables.length === 0) {
+          event.preventDefault();
+          return;
+        }
+
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        const active = document.activeElement as HTMLElement | null;
+
+        if (event.shiftKey) {
+          if (!active || active === first) {
+            event.preventDefault();
+            last.focus();
+          }
+        } else if (active === last) {
+          event.preventDefault();
+          first.focus();
+        }
+        return;
+      }
+
       if (event.key === "Escape") {
         event.preventDefault();
         closeWithOptionalAutoCreate();
         return;
       }
-      if (event.key === "Delete" && activeEventId) {
+      if (event.key === "Delete" && activeEventId && !isTextInputTarget && !event.isComposing) {
         event.preventDefault();
         handleDelete();
         return;
@@ -348,7 +398,14 @@ export function EventComposer({
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.removeEventListener("keydown", handleKeyDown);
+      const previous = previouslyFocusedElementRef.current;
+      if (previous && document.contains(previous)) {
+        previous.focus();
+      }
+    };
   }, [activeEventId, closeWithOptionalAutoCreate, handleDelete, isOpen]);
 
   useEffect(() => {
@@ -549,6 +606,7 @@ export function EventComposer({
       className={overlayClassName}
       role="dialog"
       aria-modal="true"
+      aria-label={t("Event editor")}
       onClick={handleOverlayClick}
     >
       <div
@@ -574,6 +632,7 @@ export function EventComposer({
                 handleSelectEntryType(event.target.value as CalendarEntryType)
               }
               className={styles.composerHeaderSelect}
+              aria-label={t("Type")}
             >
               {(() => {
                 const entryTypes = VISIBLE_ENTRY_TYPES.includes(state.entryType)
@@ -613,6 +672,7 @@ export function EventComposer({
               }
               placeholder={t("Title")}
               className={styles.composerTitleInput}
+              aria-label={t("Title")}
             />
           </div>
           {!isHabit ? (
@@ -628,6 +688,7 @@ export function EventComposer({
                       }
                       className={styles.composerTimeInput}
                       required
+                      aria-label={t("Start time")}
                     />
                     <ArrowRight size={14} className={styles.composerTimeArrow} />
                     <input
@@ -638,6 +699,7 @@ export function EventComposer({
                       }
                       className={styles.composerTimeInput}
                       required
+                      aria-label={t("End time")}
                     />
                   </div>
 		                  <span className={styles.composerDuration}>

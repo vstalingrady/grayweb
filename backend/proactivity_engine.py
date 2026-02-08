@@ -129,7 +129,7 @@ class ProactivityEngine:
                 exc_info=True,
                 extra={"event_type": "proactivity_delivery_guard_error", "user_id": user_id},
             )
-            return True
+            return False
 
         if not inserted:
             logger.info(
@@ -700,17 +700,27 @@ class ProactivityEngine:
         if status != "pending":
             return None
 
+        delivery_key = f"reminder:{reminder_id}"
+        reserved = await self._reserve_delivery_key(user_id, delivery_key, source)
+        if not reserved:
+            return None
+
         remind_at = reminder.get("remind_at")
         if isinstance(remind_at, str):
             try:
                 remind_at = datetime.fromisoformat(remind_at)
             except Exception:
                 remind_at = None
+        now_utc = datetime.now(dt_timezone.utc)
         if isinstance(remind_at, datetime):
             remind_at_utc = remind_at if remind_at.tzinfo else remind_at.replace(tzinfo=dt_timezone.utc)
             remind_at_utc = remind_at_utc.astimezone(dt_timezone.utc)
         else:
-            remind_at_utc = datetime.now(dt_timezone.utc)
+            remind_at_utc = now_utc
+
+        # Never deliver reminders before their due time.
+        if remind_at_utc > now_utc:
+            return None
 
         label = (reminder.get("label") or "Reminder").strip()
         description = (reminder.get("description") or "").strip()
@@ -724,8 +734,6 @@ class ProactivityEngine:
         await self._save_general_message(user_id, "model", message)
 
         title = "🔔 Reminder"
-        delivery_key = f"reminder:{reminder_id}"
-
         await self._send_browser_notification(
             user_id,
             title,
@@ -747,12 +755,13 @@ class ProactivityEngine:
                 """
                 UPDATE reminders
                 SET status = 'delivered', delivered_at = :delivered_at
-                WHERE id = :id AND user_id = :user_id
+                WHERE id = :id AND user_id = :user_id AND status = 'pending'
                 """,
                 {"id": reminder_id, "user_id": user_id, "delivered_at": now},
             )
         except Exception as exc:
-            logger.warning("Failed to mark reminder delivered: %s", exc, exc_info=True)
+            logger.error("Failed to mark reminder delivered: %s", exc, exc_info=True)
+            return None
 
         dispatch = {
             "user_id": user_id,

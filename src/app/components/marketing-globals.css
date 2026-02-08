@@ -2563,6 +2563,7 @@ a:hover {
   pointer-events: auto;
   backdrop-filter: blur(24px);
   font-weight: 600;
+  visibility: visible;
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
@@ -2592,6 +2593,7 @@ a:hover {
   opacity: 0;
   transform: translateY(-120%);
   pointer-events: none;
+  visibility: hidden;
 }
 
 .nav-shell--hidden .nav-backdrop {

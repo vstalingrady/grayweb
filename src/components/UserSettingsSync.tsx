@@ -133,7 +133,7 @@ export function UserSettingsSync() {
       ui_locale?: "en" | "id" | null;
       preferred_response_language?: "auto" | "en" | "id" | null;
       conversation_memory_enabled?: boolean | null;
-      improve_model_for_everyone?: boolean | null;
+      improve_model_for_everyone?: boolean;
       supermemory_auto_recall?: boolean | null;
       supermemory_auto_capture?: boolean | null;
       supermemory_capture_mode?: "all" | "everything" | null;
