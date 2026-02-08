@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, type SetStateAction } from "react";
 import { buildSessionStorageKeyCandidates, normalizeConversationIdValue } from "../utils";
 import type { ChatSession } from "../types";
 import {
+  buildReasoningSecondsMapFromMessages,
   dedupeSessionsByConversation,
   loadStoredSessions,
+  normalizeReasoningSecondsMap,
   normalizeSessionsList,
 } from "./sessionStore";
 
@@ -87,6 +89,15 @@ export const useSessionStorage = ({
         const serializable = next.map((session) => {
           const normalizedConversationId = normalizeConversationIdValue(session.conversationId);
           const shouldPersistMessages = !normalizedConversationId;
+          const inferredReasoningMap = buildReasoningSecondsMapFromMessages(session.messages);
+          const existingReasoningMap = normalizeReasoningSecondsMap(session.localReasoningByMessage);
+          const persistedReasoningMap =
+            inferredReasoningMap
+              ? normalizeReasoningSecondsMap({
+                ...(existingReasoningMap ?? {}),
+                ...inferredReasoningMap,
+              })
+              : existingReasoningMap;
           const sanitizedMessages = shouldPersistMessages
             ? session.messages.map((message) => {
               if (!message.attachments?.length) {
@@ -105,6 +116,7 @@ export const useSessionStorage = ({
           return {
             ...session,
             messages: sanitizedMessages,
+            localReasoningByMessage: persistedReasoningMap,
           };
         });
         window.localStorage.setItem(key, JSON.stringify(serializable));

@@ -244,6 +244,8 @@ type MergeHistoryOptions = {
   hasMore?: boolean;
 };
 
+type ReasoningSecondsMap = Record<string, number>;
+
 const areChatMessagesEquivalent = (left: ChatMessage[], right: ChatMessage[]): boolean => {
   if (left.length !== right.length) {
     return false;
@@ -267,7 +269,7 @@ const areChatMessagesEquivalent = (left: ChatMessage[], right: ChatMessage[]): b
   return true;
 };
 
-const buildMessageSignature = (message: ChatMessage): string => {
+export const buildMessageSignature = (message: Pick<ChatMessage, "role" | "createdAt" | "content">): string => {
   const timestamp =
     typeof message.createdAt === "number" && Number.isFinite(message.createdAt) && message.createdAt > 0
       ? message.createdAt
@@ -276,6 +278,127 @@ const buildMessageSignature = (message: ChatMessage): string => {
     return JSON.stringify([message.role, message.content ?? "", "unknown"]);
   }
   return JSON.stringify([message.role, timestamp]);
+};
+
+const buildMessageContentSignature = (message: Pick<ChatMessage, "role" | "content">): string | null => {
+  const normalizedContent = (message.content ?? "").replace(/\s+/g, " ").trim();
+  if (!normalizedContent) {
+    return null;
+  }
+  return JSON.stringify([message.role, normalizedContent.slice(0, 512)]);
+};
+
+const MAX_REASONING_MAP_ENTRIES = 500;
+
+const normalizeReasoningSecondsValue = (value: unknown): number | null => {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+  return value;
+};
+
+export const normalizeReasoningSecondsMap = (value: unknown): ReasoningSecondsMap | undefined => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (entries.length === 0) {
+    return undefined;
+  }
+  const normalized: ReasoningSecondsMap = {};
+  let count = 0;
+  for (const [key, rawValue] of entries) {
+    if (!key || key.trim().length === 0) {
+      continue;
+    }
+    const seconds = normalizeReasoningSecondsValue(rawValue);
+    if (seconds === null) {
+      continue;
+    }
+    normalized[key] = seconds;
+    count += 1;
+    if (count >= MAX_REASONING_MAP_ENTRIES) {
+      break;
+    }
+  }
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+};
+
+export const buildReasoningSecondsMapFromMessages = (messages: ChatMessage[]): ReasoningSecondsMap | undefined => {
+  const map: ReasoningSecondsMap = {};
+  for (const message of messages) {
+    if (message.role !== "assistant") {
+      continue;
+    }
+    const seconds = normalizeReasoningSecondsValue(message.reasoningSeconds);
+    if (seconds === null) {
+      continue;
+    }
+    map[buildMessageSignature(message)] = seconds;
+    const contentSignature = buildMessageContentSignature(message);
+    if (contentSignature) {
+      map[contentSignature] = seconds;
+    }
+  }
+  return normalizeReasoningSecondsMap(map);
+};
+
+const areReasoningSecondsMapsEqual = (
+  left: ReasoningSecondsMap | undefined,
+  right: ReasoningSecondsMap | undefined
+): boolean => {
+  if (!left && !right) {
+    return true;
+  }
+  if (!left || !right) {
+    return false;
+  }
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length) {
+    return false;
+  }
+  for (const key of leftKeys) {
+    if (!(key in right)) {
+      return false;
+    }
+    if (left[key] !== right[key]) {
+      return false;
+    }
+  }
+  return true;
+};
+
+const applyReasoningSecondsMap = (
+  messages: ChatMessage[],
+  reasoningMap: ReasoningSecondsMap | undefined
+): ChatMessage[] => {
+  if (!reasoningMap) {
+    return messages;
+  }
+  let changed = false;
+  const mapped = messages.map((message) => {
+    if (message.role !== "assistant") {
+      return message;
+    }
+    if (typeof message.reasoningSeconds === "number" && Number.isFinite(message.reasoningSeconds) && message.reasoningSeconds > 0) {
+      return message;
+    }
+    const signature = buildMessageSignature(message);
+    const contentSignature = buildMessageContentSignature(message);
+    const persistedSeconds = normalizeReasoningSecondsValue(
+      reasoningMap[signature] ?? (contentSignature ? reasoningMap[contentSignature] : undefined)
+    );
+    if (persistedSeconds === null) {
+      return message;
+    }
+    changed = true;
+    return {
+      ...message,
+      reasoningSeconds: persistedSeconds,
+    };
+  });
+  return changed ? mapped : messages;
 };
 
 export function mergeConversationHistoryIntoSession(
@@ -288,7 +411,11 @@ export function mergeConversationHistoryIntoSession(
     return null;
   }
   const localMessages = session.messages ?? [];
-  const mapped = history.length > 0 ? mapApiMessagesToChatMessages(history, conversationId, Date.now()) : [];
+  const existingReasoningMap = normalizeReasoningSecondsMap(session.localReasoningByMessage);
+  const mapped =
+    history.length > 0
+      ? applyReasoningSecondsMap(mapApiMessagesToChatMessages(history, conversationId, Date.now()), existingReasoningMap)
+      : [];
   const mode = options?.mode ?? "replace";
   let nextMessages = localMessages;
   let didChangeMessages = false;
@@ -317,6 +444,15 @@ export function mergeConversationHistoryIntoSession(
   const computedCursor = getHistoryCursorFromMessages(nextMessages);
   const nextHistoryCursor = computedCursor ?? session.historyCursor ?? null;
   const nextHistoryHasMore = options?.hasMore ?? session.historyHasMore;
+  const mappedReasoningMap = buildReasoningSecondsMapFromMessages(nextMessages);
+  const nextReasoningMap =
+    mappedReasoningMap
+      ? normalizeReasoningSecondsMap({
+          ...(existingReasoningMap ?? {}),
+          ...mappedReasoningMap,
+        })
+      : existingReasoningMap;
+  const reasoningMapChanged = !areReasoningSecondsMapsEqual(existingReasoningMap, nextReasoningMap);
 
   const shouldTouchUpdatedAt = Boolean(options?.touchUpdatedAt);
   const shouldUpdate =
@@ -324,6 +460,7 @@ export function mergeConversationHistoryIntoSession(
     session.conversationId !== conversationId ||
     session.historyCursor !== nextHistoryCursor ||
     session.historyHasMore !== nextHistoryHasMore ||
+    reasoningMapChanged ||
     shouldTouchUpdatedAt;
 
   if (!shouldUpdate) {
@@ -334,6 +471,7 @@ export function mergeConversationHistoryIntoSession(
     ...session,
     conversationId,
     messages: nextMessages,
+    localReasoningByMessage: nextReasoningMap,
     historyCursor: nextHistoryCursor,
     historyHasMore: nextHistoryHasMore,
     isResponding: didChangeMessages ? false : session.isResponding,

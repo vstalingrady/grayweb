@@ -334,6 +334,20 @@ export interface GroundingChunkWeb {
   title?: string;
   site?: string;
   domain?: string;
+  content?: string;
+  snippet?: string;
+  image_url?: string;
+  imageUrl?: string;
+  thumbnail_url?: string;
+  thumbnailUrl?: string;
+  image?: string;
+  thumbnail?: string;
+  preview_image_url?: string;
+  previewImageUrl?: string;
+  preview_url?: string;
+  previewUrl?: string;
+  image_proxy_url?: string;
+  imageProxyUrl?: string;
 }
 
 export interface GroundingChunkRetrievedContext {

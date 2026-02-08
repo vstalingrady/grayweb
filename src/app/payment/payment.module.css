@@ -690,6 +690,35 @@
     box-shadow: none;
 }
 
+.paymentLoadingContent {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.paymentErrorBanner {
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    border-radius: 8px;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    font-size: 0.9rem;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    color: #fca5a5;
+}
+
+.paymentTrustNote {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    color: rgba(255, 255, 255, 0.42);
+    font-size: 0.8rem;
+}
+
 /* Success State */
 .successContainer {
     display: flex;
@@ -1109,4 +1138,340 @@
     width: 18px;
     height: 18px;
     flex: 0 0 18px;
+}
+
+:global(html.light) .page {
+    background:
+        radial-gradient(circle at 12% 8%, rgba(31, 60, 122, 0.08), transparent 34%),
+        radial-gradient(circle at 88% 16%, rgba(12, 95, 70, 0.08), transparent 36%),
+        #f6f8fb;
+    color: #141823;
+}
+
+:global(html.light) .starLayer {
+    background-image:
+        radial-gradient(1px 1px at 20px 30px, rgba(13, 23, 41, 0.22), transparent 65%),
+        radial-gradient(1px 1px at 120px 80px, rgba(13, 23, 41, 0.16), transparent 55%),
+        radial-gradient(2px 2px at 60px 140px, rgba(13, 23, 41, 0.2), transparent 60%);
+    opacity: 0.16;
+}
+
+:global(html.light) .activePaymentMethodsTitle {
+    color: rgba(20, 24, 36, 0.9);
+}
+
+:global(html.light) .paymentSelectLabel {
+    color: rgba(20, 24, 36, 0.72);
+}
+
+:global(html.light) .paymentSelect {
+    border-color: rgba(15, 23, 42, 0.14);
+    background-color: #ffffff;
+    color: rgba(20, 24, 36, 0.94);
+    background-image:
+        linear-gradient(45deg, transparent 50%, rgba(20, 24, 36, 0.58) 50%),
+        linear-gradient(135deg, rgba(20, 24, 36, 0.58) 50%, transparent 50%);
+}
+
+:global(html.light) .paymentSelectHint {
+    color: rgba(20, 24, 36, 0.55);
+}
+
+:global(html.light) .methodGroupTabs button {
+    border-color: rgba(15, 23, 42, 0.14);
+    color: rgba(20, 24, 36, 0.64);
+}
+
+:global(html.light) .methodGroupTabs button[data-active="true"] {
+    border-color: rgba(15, 23, 42, 0.3);
+    color: rgba(18, 22, 34, 0.95);
+    background: rgba(255, 255, 255, 0.72);
+}
+
+:global(html.light) .methodGroupTabs button:hover {
+    border-color: rgba(15, 23, 42, 0.22);
+    color: rgba(20, 24, 36, 0.82);
+}
+
+:global(html.light) .methodGroupTabs button[data-muted="true"] {
+    border-color: rgba(15, 23, 42, 0.1);
+    color: rgba(20, 24, 36, 0.42);
+}
+
+:global(html.light) .methodSearch {
+    border-color: rgba(15, 23, 42, 0.14);
+    background: rgba(255, 255, 255, 0.82);
+    color: rgba(20, 24, 36, 0.68);
+}
+
+:global(html.light) .methodSearchInput {
+    color: rgba(20, 24, 36, 0.9);
+}
+
+:global(html.light) .methodSearchInput::placeholder {
+    color: rgba(20, 24, 36, 0.46);
+}
+
+:global(html.light) .methodOption {
+    border-color: rgba(15, 23, 42, 0.14);
+    color: rgba(20, 24, 36, 0.84);
+    background: rgba(255, 255, 255, 0.8);
+}
+
+:global(html.light) .methodOption:hover {
+    border-color: rgba(15, 23, 42, 0.24);
+}
+
+:global(html.light) .methodOption[data-selected="true"] {
+    border-color: rgba(34, 90, 206, 0.55);
+    background: rgba(229, 239, 255, 0.88);
+}
+
+:global(html.light) .methodLogo {
+    filter: none;
+}
+
+:global(html.light) .methodLabel {
+    color: rgba(20, 24, 36, 0.9);
+}
+
+:global(html.light) .methodEmpty {
+    color: rgba(20, 24, 36, 0.54);
+}
+
+:global(html.light) .groupTitle {
+    color: rgba(20, 24, 36, 0.5);
+}
+
+:global(html.light) .dismiss {
+    color: rgba(20, 24, 36, 0.86);
+}
+
+:global(html.light) .dismiss:hover {
+    background: rgba(15, 23, 42, 0.06);
+}
+
+:global(html.light) .title {
+    color: rgba(18, 22, 34, 0.95);
+}
+
+:global(html.light) .subtitle {
+    color: rgba(20, 24, 36, 0.56);
+}
+
+:global(html.light) .billingToggle {
+    border-color: rgba(15, 23, 42, 0.16);
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+:global(html.light) .billingThumb {
+    background: linear-gradient(135deg, #151b28, #313a4d);
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.24);
+}
+
+:global(html.light) .billingToggle button {
+    color: rgba(20, 24, 36, 0.72);
+}
+
+:global(html.light) .billingToggle button:hover {
+    color: rgba(20, 24, 36, 0.9);
+}
+
+:global(html.light) .billingToggle button[data-active="true"] {
+    color: rgba(247, 249, 255, 0.96);
+}
+
+:global(html.light) .saveBadge {
+    color: rgba(20, 24, 36, 0.88);
+    background: rgba(20, 24, 36, 0.08);
+    border-color: rgba(20, 24, 36, 0.16);
+}
+
+:global(html.light) .billingToggle button[data-active="true"] .saveBadge {
+    color: rgba(247, 249, 255, 0.92);
+    background: rgba(247, 249, 255, 0.24);
+    border-color: rgba(247, 249, 255, 0.32);
+}
+
+:global(html.light) .billingToggle button[data-active="true"] .cycleMeta {
+    color: rgba(247, 249, 255, 0.9);
+}
+
+:global(html.light) .sectionTitle {
+    color: rgba(20, 24, 36, 0.5);
+}
+
+:global(html.light) .planSummaryHeader {
+    border-bottom-color: rgba(15, 23, 42, 0.1);
+}
+
+:global(html.light) .bigPrice {
+    color: rgba(20, 24, 36, 0.94);
+}
+
+:global(html.light) .perPeriod {
+    color: rgba(20, 24, 36, 0.56);
+}
+
+:global(html.light) .whatsIncluded {
+    color: rgba(20, 24, 36, 0.92);
+}
+
+:global(html.light) .featureItem {
+    color: rgba(20, 24, 36, 0.72);
+}
+
+:global(html.light) .checkIcon {
+    color: rgba(20, 24, 36, 0.76);
+}
+
+:global(html.light) .cardForm {
+    background: rgba(255, 255, 255, 0.88);
+    border-color: rgba(15, 23, 42, 0.1);
+}
+
+:global(html.light) .input {
+    background: rgba(255, 255, 255, 0.96);
+    border-color: rgba(15, 23, 42, 0.15);
+    color: rgba(20, 24, 36, 0.9);
+}
+
+:global(html.light) .input:focus {
+    border-color: rgba(27, 78, 182, 0.62);
+}
+
+:global(html.light) .payButton {
+    background: linear-gradient(135deg, #182236, #2d3b57);
+    color: #f7f9ff;
+}
+
+:global(html.light) .payButton:hover:not(:disabled) {
+    background: linear-gradient(135deg, #121a2b, #24324a);
+}
+
+:global(html.light) .payButton:disabled {
+    background: rgba(15, 23, 42, 0.1);
+    color: rgba(20, 24, 36, 0.45);
+}
+
+:global(html.light) .paymentErrorBanner {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(185, 28, 28, 0.22);
+    color: rgba(153, 27, 27, 0.9);
+}
+
+:global(html.light) .paymentTrustNote {
+    color: rgba(20, 24, 36, 0.5);
+}
+
+:global(html.light) .successPanel {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: rgba(15, 23, 42, 0.12);
+    box-shadow: 0 18px 46px rgba(15, 23, 42, 0.12);
+}
+
+:global(html.light) .successIcon {
+    background: rgba(15, 23, 42, 0.08);
+    color: rgba(20, 24, 36, 0.92);
+}
+
+:global(html.light) .successTitle {
+    color: rgba(20, 24, 36, 0.94);
+}
+
+:global(html.light) .successSteps {
+    color: rgba(20, 24, 36, 0.72);
+}
+
+:global(html.light) .successStepNumber {
+    color: rgba(20, 24, 36, 0.84);
+}
+
+:global(html.light) .successMetaBox {
+    border-color: rgba(15, 23, 42, 0.12);
+    background: rgba(248, 251, 255, 0.9);
+}
+
+:global(html.light) .successMetaLabel {
+    color: rgba(20, 24, 36, 0.46);
+}
+
+:global(html.light) .successMetaValue {
+    color: rgba(20, 24, 36, 0.9);
+}
+
+:global(html.light) .successPrimaryAction {
+    background: linear-gradient(135deg, #182236, #2d3b57);
+    color: #f7f9ff;
+    border-color: transparent;
+}
+
+:global(html.light) .successSecondaryAction {
+    color: rgba(20, 24, 36, 0.88);
+    border-color: rgba(15, 23, 42, 0.2);
+}
+
+:global(html.light) .successSecondaryAction:hover {
+    background: rgba(15, 23, 42, 0.06);
+    border-color: rgba(15, 23, 42, 0.28);
+}
+
+:global(html.light) .planCard {
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    box-shadow: 0 16px 42px rgba(15, 23, 42, 0.12);
+}
+
+:global(html.light) .planCard[data-variant="muted"] {
+    background: rgba(246, 248, 252, 0.96);
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.09);
+}
+
+:global(html.light) .planCard[data-variant="highlighted"] {
+    background-image: linear-gradient(135deg, rgba(235, 243, 255, 0.9), rgba(255, 255, 255, 0.98) 62%, rgba(226, 235, 255, 0.84));
+    box-shadow: 0 20px 40px rgba(27, 50, 95, 0.16);
+}
+
+:global(html.light) .planCard[data-variant="primary"] {
+    background-image: linear-gradient(158deg, rgba(214, 227, 255, 0.9) 0%, rgba(252, 254, 255, 0.98) 100%);
+    box-shadow: 0 22px 44px rgba(18, 39, 75, 0.18);
+}
+
+:global(html.light) .cardHeader h2 {
+    color: rgba(19, 23, 33, 0.95);
+}
+
+:global(html.light) .cardHeader p {
+    color: rgba(20, 24, 36, 0.65);
+}
+
+:global(html.light) .priceValue {
+    color: rgba(19, 23, 33, 0.94);
+}
+
+:global(html.light) .priceMeta {
+    color: rgba(20, 24, 36, 0.56);
+}
+
+:global(html.light) .featureList li {
+    color: rgba(20, 24, 36, 0.78);
+}
+
+:global(html.light) .featureLabelInherit {
+    color: rgba(20, 24, 36, 0.62);
+}
+
+:global(html.light) .featureSubtext {
+    color: rgba(20, 24, 36, 0.54);
+}
+
+:global(html.light) .featureList svg {
+    color: rgba(20, 24, 36, 0.58);
+}
+
+@media (max-width: 900px) {
+    :global(html.light) .inputColumn {
+        border-top-color: rgba(15, 23, 42, 0.1);
+    }
 }

@@ -10,7 +10,12 @@ import {
   isTitleDerivedFromMessage,
   normalizeConversationIdValue,
 } from "../utils";
-import { GENERAL_SESSION_TITLE, createEmptyGeneralSession, normalizeSessionsList } from "./sessionStore";
+import {
+  GENERAL_SESSION_TITLE,
+  createEmptyGeneralSession,
+  normalizeReasoningSecondsMap,
+  normalizeSessionsList,
+} from "./sessionStore";
 
 type UseSessionLifecycleActionsOptions = {
   sessionsRef: MutableRefObject<ChatSession[]>;
@@ -263,6 +268,7 @@ export const useSessionLifecycleActions = ({
         isResponding: Boolean(raw.isResponding),
         scope: normalizedScope,
         conversationId: normalizeConversationIdValue(raw.conversationId),
+        localReasoningByMessage: normalizeReasoningSecondsMap(raw.localReasoningByMessage),
         pendingAutoStream: Boolean(raw.pendingAutoStream),
       };
 

@@ -44,6 +44,11 @@ export type ChatSession = {
     scope: ChatSessionScope;
     conversationId?: string;
     metadata?: Record<string, unknown>;
+    /**
+     * Client-only cache of assistant reasoning durations keyed by message signature.
+     * Used to preserve "Thought for X" labels across refresh for remote conversations.
+     */
+    localReasoningByMessage?: Record<string, number>;
     pendingAutoStream?: boolean;
     isGeneratingTitle?: boolean;
     historyCursor?: number | null;

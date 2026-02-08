@@ -21,7 +21,7 @@ function loadMarketingCss() {
 }
 
 const coexistenceOverrides = `
-:root {
+:root:not(.light) {
   color-scheme: dark;
 }
 
@@ -40,11 +40,21 @@ body {
   overflow-y: auto;
   padding: 0 !important;
   margin: 0;
-  color-scheme: dark;
+  color-scheme: inherit;
   background-color: #000000;
   color: #fffefa;
   font-family: var(--font-sans), "Plus Jakarta Sans", "Helvetica Neue", Arial, sans-serif;
   letter-spacing: 0.01em;
+}
+
+html:not(.light) body {
+  color-scheme: dark;
+}
+
+html.light body {
+  color-scheme: light;
+  background-color: #fdfdfd;
+  color: #1a1a1b;
 }
 
 #__next,

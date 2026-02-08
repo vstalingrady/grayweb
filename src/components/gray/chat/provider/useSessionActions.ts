@@ -21,6 +21,7 @@ import {
   GENERAL_SESSION_TITLE,
   createEmptyGeneralSession,
   makeMessage,
+  normalizeReasoningSecondsMap,
   normalizeSessionsList,
 } from "./sessionStore";
 
@@ -512,6 +513,7 @@ export const useSessionActions = ({
         isResponding: Boolean(raw.isResponding),
         scope: normalizedScope,
         conversationId: normalizeConversationIdValue(raw.conversationId),
+        localReasoningByMessage: normalizeReasoningSecondsMap(raw.localReasoningByMessage),
         pendingAutoStream: Boolean(raw.pendingAutoStream),
       };
 

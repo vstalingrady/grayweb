@@ -16,6 +16,7 @@ import {
   ChevronLeft,
   ChevronRight,
   UserCircle,
+  Pencil,
   Settings as SettingsIcon,
   Palette,
   Database,
@@ -61,9 +62,13 @@ const resolveInitialTheme = (): ThemeMode => {
     return "system";
   }
 
-  const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-  if (stored === "light" || stored === "dark" || stored === "system") {
-    return stored;
+  try {
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (stored === "light" || stored === "dark" || stored === "system") {
+      return stored;
+    }
+  } catch {
+    // Ignore storage failures in restricted contexts (private mode / disabled storage).
   }
 
   return "system";
@@ -246,6 +251,7 @@ export function SettingsModal({
   const [avatarUploadState, setAvatarUploadState] = useState<"idle" | "uploading" | "error">("idle");
   const [avatarUploadError, setAvatarUploadError] = useState<string | null>(null);
   const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
+  const mobileAvatarFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const resolvedDeviceTimeZone = useMemo(() => {
     try {
@@ -398,6 +404,15 @@ export function SettingsModal({
     onClose();
     router.push("/pricing");
   }, [onClose, router]);
+
+  const openMobileSection = useCallback((section: SettingsSection) => {
+    setActiveSection(section);
+    setMobileView("detail");
+  }, []);
+
+  const openAvatarPicker = useCallback(() => {
+    mobileAvatarFileInputRef.current?.click();
+  }, []);
 
   const handleLogOut = useCallback(async () => {
     try {
@@ -606,6 +621,13 @@ export function SettingsModal({
             </header>
 
             <div className={styles.mobileProfileSection}>
+              <input
+                ref={mobileAvatarFileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarFileChange}
+                style={{ display: "none" }}
+              />
               <div className={styles.mobileProfileAvatar}>
                 {user?.profile_picture_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -613,58 +635,124 @@ export function SettingsModal({
                 ) : (
                   <UserCircle size={48} />
                 )}
+                <button
+                  type="button"
+                  className={styles.mobileProfileAvatarEdit}
+                  onClick={openAvatarPicker}
+                  aria-label={avatarUploadState === "uploading" ? t("Uploading…") : t("Change avatar")}
+                  disabled={avatarUploadState === "uploading"}
+                >
+                  <Pencil size={14} />
+                </button>
               </div>
-              <h3 className={styles.mobileProfileName}>{user?.full_name || "Gray User"}</h3>
+              <div className={styles.mobileProfileNameRow}>
+                <h3 className={styles.mobileProfileName}>{user?.full_name || "Gray User"}</h3>
+                <button
+                  type="button"
+                  className={styles.mobileProfileNameEdit}
+                  onClick={() => openMobileSection("personalization")}
+                  aria-label={t("Change username")}
+                >
+                  <Pencil size={13} />
+                </button>
+              </div>
               {user?.email ? (
                 <span className={styles.mobileProfileEmail}>{user.email}</span>
               ) : null}
               <button
                 type="button"
-                className={styles.mobileProfileManageName}
-                onClick={() => {
-                  setActiveSection("personalization");
-                  setMobileView("detail");
-                }}
+                className={`${styles.mobileGroupItem} ${styles.mobileProfilePlanRow}`}
+                onClick={handleNavigateToPricing}
               >
-                {t("Change username")}
-              </button>
-            </div>
-
-            <div className={styles.mobileGroup}>
-              <button
-                className={styles.mobileGroupItem}
-                onClick={() => {
-                  setActiveSection("personalization");
-                  setMobileView("detail");
-                }}
-              >
-                <Palette className={styles.mobileGroupItemIcon} size={20} />
-                <span className={styles.mobileGroupItemLabel}>{t("Personalization")}</span>
+                <CreditCard className={styles.mobileGroupItemIcon} size={20} />
+                <div className={styles.mobileGroupItemBody}>
+                  <span className={styles.mobileGroupItemLabel}>{t("Plan")}</span>
+                  <span className={styles.mobileGroupItemValue}>{planLabel}</span>
+                </div>
                 <ChevronRight className={styles.mobileGroupItemArrow} size={16} />
               </button>
+              {avatarUploadError ? (
+                <span className={styles.mobileProfileError}>{avatarUploadError}</span>
+              ) : null}
             </div>
 
             <div className={styles.mobileGroupLabel}>{t("Account")}</div>
             <div className={styles.mobileGroup}>
               <button
+                type="button"
                 className={styles.mobileGroupItem}
-                onClick={handleNavigateToPricing}
+                onClick={() => openMobileSection("account")}
               >
-                <CreditCard className={styles.mobileGroupItemIcon} size={20} />
-                <div style={{ flex: 1 }}>
-                  <span className={styles.mobileGroupItemLabel} style={{ display: "block" }}>{t("Plan")}</span>
-                  <span className={styles.mobileGroupItemValue} style={{ fontSize: "0.85rem", color: "#888" }}>
-                    {planLabel}
-                  </span>
-                </div>
+                <UserCircle className={styles.mobileGroupItemIcon} size={20} />
+                <span className={styles.mobileGroupItemLabel}>{t("Account")}</span>
                 <ChevronRight className={styles.mobileGroupItemArrow} size={16} />
               </button>
               <button
+                type="button"
                 className={styles.mobileGroupItem}
+                data-variant="danger"
                 onClick={handleLogOut}
               >
                 <LogOut className={styles.mobileGroupItemIcon} size={20} />
                 <span className={styles.mobileGroupItemLabel}>{t("Sign out")}</span>
+              </button>
+            </div>
+
+            <div className={styles.mobileGroupLabel}>{t("Settings")}</div>
+            <div className={styles.mobileGroup}>
+              <button
+                type="button"
+                className={styles.mobileGroupItem}
+                onClick={() => openMobileSection("preferences")}
+              >
+                <SettingsIcon className={styles.mobileGroupItemIcon} size={20} />
+                <span className={styles.mobileGroupItemLabel}>{t("Preferences")}</span>
+                <ChevronRight className={styles.mobileGroupItemArrow} size={16} />
+              </button>
+              <button
+                type="button"
+                className={styles.mobileGroupItem}
+                onClick={() => openMobileSection("personalization")}
+              >
+                <Palette className={styles.mobileGroupItemIcon} size={20} />
+                <span className={styles.mobileGroupItemLabel}>{t("Personalization")}</span>
+                <ChevronRight className={styles.mobileGroupItemArrow} size={16} />
+              </button>
+              <button
+                type="button"
+                className={styles.mobileGroupItem}
+                onClick={() => openMobileSection("models")}
+              >
+                <Brain className={styles.mobileGroupItemIcon} size={20} />
+                <span className={styles.mobileGroupItemLabel}>{t("Models")}</span>
+                <ChevronRight className={styles.mobileGroupItemArrow} size={16} />
+              </button>
+              <button
+                type="button"
+                className={styles.mobileGroupItem}
+                onClick={() => openMobileSection("memory")}
+              >
+                <Archive className={styles.mobileGroupItemIcon} size={20} />
+                <span className={styles.mobileGroupItemLabel}>{t("Memory")}</span>
+                <ChevronRight className={styles.mobileGroupItemArrow} size={16} />
+              </button>
+              <button
+                type="button"
+                className={styles.mobileGroupItem}
+                onClick={() => openMobileSection("data_controls")}
+              >
+                <Database className={styles.mobileGroupItemIcon} size={20} />
+                <span className={styles.mobileGroupItemLabel}>{t("Data Controls")}</span>
+                <ChevronRight className={styles.mobileGroupItemArrow} size={16} />
+              </button>
+              <button
+                type="button"
+                className={styles.mobileGroupItem}
+                onClick={() => openMobileSection("notifications")}
+              >
+                <Bell className={styles.mobileGroupItemIcon} size={20} />
+                <span className={styles.mobileGroupItemLabel}>{t("Notifications")}</span>
+                <ChevronRight className={styles.mobileGroupItemArrow} size={16} />
               </button>
             </div>
 

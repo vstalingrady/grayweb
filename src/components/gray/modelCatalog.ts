@@ -2,6 +2,7 @@ export type CatalogModel = {
   id: string;
   label: string;
   cost?: string;
+  isFast?: boolean;
   tierRequired?: "pathfinder" | "voyager" | "pioneer";
 };
 
@@ -42,6 +43,8 @@ export const PIONEER_GROUPS: ModelGroup[] = [
     label: "OpenAI",
     iconPath: "/logos/whiteopenai.svg",
     models: [
+      { id: "openai/gpt-oss-120b", label: "GPT OSS 120B", cost: "$", tierRequired: "pathfinder" },
+      { id: "openai/gpt-oss-120b:fast", label: "GPT OSS 120B", isFast: true, cost: "$$", tierRequired: "pathfinder" },
       { id: "openai/gpt-5.2-chat", label: "GPT 5.2", cost: "$$$", tierRequired: "voyager" },
       { id: "openai/gpt-5.2-pro", label: "GPT 5.2 Pro", cost: "$$$$$", tierRequired: "pioneer" },
     ],
@@ -73,7 +76,7 @@ export const PIONEER_GROUPS: ModelGroup[] = [
     iconPath: "/logos/whitekimi.svg",
     models: [
       { id: "moonshotai/kimi-k2.5", label: "Kimi K2.5", cost: "$$$", tierRequired: "pathfinder" },
-      { id: "moonshotai/kimi-k2-0905", label: "Kimi K2 (Fast)", cost: "$$$", tierRequired: "voyager" },
+      { id: "moonshotai/kimi-k2-0905", label: "Kimi K2", isFast: true, cost: "$$$", tierRequired: "voyager" },
     ],
   },
   {
@@ -105,7 +108,7 @@ export const PIONEER_GROUPS: ModelGroup[] = [
     iconPath: "/logos/zaiwhite.svg",
     models: [
       { id: "z-ai/glm-4.7", label: "GLM 4.7", cost: "$$", tierRequired: "pathfinder" },
-      { id: "z-ai/glm-4.7-flash", label: "GLM 4.7 Flash", cost: "$", tierRequired: "pathfinder" },
+      { id: "z-ai/glm-4.7:fast", label: "GLM 4.7", isFast: true, cost: "$$", tierRequired: "pathfinder" },
     ],
   },
 ];

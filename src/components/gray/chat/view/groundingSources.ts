@@ -34,8 +34,62 @@ export type DerivedGroundingSource = {
   title: string;
   href?: string;
   excerpt?: string;
+  previewImageUrl?: string;
   isReferenced: boolean;
   faviconHost?: string | null;
+};
+
+const resolveRecordString = (record: Record<string, unknown>, key: string): string | undefined => {
+  const value = record[key];
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+};
+
+const normalizePreviewImageUrl = (value?: string): string | undefined => {
+  if (!value) {
+    return undefined;
+  }
+  if (value.startsWith("data:")) {
+    return value;
+  }
+  const candidate = value.startsWith("//") ? `https:${value}` : value;
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return undefined;
+    }
+    return parsed.toString();
+  } catch {
+    return undefined;
+  }
+};
+
+const resolveGroundingWebSnippet = (web: Record<string, unknown>): string | undefined =>
+  resolveRecordString(web, "snippet") ?? resolveRecordString(web, "content");
+
+const resolveGroundingWebPreviewImageUrl = (web: Record<string, unknown>): string | undefined => {
+  const candidates = [
+    resolveRecordString(web, "image_url"),
+    resolveRecordString(web, "imageUrl"),
+    resolveRecordString(web, "thumbnail_url"),
+    resolveRecordString(web, "thumbnailUrl"),
+    resolveRecordString(web, "image"),
+    resolveRecordString(web, "thumbnail"),
+    resolveRecordString(web, "preview_image_url"),
+    resolveRecordString(web, "previewImageUrl"),
+    resolveRecordString(web, "preview_url"),
+    resolveRecordString(web, "previewUrl"),
+  ];
+  for (const candidate of candidates) {
+    const normalized = normalizePreviewImageUrl(candidate);
+    if (normalized) {
+      return normalized;
+    }
+  }
+  return undefined;
 };
 
 const normalizeFaviconCandidate = (value?: string | null): string | null => {
@@ -116,9 +170,12 @@ export const buildGroundingSourceCards = (
     const id = `chunk-${index}`;
     const isReferenced = referenced.has(index);
     if (chunk.web) {
+      const webRecord = chunk.web as Record<string, unknown>;
       const derivedHost = deriveGroundingSourceHost(undefined, chunk.web.uri);
       const rawSite = chunk.web.site ?? chunk.web.domain;
       let siteLabel: string | undefined = (rawSite ?? derivedHost) ?? undefined;
+      const previewImageUrl = resolveGroundingWebPreviewImageUrl(webRecord);
+      const excerpt = resolveGroundingWebSnippet(webRecord);
 
       // Filter out internal Google/Vertex domains if they leak into the label
       if (
@@ -138,6 +195,8 @@ export const buildGroundingSourceCards = (
         siteLabel: siteLabel,
         title: chunk.web.title ?? siteLabel ?? t("Referenced web content"),
         href: chunk.web.uri ?? undefined,
+        excerpt,
+        previewImageUrl,
         isReferenced,
         faviconHost: derivedHost,
       });
@@ -174,4 +233,3 @@ export const buildGroundingSourceCards = (
 
   return sources.sort((a, b) => Number(b.isReferenced) - Number(a.isReferenced));
 };
-

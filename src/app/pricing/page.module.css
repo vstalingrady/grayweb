@@ -530,3 +530,181 @@
     grid-template-columns: 1fr;
   }
 }
+
+:global(html.light) .page {
+  background:
+    radial-gradient(circle at 10% 8%, rgba(31, 60, 122, 0.08), transparent 32%),
+    radial-gradient(circle at 88% 16%, rgba(12, 95, 70, 0.08), transparent 34%),
+    #f6f8fb;
+  color: #141823;
+}
+
+:global(html.light) .particleBackground {
+  opacity: 0.24;
+}
+
+:global(html.light) .starLayer {
+  background-image: radial-gradient(1px 1px at 20px 30px, rgba(13, 23, 41, 0.22), transparent 65%),
+    radial-gradient(1px 1px at 120px 80px, rgba(13, 23, 41, 0.16), transparent 55%),
+    radial-gradient(2px 2px at 60px 140px, rgba(13, 23, 41, 0.2), transparent 60%);
+  opacity: 0.15;
+}
+
+:global(html.light) .dismiss {
+  color: rgba(20, 24, 36, 0.78);
+}
+
+:global(html.light) .overline {
+  color: rgba(20, 24, 36, 0.45);
+}
+
+:global(html.light) .heroTitle {
+  background: linear-gradient(180deg, #151b27, #4a576e);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+}
+
+:global(html.light) .heroSubhead {
+  color: rgba(20, 24, 36, 0.66);
+}
+
+:global(html.light) .billingToggle {
+  border-color: rgba(15, 23, 42, 0.16);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+}
+
+:global(html.light) .billingThumb {
+  background: linear-gradient(135deg, #151b28, #313a4d);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.24);
+}
+
+:global(html.light) .billingToggle button {
+  color: rgba(20, 24, 36, 0.72);
+}
+
+:global(html.light) .billingToggle button:hover {
+  color: rgba(20, 24, 36, 0.88);
+}
+
+:global(html.light) .billingToggle button[data-active="true"] {
+  color: rgba(247, 249, 255, 0.96);
+}
+
+:global(html.light) .billingSavings {
+  color: rgba(20, 24, 36, 0.6);
+}
+
+:global(html.light) .billingToggle button[data-active="true"] .billingSavings {
+  color: rgba(247, 249, 255, 0.9);
+  opacity: 0.65;
+}
+
+:global(html.light) .planCard {
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.12);
+}
+
+:global(html.light) .planCard[data-variant="muted"] {
+  background: rgba(246, 248, 252, 0.96);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+  color: rgba(20, 24, 36, 0.58);
+}
+
+:global(html.light) .planCard[data-variant="muted"] .cardHeader h2 {
+  color: rgba(20, 24, 36, 0.7);
+}
+
+:global(html.light) .planCard[data-variant="muted"] .priceValue {
+  color: rgba(20, 24, 36, 0.76);
+}
+
+:global(html.light) .planCard[data-variant="muted"] .featureList li {
+  color: rgba(20, 24, 36, 0.58);
+}
+
+:global(html.light) .planCard[data-variant="muted"] .featureList svg {
+  color: rgba(20, 24, 36, 0.45);
+}
+
+:global(html.light) .planCard[data-variant="neutral"] {
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.1);
+}
+
+:global(html.light) .planCard[data-variant="highlighted"] {
+  background-image: linear-gradient(135deg, rgba(235, 243, 255, 0.9), rgba(255, 255, 255, 0.98) 62%, rgba(226, 235, 255, 0.84));
+  box-shadow: 0 20px 40px rgba(27, 50, 95, 0.16);
+}
+
+:global(html.light) .planCard[data-variant="primary"] {
+  background-image: linear-gradient(158deg, rgba(214, 227, 255, 0.9) 0%, rgba(252, 254, 255, 0.98) 100%);
+  box-shadow: 0 22px 44px rgba(18, 39, 75, 0.18);
+}
+
+:global(html.light) .cardHeader h2 {
+  color: rgba(19, 23, 33, 0.95);
+}
+
+:global(html.light) .cardHeader p {
+  color: rgba(20, 24, 36, 0.65);
+}
+
+:global(html.light) .priceValue {
+  color: rgba(19, 23, 33, 0.94);
+}
+
+:global(html.light) .priceValueMuted {
+  color: rgba(20, 24, 36, 0.4);
+  text-decoration-color: rgba(20, 24, 36, 0.35);
+}
+
+:global(html.light) .priceMeta {
+  color: rgba(20, 24, 36, 0.56);
+}
+
+:global(html.light) .savingsInline {
+  color: rgba(22, 74, 53, 0.9);
+}
+
+:global(html.light) .featureList li {
+  color: rgba(20, 24, 36, 0.78);
+}
+
+:global(html.light) .featureLabelInherit {
+  color: rgba(20, 24, 36, 0.62);
+}
+
+:global(html.light) .featureSubtext {
+  color: rgba(20, 24, 36, 0.54);
+}
+
+:global(html.light) .featureList svg {
+  color: rgba(20, 24, 36, 0.58);
+}
+
+:global(html.light) .planButton {
+  border-color: rgba(15, 23, 42, 0.1);
+  background: rgba(239, 243, 250, 0.88);
+  color: rgba(20, 24, 36, 0.48);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.75);
+}
+
+:global(html.light) .planButtonOutline {
+  border-color: rgba(15, 23, 42, 0.26);
+  background: rgba(255, 255, 255, 0.97);
+  color: rgba(18, 23, 36, 0.92);
+}
+
+:global(html.light) .planButtonPrimary {
+  color: #f8faff;
+  background: linear-gradient(135deg, #182236, #2d3b57);
+  box-shadow: 0 14px 28px rgba(17, 30, 56, 0.28);
+}
+
+:global(html.light) .disclaimer {
+  color: rgba(20, 24, 36, 0.55);
+}

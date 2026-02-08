@@ -108,8 +108,26 @@ const VERIFICATION_PATTERNS = [
   /\b(?:did|does|do|is|are|was|were|has|have|had)\b[\s\S]{0,140}\b(?:actually|really|true|real|legit|confirmed|evidence)\b/i,
 ];
 
+const TREND_PATTERNS = [
+  /\btrending\b/i,
+  /\bviral\b/i,
+  /\bmeme(?:s)?\b/i,
+  /\bmascot\b/i,
+  /\bcontrovers(?:y|ial)\b/i,
+  /\bwhat(?:'s| is)\s+up\s+with\b/i,
+];
+
+const TEMPORAL_QUESTION_PATTERNS = [
+  /\bwhat\s+happened\b/i,
+  /\bwhy\s+is\b/i,
+  /\bwhat(?:'s| is)\s+going\s+on\b/i,
+];
+
+const NAME_LIKE_PATTERN = /\b[A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,}){0,2}\b/;
+
 const PERSONAL_RECENCY_PATTERNS = [
   /\b(today|right now|currently|this week|this month|this year)\b\s+(i|i'm|im|we|we're|our|my|me)\b/i,
+  /\b(i|i'm|im|we|we're|our|my|me)\b[\s\S]{0,30}\b(today|right now|currently|this week|this month|this year)\b/i,
 ];
 
 const FOLLOW_UP_PATTERNS = [
@@ -150,9 +168,72 @@ const isSmallTalk = (trimmed: string, wordCount: number): boolean =>
 const isAmbiguousFollowUp = (normalized: string): boolean =>
   FOLLOW_UP_PRONOUN_PATTERN.test(normalized) && FOLLOW_UP_PATTERNS.some((pattern) => pattern.test(normalized));
 
+const computeSearchNeedScore = ({
+  trimmed,
+  normalized,
+  hasSoftRecency,
+  hasHardRecency,
+  questionLike,
+}: {
+  trimmed: string;
+  normalized: string;
+  hasSoftRecency: boolean;
+  hasHardRecency: boolean;
+  questionLike: boolean;
+}): number => {
+  let score = 0;
+
+  if (hasHardRecency) {
+    score += 2;
+  }
+  if (hasSoftRecency) {
+    score += 1;
+  }
+  if (questionLike) {
+    score += 1;
+  }
+  if (TREND_PATTERNS.some((pattern) => pattern.test(normalized))) {
+    score += 2;
+  }
+  if (TEMPORAL_QUESTION_PATTERNS.some((pattern) => pattern.test(normalized))) {
+    score += 2;
+  }
+  if (/\b(202[3-9]|203[0-9])\b/.test(normalized)) {
+    score += 1;
+  }
+  if (
+    NAME_LIKE_PATTERN.test(trimmed) &&
+    (hasSoftRecency ||
+      hasHardRecency ||
+      TREND_PATTERNS.some((pattern) => pattern.test(normalized)) ||
+      TEMPORAL_QUESTION_PATTERNS.some((pattern) => pattern.test(normalized)))
+  ) {
+    score += 1;
+  }
+
+  return score;
+};
+
 export type WebSearchDecision = {
   enabled: boolean;
   mode: "on" | "auto" | "off";
+};
+
+const EXPLICIT_SEARCH_FORCE_PATTERNS = [
+  /\bsearch\b/i,
+  /\bgoogle\b/i,
+  /\bweb\s*search\b/i,
+  /\blook\s*up\b/i,
+  /\blookup\b/i,
+  /\bfind\s+on\s+the\s+web\b/i,
+];
+
+const isExplicitSearchRequest = (message: string): boolean => {
+  const trimmed = (message || "").trim();
+  if (!trimmed) {
+    return false;
+  }
+  return EXPLICIT_SEARCH_FORCE_PATTERNS.some((pattern) => pattern.test(trimmed));
 };
 
 export const shouldEnableWebSearch = (message: string, recentUserMessages?: string[]): boolean => {
@@ -217,22 +298,19 @@ export const shouldEnableWebSearch = (message: string, recentUserMessages?: stri
     return false;
   }
 
-  if ((hasSoftRecency || hasHardRecency) && isQuestionLike(normalized)) {
-    return true;
-  }
-
-  if (hasHardRecency && wordCount >= 2) {
-    return true;
-  }
-
   if (wordCount <= 2 && !isQuestionLike(normalized)) {
     return false;
   }
 
-  if (/\b(202[3-9]|203[0-9])\b/.test(normalized)) {
-    if (["news", "update", "updates", "trending"].some((phrase) => normalized.includes(phrase))) {
-      return true;
-    }
+  const searchScore = computeSearchNeedScore({
+    trimmed,
+    normalized,
+    hasSoftRecency,
+    hasHardRecency,
+    questionLike: isQuestionLike(normalized),
+  });
+  if (searchScore >= 3) {
+    return true;
   }
 
   if (FOLLOW_UP_PATTERNS.some((pattern) => pattern.test(normalized)) && Array.isArray(recentUserMessages)) {
@@ -284,6 +362,11 @@ export const resolveWebSearchDecision = ({
   const trimmed = (message || "").trim();
   if (!trimmed) {
     return { enabled: false, mode: "off" };
+  }
+
+  // Explicit user search requests should run even if auto-search is off.
+  if (isExplicitSearchRequest(trimmed)) {
+    return { enabled: true, mode: "on" };
   }
 
   if (manualEnabled) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { memo, useCallback, useMemo, useRef, useState, type RefObject } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import styles from "@/components/gray/chat/ChatStyles.module.css";
@@ -201,65 +201,6 @@ export type ChatMessagesListProps = {
   isLoadingHistory?: boolean;
   onLoadOlder?: () => void;
 };
-
-const StreamingMessageText = memo(({ text }: { text: string }) => {
-  const previousTextRef = useRef(text);
-  const [chunkState, setChunkState] = useState({
-    stableText: "",
-    deltaText: text,
-    deltaKey: 0,
-  });
-
-  useEffect(() => {
-    const previousText = previousTextRef.current;
-    if (text === previousText) {
-      return;
-    }
-
-    let nextStableText = "";
-    let nextDeltaText = text;
-    if (text.startsWith(previousText)) {
-      const nextDelta = text.slice(previousText.length);
-      if (!nextDelta) {
-        return;
-      }
-      nextStableText = previousText;
-      nextDeltaText = nextDelta;
-    }
-
-    previousTextRef.current = text;
-    let didCancel = false;
-    const animationFrame = requestAnimationFrame(() => {
-      if (didCancel) {
-        return;
-      }
-      setChunkState((current) => ({
-        ...current,
-        stableText: nextStableText,
-        deltaText: nextDeltaText,
-        deltaKey: current.deltaKey + 1,
-      }));
-    });
-
-    return () => {
-      didCancel = true;
-      cancelAnimationFrame(animationFrame);
-    };
-  }, [text]);
-
-  return (
-    <div className={`${styles.chatMarkdown} ${styles.chatMarkdownStreaming}`} aria-live="polite">
-      {chunkState.stableText ? <span className={styles.chatStreamingStableText}>{chunkState.stableText}</span> : null}
-      {chunkState.deltaText ? (
-        <span key={chunkState.deltaKey} className={styles.chatStreamingToken}>
-          {chunkState.deltaText}
-        </span>
-      ) : null}
-      <span className={styles.chatStreamingCaret} aria-hidden="true" />
-    </div>
-  );
-});
-StreamingMessageText.displayName = "StreamingMessageText";
 
 export const ChatMessagesList = memo(
   ({
@@ -503,20 +444,20 @@ export const ChatMessagesList = memo(
                         isStreamingMessage={isStreamingMessage}
                       />
                     )}
-                    {hasTextContent &&
-                      (isStreamingMessage ? (
-                        <StreamingMessageText text={visibleAssistantText} />
-                      ) : (
-                        <div className={styles.chatMarkdown}>
-                          <ReactMarkdown
-                            components={markdownComponents}
-                            remarkPlugins={MARKDOWN_PLUGINS}
-                            rehypePlugins={[[rehypeKatex, { strict: false }]]}
-                          >
-                            {visibleAssistantText}
-                          </ReactMarkdown>
-                        </div>
-                      ))}
+                    {hasTextContent ? (
+                      <div
+                        className={`${styles.chatMarkdown} ${isStreamingMessage ? styles.chatMarkdownStreaming : ""}`}
+                        aria-live={isStreamingMessage ? "polite" : undefined}
+                      >
+                        <ReactMarkdown
+                          components={markdownComponents}
+                          remarkPlugins={MARKDOWN_PLUGINS}
+                          rehypePlugins={[[rehypeKatex, { strict: false }]]}
+                        >
+                          {visibleAssistantText}
+                        </ReactMarkdown>
+                      </div>
+                    ) : null}
                     {isAssistant && message.groundingMetadata ? (
                       <ChatMessageGroundingPanel
                         metadata={message.groundingMetadata}

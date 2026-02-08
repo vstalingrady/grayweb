@@ -220,7 +220,7 @@ export function GrayGeneralView({
   );
 
   const tasksCard = (
-    <article className={styles.dashboardCard}>
+    <article className={styles.dashboardCard} data-editor-open={activeEditor ? "true" : "false"}>
       <header className={styles.dashboardCardHeader}>
         <h2 className={styles.dashboardCardTitle}>{t("Events")}</h2>
       </header>
@@ -406,7 +406,12 @@ export function GrayGeneralView({
           <div className={`${styles.dashboardSectionCard} ${styles.dashboardGridItemProactivity}`}>
             {proactivityCard}
           </div>
-          <div className={`${styles.dashboardSectionCard} ${styles.dashboardGridItemTasks}`}>{tasksCard}</div>
+          <div
+            className={`${styles.dashboardSectionCard} ${styles.dashboardGridItemTasks}`}
+            data-editor-open={activeEditor ? "true" : "false"}
+          >
+            {tasksCard}
+          </div>
         </section>
       ) : null}
 

@@ -31,7 +31,7 @@ def test_should_enable_search_for_generic_fact_question():
 
 
 def test_should_enable_search_for_what_happened():
-    assert should_enable_search("What happened in the Epstein files?") is False
+    assert should_enable_search("What happened in the Epstein files?") is True
 
 
 def test_should_enable_search_slang_guard():
@@ -60,6 +60,14 @@ def test_should_enable_search_for_low_confidence_verification_query():
 
 def test_should_enable_search_for_debunk_style_query():
     assert should_enable_search("is this true or just a rumor?") is True
+
+
+def test_should_enable_search_for_trending_meme_context():
+    assert should_enable_search("why is draco malfoy this years chinese new year mascot") is True
+
+
+def test_should_enable_search_not_for_personal_recency_checkin():
+    assert should_enable_search("i worked out today should i stretch now") is False
 
 
 def test_should_enable_search_ambiguous_follow_up_without_context():

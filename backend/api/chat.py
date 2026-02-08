@@ -114,6 +114,14 @@ WEB_ACCESS_DISCLAIMER_PATTERN = re.compile(
     r"\bknowledge\s+cutoff\b)",
     re.IGNORECASE,
 )
+EXPLICIT_WEB_SEARCH_REQUEST_PATTERN = re.compile(
+    r"\b(?:search|google|web\s*search|look\s*up|lookup|find\s+on\s+the\s+web)\b",
+    re.IGNORECASE,
+)
+GPT_OSS_120B_MODEL_ID = "openai/gpt-oss-120b"
+GPT_OSS_120B_FAST_MODEL_ID = "openai/gpt-oss-120b:fast"
+GLM_47_MODEL_ID = "z-ai/glm-4.7"
+GLM_47_FAST_MODEL_ID = "z-ai/glm-4.7:fast"
 
 
 def _is_low_information_search_turn(text: str) -> bool:
@@ -126,6 +134,13 @@ def _is_low_information_search_turn(text: str) -> bool:
     if len(words) <= 3 and any(token in normalized for token in ("search", "google", "lookup", "look up")):
         return True
     return False
+
+
+def _is_explicit_web_search_request(text: Optional[str]) -> bool:
+    normalized = (text or "").strip()
+    if not normalized:
+        return False
+    return bool(EXPLICIT_WEB_SEARCH_REQUEST_PATTERN.search(normalized))
 
 
 def _has_web_grounding(metadata: Optional[Dict[str, Any]]) -> bool:
@@ -155,7 +170,7 @@ def _strip_incorrect_web_access_disclaimer(
     search_enabled: bool,
     grounding_metadata: Optional[Dict[str, Any]],
 ) -> str:
-    if not search_enabled or not text or not _has_web_grounding(grounding_metadata):
+    if not search_enabled or not text:
         return text
 
     paragraphs = [segment.strip() for segment in re.split(r"\n{2,}", text) if segment.strip()]
@@ -188,7 +203,7 @@ def _resolve_web_search_enabled(
     if mode == "on":
         return True
     if mode == "off":
-        return False
+        return _is_explicit_web_search_request(chat_request.message)
     if mode == "auto":
         # In auto mode, allow either side to opt-in:
         # - frontend hint can proactively enable search
@@ -196,7 +211,40 @@ def _resolve_web_search_enabled(
         client_hint = bool(getattr(chat_request, "web_search_enabled", False))
         server_decision = should_enable_search(chat_request.message, conversation_history=conversation_history)
         return client_hint or server_decision
-    return bool(chat_request.web_search_enabled)
+    return bool(chat_request.web_search_enabled) or _is_explicit_web_search_request(chat_request.message)
+
+
+def _resolve_provider_routing(
+    *,
+    requested_model: Optional[str],
+    effective_model: Optional[str],
+    requested_provider_routing: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    routing = dict(requested_provider_routing or {})
+    effective = (effective_model or "").strip().lower()
+    requested = (requested_model or "").strip().lower()
+    gpt_oss_targets = {GPT_OSS_120B_MODEL_ID, GPT_OSS_120B_FAST_MODEL_ID}
+    glm_47_targets = {GLM_47_MODEL_ID, GLM_47_FAST_MODEL_ID}
+
+    # GPT OSS 120b defaults:
+    # - Normal model prioritizes cheapest provider
+    # - :fast variant prioritizes fastest provider
+    if effective in gpt_oss_targets or requested in gpt_oss_targets:
+        if requested == GPT_OSS_120B_FAST_MODEL_ID or effective == GPT_OSS_120B_FAST_MODEL_ID:
+            routing.setdefault("sort", "throughput")
+        else:
+            routing.setdefault("sort", "price")
+
+    # GLM 4.7 defaults:
+    # - Normal model prioritizes cheapest provider
+    # - :fast variant prioritizes fastest provider
+    if effective in glm_47_targets or requested in glm_47_targets:
+        if requested == GLM_47_FAST_MODEL_ID or effective == GLM_47_FAST_MODEL_ID:
+            routing.setdefault("sort", "throughput")
+        else:
+            routing.setdefault("sort", "price")
+
+    return routing or None
 
 
 def _normalize_general_conversation_id(
@@ -740,6 +788,12 @@ async def chat_route(
         ) if search_enabled else None
 
         # Generate AI response
+        effective_provider_routing = _resolve_provider_routing(
+            requested_model=chat_request.model,
+            effective_model=effective_model,
+            requested_provider_routing=chat_request.provider_routing,
+        )
+
         ai_response, grounding_metadata = await _generate_ai_response(
             effective_message,
             conversation_history,
@@ -766,7 +820,7 @@ async def chat_route(
             user_timezone=chat_request.timezone,
             plan_tier=normalized_tier,
             conversation_memory_enabled=memory_enabled,
-            provider_routing=chat_request.provider_routing,
+            provider_routing=effective_provider_routing,
             supermemory_overrides=supermemory_overrides,
         )
         ai_response = _strip_incorrect_web_access_disclaimer(
@@ -1178,6 +1232,12 @@ async def chat_stream_route(
             conversation_history=conversation_history,
         ) if search_enabled else None
 
+        effective_provider_routing = _resolve_provider_routing(
+            requested_model=chat_request.model,
+            effective_model=effective_model,
+            requested_provider_routing=chat_request.provider_routing,
+        )
+
         async def event_stream() -> AsyncGenerator[str, None]:
             nonlocal session_title
             start_time_stream = time.perf_counter()
@@ -1215,7 +1275,7 @@ async def chat_stream_route(
                     conversation_memory_enabled=memory_enabled,
                     response_schema=chat_request.response_json_schema,
                     response_mime_type=chat_request.response_mime_type,
-                    provider_routing=chat_request.provider_routing,
+                    provider_routing=effective_provider_routing,
                     supermemory_overrides=supermemory_overrides,
                 ):
                     if kind == "delta":

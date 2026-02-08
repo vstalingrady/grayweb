@@ -401,6 +401,18 @@
   position: relative;
 }
 
+.sidebarHistorySkeletonBlock {
+  padding: 3px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sidebarHistorySkeletonRow {
+  padding: 3px 6px;
+  border-radius: 6px;
+}
+
 .sidebarHistoryActions {
   position: absolute;
   right: 0;
@@ -907,3 +919,115 @@
   color: rgba(255, 210, 210, 0.9);
 }
 
+/* Light mode: sidebar surfaces, menus, and history interactions */
+:global(html.light) .sidebarRail,
+:global(html.light) .sidebarPanelContent {
+  background: var(--gray-ui-surface, #ffffff);
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+}
+
+:global(html.light) .sidebarRailAvatarImage {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .sidebarRailAvatarIcon {
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.95));
+}
+
+:global(html.light) .sidebarNav button {
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .sidebarNav button:hover {
+  color: rgba(12, 12, 12, 0.98);
+  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+}
+
+:global(html.light) .sidebarNav button[data-active="true"] {
+  color: rgba(12, 12, 12, 1);
+}
+
+:global(html.light) .sidebarScrollFadeFixed {
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.6) 40%,
+    var(--gray-ui-surface, #ffffff) 100%
+  );
+}
+
+:global(html.light) .sidebarHistoryActions {
+  background: linear-gradient(to right, transparent 0%, rgba(248, 248, 250, 0) 100%);
+}
+
+:global(html.light) .sidebarHistoryActions:hover,
+:global(html.light) .sidebarHistoryActions.isOpen {
+  background: linear-gradient(to right, transparent, rgba(248, 248, 250, 0.88) 30%, var(--gray-ui-overlay, #f8f8fa) 60%);
+}
+
+:global(html.light) .sidebarActionButton {
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.95));
+}
+
+:global(html.light) .sidebarActionButton:hover {
+  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .sidebarMenuPopover {
+  background: var(--gray-ui-surface, #ffffff);
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+  box-shadow: 0 12px 28px -8px rgba(0, 0, 0, 0.24);
+}
+
+:global(html.light) .sidebarMenuItem {
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .sidebarMenuItem:hover {
+  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+  color: rgba(12, 12, 12, 1);
+}
+
+:global(html.light) .sidebarHistoryLink {
+  color: rgba(39, 39, 42, 0.88);
+}
+
+:global(html.light) .sidebarHistoryLink:hover,
+:global(html.light) .sidebarHistoryLink:focus-visible {
+  color: rgba(12, 12, 12, 0.96);
+  background: linear-gradient(
+    to left,
+    rgba(0, 0, 0, 0.08),
+    rgba(0, 0, 0, 0.05) 55%,
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+
+:global(html.light) .sidebarHistoryLinkActive {
+  color: rgba(12, 12, 12, 1);
+}
+
+:global(html.light) .profileMenu {
+  background: var(--gray-ui-surface, #ffffff);
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.03);
+}
+
+:global(html.light) .profileMenuItem:hover .profileMenuItemContent,
+:global(html.light) .profileMenuItem:focus-visible .profileMenuItemContent {
+  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+}
+
+:global(html.light) .profileMenuIcon {
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.95));
+}
+
+:global(html.light) .profileMenuLabel {
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .profileMenuDivider {
+  background: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+}

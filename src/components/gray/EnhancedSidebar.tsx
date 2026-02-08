@@ -283,10 +283,10 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
                               return (
                                 <li key={entry.id}>
                                   {entry.isGeneratingTitle || !entry.title?.trim() ? (
-                                    <div className="gray-history-skeleton" style={{ padding: "6px 16px" }}>
+                                    <div className={`gray-history-skeleton ${styles.sidebarHistorySkeletonRow}`}>
                                       <Skeleton
                                         height={14}
-                                        width={140}
+                                        width="72%"
                                         baseColor="rgba(255, 255, 255, 0.08)"
                                         highlightColor="rgba(255, 255, 255, 0.18)"
                                         borderRadius={4}

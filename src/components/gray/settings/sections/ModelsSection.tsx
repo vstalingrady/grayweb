@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment } from "react";
-import { Lock } from "lucide-react";
+import { Lock, Zap } from "lucide-react";
 import styles from "../SettingsStyles.module.css";
 import { ALL_PIONEER_MODEL_IDS, GRAY_BRAND, PIONEER_GROUPS } from "@/components/gray/modelCatalog";
 import { SettingsLogo } from "@/components/gray/settings/components/SettingsLogo";
@@ -36,6 +36,12 @@ export function ModelsSection({
   onModelsStatusChange,
 }: ModelsSectionProps) {
   const visibleIds = visibleModelIds ?? ALL_PIONEER_MODEL_IDS;
+  const renderModelLabel = (label: string, isFast?: boolean) => (
+    <span className={styles.settingsFastLabel}>
+      {isFast ? <Zap size={13} className={styles.settingsFastIcon} aria-hidden="true" /> : null}
+      <span>{label}</span>
+    </span>
+  );
 
   return (
     <>
@@ -192,7 +198,7 @@ export function ModelsSection({
                         <div className={styles.settingsLabelGroup}>
                           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                             <SettingsLogo src={group.iconPath} alt={group.label} />
-                            <span className={styles.settingsLabel}>{row.model.label}</span>
+                            <span className={styles.settingsLabel}>{renderModelLabel(row.model.label, row.model.isFast)}</span>
                           </div>
                           <span className={styles.settingsItemDescription}>
                             {row.model.cost ? (

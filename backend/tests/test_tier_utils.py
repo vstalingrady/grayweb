@@ -30,6 +30,18 @@ def test_coerce_model_for_tier_remaps_glm_alias() -> None:
     assert coerced is True
 
 
+def test_coerce_model_for_tier_allows_gpt_oss_fast_for_pathfinder() -> None:
+    effective_model, coerced = coerce_model_for_tier("openai/gpt-oss-120b:fast", "pathfinder")
+    assert effective_model == "openai/gpt-oss-120b:fast"
+    assert coerced is False
+
+
+def test_coerce_model_for_tier_allows_glm_fast_for_pathfinder() -> None:
+    effective_model, coerced = coerce_model_for_tier("z-ai/glm-4.7:fast", "pathfinder")
+    assert effective_model == "z-ai/glm-4.7:fast"
+    assert coerced is False
+
+
 def test_bootstrap_plan_tier_defaults_to_scout(monkeypatch) -> None:
     monkeypatch.delenv("BOOTSTRAP_PIONEER_EMAILS", raising=False)
     assert bootstrap_plan_tier("someone@example.com") == "scout"

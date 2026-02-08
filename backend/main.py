@@ -582,6 +582,11 @@ from backend.api.supermemory import router as supermemory_router
 
 app.include_router(supermemory_router)
 
+# Link preview routes
+from backend.api.link_preview import router as link_preview_router
+
+app.include_router(link_preview_router)
+
 # Initialize audit logger with database
 
 from backend.audit_logger import init_audit_logger

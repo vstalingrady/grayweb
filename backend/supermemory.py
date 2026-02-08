@@ -902,5 +902,94 @@ class SupermemoryService:
                 self._logger.warning("Supermemory wipe delete failed: %s", exc, exc_info=True)
         return {"deletedCount": deleted_count}
 
+    async def delete_conversation_memories(
+        self,
+        *,
+        user_id: int,
+        conversation_id: str,
+    ) -> Dict[str, int]:
+        if not self.available:
+            return {"matchedCount": 0, "deletedCount": 0}
+
+        target_conversation_id = (conversation_id or "").strip()
+        if not target_conversation_id:
+            return {"matchedCount": 0, "deletedCount": 0}
+
+        container_tag = self._container_tag(user_id)
+        client = await self._get_client()
+        matched_ids: List[str] = []
+        page = 1
+        try:
+            while True:
+                payload = {"containerTags": [container_tag], "limit": 100, "page": page}
+                response = await client.post(
+                    f"{self._base_url}/v3/documents/list",
+                    json=payload,
+                    headers=self._headers(container_tag),
+                )
+                response.raise_for_status()
+                data = response.json() or {}
+                memories = data.get("memories") or []
+                if not memories:
+                    break
+
+                for doc in memories:
+                    if not isinstance(doc, dict):
+                        continue
+
+                    memory_id = doc.get("id")
+                    if not isinstance(memory_id, str) or not memory_id.strip():
+                        continue
+
+                    metadata = doc.get("metadata")
+                    if not isinstance(metadata, dict):
+                        metadata = doc.get("meta")
+                    if not isinstance(metadata, dict):
+                        continue
+
+                    doc_conversation_id = (
+                        metadata.get("conversation_id")
+                        or metadata.get("conversationId")
+                    )
+                    if not isinstance(doc_conversation_id, str):
+                        continue
+                    if doc_conversation_id.strip() != target_conversation_id:
+                        continue
+                    matched_ids.append(memory_id.strip())
+
+                pagination = data.get("pagination") or {}
+                total_pages = pagination.get("totalPages") or pagination.get("total_pages")
+                if not total_pages or page >= int(total_pages):
+                    break
+                page += 1
+        except Exception as exc:
+            if self._debug:
+                self._logger.warning(
+                    "Supermemory conversation wipe list failed: %s", exc, exc_info=True
+                )
+            return {"matchedCount": 0, "deletedCount": 0}
+
+        if not matched_ids:
+            return {"matchedCount": 0, "deletedCount": 0}
+
+        deleted_count = 0
+        try:
+            for i in range(0, len(matched_ids), 100):
+                batch = matched_ids[i : i + 100]
+                response = await client.post(
+                    f"{self._base_url}/v3/documents/delete-bulk",
+                    json={"ids": batch},
+                    headers=self._headers(container_tag),
+                )
+                response.raise_for_status()
+                deleted_count += len(batch)
+        except Exception as exc:
+            if self._debug:
+                self._logger.warning(
+                    "Supermemory conversation wipe delete failed: %s", exc, exc_info=True
+                )
+
+        return {"matchedCount": len(matched_ids), "deletedCount": deleted_count}
+
 
 SUPERMEMORY_SERVICE = SupermemoryService()

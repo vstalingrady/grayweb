@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, type SyntheticEvent } from "react";
+import { useEffect, useState, type SyntheticEvent } from "react";
 import { ChevronDown } from "lucide-react";
 import styles from "./ChatMessageGroundingPanel.module.css";
 import type { GroundingMetadata } from "@/lib/api";
+import { resolveApiUrl } from "@/lib/api/baseUrl";
 import {
   buildGroundingSourceCards,
   buildGroundingSourceFaviconUrl,
@@ -48,6 +49,17 @@ type GroundingPanelCard = {
   initials: string;
 };
 
+type LinkPreviewResponsePayload = {
+  image_url?: string;
+  imageUrl?: string;
+  image_proxy_url?: string;
+  imageProxyUrl?: string;
+};
+
+const LINK_PREVIEW_FETCH_LIMIT = 10;
+const HTTP_URL_PATTERN = /^https?:\/\//i;
+const linkPreviewImageCache = new Map<string, string | null>();
+
 const normalizeSearchEntryImageUrl = (raw: string | null): string | null => {
   if (!raw) {
     return null;
@@ -55,6 +67,9 @@ const normalizeSearchEntryImageUrl = (raw: string | null): string | null => {
   const trimmed = raw.trim();
   if (!trimmed) {
     return null;
+  }
+  if (trimmed.startsWith("/")) {
+    return trimmed;
   }
   if (trimmed.startsWith("data:")) {
     return trimmed;
@@ -254,6 +269,68 @@ const dedupeNonEmptyUrls = (values: Array<string | undefined>): string[] => {
   return Array.from(unique);
 };
 
+const PRIVATE_IPV4_PATTERN = /^(?:\d{1,3}\.){3}\d{1,3}$/;
+
+const isPrivateIpv4Host = (hostname: string): boolean => {
+  if (!PRIVATE_IPV4_PATTERN.test(hostname)) {
+    return false;
+  }
+  const parts = hostname.split(".").map((value) => Number.parseInt(value, 10));
+  if (parts.some((part) => Number.isNaN(part) || part < 0 || part > 255)) {
+    return false;
+  }
+  if (parts[0] === 10 || parts[0] === 127) {
+    return true;
+  }
+  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) {
+    return true;
+  }
+  if (parts[0] === 192 && parts[1] === 168) {
+    return true;
+  }
+  if (parts[0] === 169 && parts[1] === 254) {
+    return true;
+  }
+  return parts[0] === 0;
+};
+
+const isLikelyInternalHost = (hostname: string): boolean => {
+  const normalized = hostname.trim().toLowerCase().replace(/^\[|\]$/g, "");
+  if (!normalized) {
+    return true;
+  }
+  if (
+    normalized === "localhost" ||
+    normalized.endsWith(".localhost") ||
+    normalized.endsWith(".local") ||
+    normalized.endsWith(".internal")
+  ) {
+    return true;
+  }
+  if (isPrivateIpv4Host(normalized)) {
+    return true;
+  }
+  if (normalized.includes(":")) {
+    if (
+      normalized === "::1" ||
+      normalized.startsWith("fc") ||
+      normalized.startsWith("fd") ||
+      normalized.startsWith("fe80:")
+    ) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const buildWebsiteScreenshotCandidates = (url: URL): string[] => {
+  const target = encodeURIComponent(url.toString());
+  return [
+    `https://s.wordpress.com/mshots/v1/${target}?w=1200&h=675`,
+    `https://s0.wp.com/mshots/v1/${target}?w=1200&h=675`,
+  ];
+};
+
 const buildWebsiteThumbnailCandidatesFromHref = (href?: string): string[] => {
   if (!href) {
     return [];
@@ -261,6 +338,9 @@ const buildWebsiteThumbnailCandidatesFromHref = (href?: string): string[] => {
   try {
     const parsed = new URL(href);
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return [];
+    }
+    if (isLikelyInternalHost(parsed.hostname)) {
       return [];
     }
     const videoId = extractYouTubeVideoId(parsed);
@@ -272,8 +352,7 @@ const buildWebsiteThumbnailCandidatesFromHref = (href?: string): string[] => {
     if (hasDirectImageExtension) {
       return [parsed.toString()];
     }
-    // If we cannot resolve a true media thumbnail, render favicon-only cards.
-    return [];
+    return buildWebsiteScreenshotCandidates(parsed);
   } catch {
     return [];
   }
@@ -321,6 +400,10 @@ const resolveThumbnailForSource = (
   source: ReturnType<typeof buildGroundingSourceCards>[number],
   thumbnailIndex: ReturnType<typeof buildSearchEntryThumbnailIndex>
 ): string | undefined => {
+  const sourcePreview = normalizeSearchEntryImageUrl(source.previewImageUrl ?? null);
+  if (sourcePreview) {
+    return sourcePreview;
+  }
   if (source.href) {
     const directMatch = thumbnailIndex.byHref.get(source.href);
     if (directMatch) {
@@ -363,6 +446,24 @@ const handleGroundingImageError = (event: SyntheticEvent<HTMLImageElement>) => {
 
 const handleGroundingFaviconError = (event: SyntheticEvent<HTMLImageElement>) => {
   event.currentTarget.style.display = "none";
+};
+
+const resolveLinkPreviewImage = (payload: unknown): string | null => {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+  const record = payload as LinkPreviewResponsePayload;
+  const proxiedUrl = typeof record.image_proxy_url === "string" ? record.image_proxy_url : record.imageProxyUrl;
+  const directImageUrl = typeof record.image_url === "string" ? record.image_url : record.imageUrl;
+
+  if (proxiedUrl) {
+    const normalizedProxy = normalizeSearchEntryImageUrl(resolveApiUrl(proxiedUrl));
+    if (normalizedProxy) {
+      return normalizedProxy;
+    }
+  }
+
+  return normalizeSearchEntryImageUrl(directImageUrl ?? null);
 };
 
 const extractSearchEntryResults = (rawHtml: string): SearchEntryResult[] => {
@@ -429,6 +530,7 @@ const handleGroundingImageLoad = (event: SyntheticEvent<HTMLImageElement>) => {
 
 export function ChatMessageGroundingPanel({ metadata, t }: ChatMessageGroundingPanelProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [resolvedPreviewByHref, setResolvedPreviewByHref] = useState<Record<string, string>>({});
   const searchQueries =
     metadata?.web_search_queries ?? (metadata as { webSearchQueries?: string[] })?.webSearchQueries ?? [];
   const searchEntryPoint =
@@ -500,6 +602,92 @@ export function ChatMessageGroundingPanel({ metadata, t }: ChatMessageGroundingP
     });
   }
 
+  const previewLookupCandidates = Array.from(
+    new Set(
+      cards
+        .map((card) => card.href?.trim())
+        .filter((href): href is string => Boolean(href) && HTTP_URL_PATTERN.test(href))
+    )
+  ).slice(0, LINK_PREVIEW_FETCH_LIMIT);
+  const previewLookupKey = previewLookupCandidates.join("\n");
+  const cachedPreviewByHref: Record<string, string> = {};
+  for (const href of previewLookupCandidates) {
+    const cached = linkPreviewImageCache.get(href);
+    if (cached) {
+      cachedPreviewByHref[href] = cached;
+    }
+  }
+
+  useEffect(() => {
+    const hrefs = previewLookupKey
+      ? previewLookupKey
+          .split("\n")
+          .map((value) => value.trim())
+          .filter((value) => value.length > 0)
+      : [];
+    if (hrefs.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    const controller = new AbortController();
+    const pendingFetches: string[] = [];
+
+    for (const href of hrefs) {
+      if (linkPreviewImageCache.has(href)) {
+        continue;
+      }
+      pendingFetches.push(href);
+    }
+
+    if (pendingFetches.length === 0) {
+      return () => controller.abort();
+    }
+
+    const loadPreviews = async () => {
+      const discovered: Record<string, string> = {};
+      await Promise.all(
+        pendingFetches.map(async (href) => {
+          try {
+            const endpoint = `${resolveApiUrl("/api/link-preview")}?url=${encodeURIComponent(href)}`;
+            const response = await fetch(endpoint, {
+              method: "GET",
+              credentials: "same-origin",
+              cache: "force-cache",
+              signal: controller.signal,
+            });
+            if (!response.ok) {
+              if (response.status >= 400 && response.status < 500) {
+                linkPreviewImageCache.set(href, null);
+              }
+              return;
+            }
+            const payload = (await response.json()) as unknown;
+            const imageUrl = resolveLinkPreviewImage(payload);
+            linkPreviewImageCache.set(href, imageUrl);
+            if (imageUrl) {
+              discovered[href] = imageUrl;
+            }
+          } catch {
+            // Transient network failures should be retryable on a future render.
+          }
+        })
+      );
+
+      if (cancelled || Object.keys(discovered).length === 0) {
+        return;
+      }
+      setResolvedPreviewByHref((previous) => ({ ...previous, ...discovered }));
+    };
+
+    void loadPreviews();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [previewLookupKey]);
+
   const selfTargetSearchEntryHtml = sanitizedSearchEntryHtml
     ? sanitizedSearchEntryHtml
         .replace(/\btarget=(["'])_blank\1/gi, 'target="_self"')
@@ -517,23 +705,32 @@ export function ChatMessageGroundingPanel({ metadata, t }: ChatMessageGroundingP
   }
 
   const renderGroundingCard = (card: GroundingPanelCard) => {
-    const mediaClassName = card.previewImageUrl
+    const resolvedPreviewImageUrl = card.href
+      ? resolvedPreviewByHref[card.href] ?? cachedPreviewByHref[card.href] ?? card.previewImageUrl
+      : card.previewImageUrl;
+    const resolvedFallbackQueue = resolvedPreviewImageUrl
+      ? dedupeNonEmptyUrls([
+          ...(resolvedPreviewImageUrl !== card.previewImageUrl ? [card.previewImageUrl] : []),
+          ...(card.previewFallbackQueue ? card.previewFallbackQueue.split("|") : []),
+        ]).join("|")
+      : card.previewFallbackQueue;
+    const mediaClassName = resolvedPreviewImageUrl
       ? styles.chatGroundingCardMedia
       : `${styles.chatGroundingCardMedia} ${styles.chatGroundingCardMediaNoPreview}`;
-    const showFaviconBackdrop = !card.previewImageUrl && Boolean(card.faviconUrl);
+    const showFaviconBackdrop = !resolvedPreviewImageUrl && Boolean(card.faviconUrl);
     const cardContent = (
       <>
         <div className={mediaClassName}>
-          {card.previewImageUrl ? (
+          {resolvedPreviewImageUrl ? (
             <>
               <span className={styles.chatGroundingCardMediaFallback}>{card.initials}</span>
               {/* eslint-disable-next-line @next/next/no-img-element -- Remote search thumbnails require direct img usage and custom fallback handling. */}
               <img
-                src={card.previewImageUrl}
+                src={resolvedPreviewImageUrl}
                 alt=""
                 referrerPolicy="no-referrer"
                 className={styles.chatGroundingCardMediaImage}
-                data-fallback-queue={card.previewFallbackQueue || undefined}
+                data-fallback-queue={resolvedFallbackQueue || undefined}
                 onLoad={handleGroundingImageLoad}
                 onError={handleGroundingImageError}
               />

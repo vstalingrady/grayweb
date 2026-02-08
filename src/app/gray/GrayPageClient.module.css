@@ -2968,9 +2968,11 @@
   align-items: stretch;
   justify-content: flex-start;
   gap: 0;
-  padding-top: clamp(24px, 5vh, 56px);
+  padding-top: clamp(8px, 2vh, 24px);
   padding-bottom: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-padding-bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(132px, 20vh, 224px));
 }
 
 .page[data-general-attachments="true"] .mainContent[data-view="general"] {
@@ -3009,23 +3011,23 @@
   flex-direction: column;
   gap: clamp(18px, 3vh, 32px);
   align-items: stretch;
-  padding-bottom: clamp(110px, 14vh, 150px);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(132px, 20vh, 224px));
   flex: 1;
 }
 
 .mainContent[data-view="general"]>.generalViewSection {
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 @media (min-width: 769px) {
 
-  /* The general composer is in-flow; avoid extra bottom padding that pushes the grid upward. */
+  /* Keep a stable scroll cushion above the fixed chat composer. */
   .mainContent[data-view="general"]>.generalViewSection {
-    padding-bottom: 0;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(132px, 20vh, 224px));
   }
 
   .page[data-general-attachments="true"] .mainContent[data-view="general"]>.generalViewSection {
-    padding-bottom: 0;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(168px, 24vh, 260px));
   }
 }
 
@@ -3080,6 +3082,19 @@
   height: 100%;
 }
 
+.mainContent[data-view="general"] .dashboardGridItemTasks[data-editor-open="true"] {
+  height: auto;
+}
+
+.mainContent[data-view="general"] .dashboardGridItemTasks[data-editor-open="true"]>.dashboardCard {
+  height: auto;
+  overflow: visible;
+}
+
+.mainContent[data-view="general"] .dashboardGridItemTasks[data-editor-open="true"] .dashboardCardBody {
+  overflow: visible;
+}
+
 .proactivitySummary {
   font-size: 0.78rem;
   color: rgba(235, 235, 235, 0.58);
@@ -3121,7 +3136,7 @@
 
 @media (max-width: 768px) {
   .page[data-general-attachments="true"] .generalViewSection {
-    padding-bottom: clamp(140px, 18vh, 190px);
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(168px, 24vh, 260px));
   }
 }
 
@@ -3377,10 +3392,10 @@ h1.greeting {
 
 @media (min-width: 769px) {
 
-  /* Center the dashboard cards between the workspace greeting and chat bar. */
+  /* Keep content top-aligned so expanding cards can use available vertical space. */
   .mainContent[data-view="general"] .dashboardGrid {
-    margin-top: auto;
-    margin-bottom: auto;
+    margin-top: 0;
+    margin-bottom: 0;
   }
 }
 
@@ -8150,4 +8165,72 @@ h1.greeting {
   pointer-events: none;
   width: 24px;
   height: 24px;
+}
+
+/* Light mode: high-traffic controls (mobile composer, history, calendar sidebar) */
+:global(html.light) .mobileChatInputContainer {
+  background: var(--gray-ui-surface, #ffffff);
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+}
+
+:global(html.light) .mobileChatInputField {
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .mobileChatInputField::placeholder {
+  color: var(--gray-ui-placeholder, rgba(113, 113, 122, 0.75));
+}
+
+:global(html.light) .mobileChatActionButton {
+  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .mobileChatActionButton[data-variant="primary"] {
+  background: #171717;
+  color: #fafafa;
+}
+
+:global(html.light) .historyViewHeader h1 {
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .historyViewSearch {
+  border-color: var(--gray-ui-border, rgba(0, 0, 0, 0.12));
+  background: var(--gray-ui-surface, #ffffff);
+}
+
+:global(html.light) .historyViewSearch:focus-within {
+  border-color: var(--gray-ui-border, rgba(0, 0, 0, 0.18));
+  background: var(--gray-ui-surface, #ffffff);
+}
+
+:global(html.light) .historyViewSearch svg {
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.95));
+}
+
+:global(html.light) .historyViewSearch input {
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .historyViewSearch input::placeholder {
+  color: var(--gray-ui-placeholder, rgba(113, 113, 122, 0.75));
+}
+
+:global(html.light) .historyListShell {
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+  background: var(--gray-ui-surface-muted, rgba(248, 248, 250, 0.92));
+}
+
+:global(html.light) .historyListShell li:hover,
+:global(html.light) .historyListShell li:focus-within {
+  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+}
+
+:global(html.light) .calendarSidebarSearch input {
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .calendarSidebarSearch input::placeholder {
+  color: var(--gray-ui-placeholder, rgba(113, 113, 122, 0.75));
 }

@@ -155,6 +155,17 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
   }, []);
 
   const isAllModelsLocked = currentLevel < PLAN_TIER_LEVELS["pathfinder"];
+  const activeOptionIsFast = "isFast" in activeOption ? Boolean(activeOption.isFast) : false;
+
+  const renderModelLabel = useCallback(
+    (label: string, isFast = false) => (
+      <span className={styles.modelLabelWithIcon}>
+        {isFast ? <Zap size={13} className={styles.modelFastIcon} aria-hidden="true" /> : null}
+        <span>{stripBrandPrefix(label)}</span>
+      </span>
+    ),
+    []
+  );
 
   const handleAllModelsClick = useCallback(
     (event: ReactMouseEvent<HTMLButtonElement>) => {
@@ -201,9 +212,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
         aria-label={t("Select model")}
         type="button"
       >
-        <span className={styles.triggerLabel}>
-          {stripBrandPrefix(activeOption.label)}
-        </span>
+        <span className={styles.triggerLabel}>{renderModelLabel(activeOption.label, activeOptionIsFast)}</span>
         <ChevronUp
           className={`${styles.chevron} ${isOpen ? styles.chevronOpen : ""}`}
           size={16}
@@ -267,7 +276,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                               type="button"
                             >
                               <div className={styles.itemInfo}>
-                                <div className={styles.itemLabel}>{model.label}</div>
+                                <div className={styles.itemLabel}>{renderModelLabel(model.label, model.isFast)}</div>
                               </div>
                               {model.cost && <span className={styles.costIndicator}>{model.cost}</span>}
                               {isModelLocked ? (
@@ -454,7 +463,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                       <activeOption.icon size={18} />
                     </div>
                     <div className={styles.itemInfo}>
-                      <div className={styles.itemLabel}>{activeOption.label}</div>
+                      <div className={styles.itemLabel}>{renderModelLabel(activeOption.label, activeOptionIsFast)}</div>
                       <div className={styles.itemDescription}>{t("Selected Model")}</div>
                     </div>
                     <Check size={14} className={styles.checkIcon} />

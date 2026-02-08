@@ -61,10 +61,20 @@ LIVE_KEYWORDS = [
     "new files", "brand new files", "just dropped", "just released", "conspiracy",
 ]
 
-RECENCY_TOKENS = [
-    "today", "right now", "currently",
-    "this week", "this month", "this year",
-    "latest", "recent", "up to date", "up-to-date",
+SOFT_RECENCY_TOKENS = [
+    "today",
+    "right now",
+    "currently",
+    "this week",
+    "this month",
+    "this year",
+]
+
+HARD_RECENCY_TOKENS = [
+    "latest",
+    "recent",
+    "up to date",
+    "up-to-date",
 ]
 
 QUESTION_PREFIXES = (
@@ -115,6 +125,36 @@ VERIFICATION_PATTERNS = (
         re.IGNORECASE,
     ),
 )
+
+TREND_PATTERNS = (
+    re.compile(r"\btrending\b", re.IGNORECASE),
+    re.compile(r"\bviral\b", re.IGNORECASE),
+    re.compile(r"\bmeme(?:s)?\b", re.IGNORECASE),
+    re.compile(r"\bmascot\b", re.IGNORECASE),
+    re.compile(r"\bcontrovers(?:y|ial)\b", re.IGNORECASE),
+    re.compile(r"\bwhat(?:'s| is)\s+up\s+with\b", re.IGNORECASE),
+)
+
+TEMPORAL_QUESTION_PATTERNS = (
+    re.compile(r"\bwhat\s+happened\b", re.IGNORECASE),
+    re.compile(r"\bwhy\s+is\b", re.IGNORECASE),
+    re.compile(r"\bwhat(?:'s| is)\s+going\s+on\b", re.IGNORECASE),
+)
+
+PERSONAL_RECENCY_PATTERNS = (
+    re.compile(
+        r"\b(today|right now|currently|this week|this month|this year)\b\s+"
+        r"(i|i'm|im|we|we're|our|my|me)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(i|i'm|im|we|we're|our|my|me)\b[\s\S]{0,30}\b"
+        r"(today|right now|currently|this week|this month|this year)\b",
+        re.IGNORECASE,
+    ),
+)
+
+NAME_LIKE_PATTERN = re.compile(r"\b[A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,}){0,2}\b")
 
 FOLLOW_UP_PATTERNS = (
     re.compile(r"\b(?:what|how)\s+about\b", re.IGNORECASE),
@@ -167,6 +207,42 @@ def _is_ambiguous_follow_up(normalized: str) -> bool:
         FOLLOW_UP_PRONOUN_PATTERN.search(normalized)
         and any(pattern.search(normalized) for pattern in FOLLOW_UP_PATTERNS)
     )
+
+
+def _compute_search_need_score(
+    *,
+    trimmed: str,
+    normalized: str,
+    has_soft_recency: bool,
+    has_hard_recency: bool,
+    question_like: bool,
+) -> int:
+    score = 0
+
+    if has_hard_recency:
+        score += 2
+    if has_soft_recency:
+        score += 1
+    if question_like:
+        score += 1
+    if any(pattern.search(normalized) for pattern in TREND_PATTERNS):
+        score += 2
+    if any(pattern.search(normalized) for pattern in TEMPORAL_QUESTION_PATTERNS):
+        score += 2
+    if re.search(r"\b(202[3-9]|203[0-9])\b", normalized):
+        score += 1
+    if (
+        NAME_LIKE_PATTERN.search(trimmed)
+        and (
+            has_soft_recency
+            or has_hard_recency
+            or any(pattern.search(normalized) for pattern in TREND_PATTERNS)
+            or any(pattern.search(normalized) for pattern in TEMPORAL_QUESTION_PATTERNS)
+        )
+    ):
+        score += 1
+
+    return score
 
 
 def _extract_recent_user_messages(conversation_history: Optional[list]) -> list[str]:
@@ -284,10 +360,6 @@ def should_use_web_search(message: str, model: Optional[str] = None) -> bool:
     if any(keyword in normalized for keyword in LIVE_KEYWORDS):
         return True
 
-    # Generic recency cues ("today", "right now", "this week", etc.).
-    if any(token in normalized for token in RECENCY_TOKENS):
-        return True
-
     # Questions explicitly about something "happening" now.
     if "what's happening" in normalized or "whats happening" in normalized:
         return True
@@ -300,6 +372,34 @@ def should_use_web_search(message: str, model: Optional[str] = None) -> bool:
     }
     if normalized in _SLANG_GUARD_TERMS:
         return False
+
+    if any(pattern.search(normalized) for pattern in PERSONAL_RECENCY_PATTERNS):
+        return False
+
+    word_count = len(normalized.split())
+    if _is_small_talk(trimmed, word_count):
+        return False
+
+    if any(pattern.search(normalized) for pattern in STABLE_KNOWLEDGE_PATTERNS):
+        return False
+
+    if any(pattern.search(normalized) for pattern in VERIFICATION_PATTERNS):
+        return True
+
+    if _is_ambiguous_follow_up(normalized):
+        return False
+
+    has_soft_recency = any(token in normalized for token in SOFT_RECENCY_TOKENS)
+    has_hard_recency = any(token in normalized for token in HARD_RECENCY_TOKENS)
+    search_score = _compute_search_need_score(
+        trimmed=trimmed,
+        normalized=normalized,
+        has_soft_recency=has_soft_recency,
+        has_hard_recency=has_hard_recency,
+        question_like=_is_question_like(normalized),
+    )
+    if search_score >= 3:
+        return True
 
     # Simple year-based heuristic: questions that mention a near-future or
     # current year along with "news" or "update" are likely live.

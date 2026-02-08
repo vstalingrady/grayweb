@@ -850,7 +850,7 @@ function PaymentContent() {
 
                             <div className={styles.payButtonContainer}>
                                 {status === "error" && (
-                                    <div style={{ marginBottom: "1rem", padding: "0.75rem", background: "rgba(239, 68, 68, 0.1)", color: "#fca5a5", borderRadius: "8px", display: "flex", gap: "0.5rem", alignItems: "center", fontSize: "0.9rem" }}>
+                                    <div className={styles.paymentErrorBanner}>
                                         <AlertCircle size={16} />
                                         <span>{errorMessage}</span>
                                     </div>
@@ -861,14 +861,14 @@ function PaymentContent() {
                                     disabled={status === "loading"}
                                 >
                                     {status === "loading" ? (
-                                        <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
+                                        <span className={styles.paymentLoadingContent}>
                                             <Loader2 size={20} className="animate-spin" /> Processing
                                         </span>
                                     ) : (
                                         `Subscribe for ${chargeDisplay}`
                                     )}
                                 </button>
-                                <div style={{ marginTop: "1rem", display: "flex", justifyContent: "center", gap: "0.5rem", color: "rgba(255,255,255,0.3)", fontSize: "0.8rem" }}>
+                                <div className={styles.paymentTrustNote}>
                                     Powered by {poweredByLabel} • Secure 256-bit SSL Header
                                 </div>
                             </div>

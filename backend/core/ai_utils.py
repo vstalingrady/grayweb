@@ -7,6 +7,7 @@ import json
 import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 _PDF_EXCERPT_MAX_CHARS = int(os.getenv("OPENROUTER_PDF_CACHE_MAX_CHARS", "20000"))
 
@@ -17,6 +18,47 @@ def _truncate_text(value: str) -> str:
     if len(value) <= _PDF_EXCERPT_MAX_CHARS:
         return value
     return value[:_PDF_EXCERPT_MAX_CHARS]
+
+
+def _normalize_http_url(value: Any) -> Optional[str]:
+    if not isinstance(value, str):
+        return None
+    candidate = value.strip()
+    if not candidate:
+        return None
+    if candidate.startswith("//"):
+        candidate = f"https:{candidate}"
+    try:
+        parsed = urlparse(candidate)
+    except Exception:
+        return None
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
+    return candidate
+
+
+def _extract_url_citation_media_url(url_citation: Dict[str, Any], annotation: Dict[str, Any]) -> Optional[str]:
+    media_keys = (
+        "image_url",
+        "imageUrl",
+        "thumbnail_url",
+        "thumbnailUrl",
+        "preview_image_url",
+        "previewImageUrl",
+        "preview_url",
+        "previewUrl",
+        "image",
+        "thumbnail",
+    )
+    for key in media_keys:
+        normalized = _normalize_http_url(url_citation.get(key))
+        if normalized:
+            return normalized
+    for key in media_keys:
+        normalized = _normalize_http_url(annotation.get(key))
+        if normalized:
+            return normalized
+    return None
 
 
 def _extract_file_text(file_payload: Dict[str, Any]) -> Optional[str]:
@@ -62,7 +104,8 @@ def openrouter_annotations_to_grounding(annotations: Optional[List[Dict[str, Any
         if not isinstance(annotation, dict):
             continue
         ann_type = annotation.get("type")
-        url_citation = annotation.get("url_citation") or annotation.get("urlCitation") or {}
+        url_citation_raw = annotation.get("url_citation") or annotation.get("urlCitation") or {}
+        url_citation = url_citation_raw if isinstance(url_citation_raw, dict) else {}
         file_citation = annotation.get("file_citation") or annotation.get("fileCitation") or annotation.get("file") or {}
 
         if ann_type == "url_citation" or url_citation:
@@ -70,15 +113,36 @@ def openrouter_annotations_to_grounding(annotations: Optional[List[Dict[str, Any
             if not url:
                 continue
             title = url_citation.get("title") or annotation.get("title") or url
+            snippet = url_citation.get("content") or annotation.get("content")
+            if not isinstance(snippet, str):
+                snippet = None
+            elif snippet.strip():
+                snippet = _truncate_text(snippet.strip())
+            else:
+                snippet = None
+            image_url = _extract_url_citation_media_url(url_citation, annotation)
             key = ("web", url, title)
             if key in seen:
                 continue
             seen.add(key)
             chunk_index = len(chunks)
-            chunks.append({"web": {"uri": url, "title": title}})
-            _append_support(url_citation.get("start_index") or annotation.get("start_index"),
-                           url_citation.get("end_index") or annotation.get("end_index"),
-                           chunk_index)
+            web_chunk: Dict[str, Any] = {"uri": url, "title": title}
+            if snippet:
+                web_chunk["snippet"] = snippet
+            if image_url:
+                web_chunk["image_url"] = image_url
+            chunks.append({"web": web_chunk})
+            _append_support(
+                url_citation.get("start_index")
+                or url_citation.get("startIndex")
+                or annotation.get("start_index")
+                or annotation.get("startIndex"),
+                url_citation.get("end_index")
+                or url_citation.get("endIndex")
+                or annotation.get("end_index")
+                or annotation.get("endIndex"),
+                chunk_index,
+            )
             continue
 
         if ann_type == "file_citation" or ann_type == "file" or file_citation:

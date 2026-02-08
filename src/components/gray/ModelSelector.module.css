@@ -180,6 +180,16 @@
   color: #ffffff;
 }
 
+.modelLabelWithIcon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.modelFastIcon {
+  opacity: 0.85;
+}
+
 .itemDescription {
   font-size: 0.8rem;
   color: rgba(255, 255, 255, 0.5);

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction 
 
 import { useI18n } from "@/contexts/I18nContext";
 import { useUser } from "@/contexts/UserContext";
+import { primeAiCompanyLogoCache } from "@/components/gray/logoCache";
 
 import type { ChatContextValue, ChatSession } from "../types";
 import {
@@ -79,6 +80,11 @@ export const useChatProviderValue = (workspaceContext?: string): ChatContextValu
   }, [generalConversationId]);
 
   const sessions = sessionsState;
+
+  useEffect(() => {
+    void primeAiCompanyLogoCache();
+  }, []);
+
   const {
     pendingHistorySyncRef,
     pendingTitleSyncRef,

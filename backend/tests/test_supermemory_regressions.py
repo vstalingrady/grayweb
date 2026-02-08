@@ -123,3 +123,70 @@ async def test_supermemory_search_tool_falls_back_to_default_limit(monkeypatch: 
 
     assert result["status"] == "success"
     assert captured["limit"] == 5
+
+
+@pytest.mark.asyncio
+async def test_delete_conversation_memories_filters_by_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SUPERMEMORY_API_KEY", "sm_12345678901234567890")
+    monkeypatch.setenv("SUPERMEMORY_ENABLED", "1")
+
+    service = SupermemoryService()
+    captured_batches: list[list[str]] = []
+
+    class _StubResponse:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._payload
+
+    class _StubClient:
+        def __init__(self):
+            self._list_page = 0
+
+        async def post(self, url: str, json=None, headers=None):
+            del headers
+            if url.endswith("/v3/documents/list"):
+                self._list_page += 1
+                if self._list_page == 1:
+                    return _StubResponse(
+                        {
+                            "memories": [
+                                {"id": "doc_a", "metadata": {"conversation_id": "thread_1"}},
+                                {"id": "doc_b", "metadata": {"conversation_id": "thread_2"}},
+                                {"id": "doc_c", "metadata": {"conversationId": "thread_1"}},
+                                {"id": "doc_d", "meta": {"conversation_id": "thread_1"}},
+                            ],
+                            "pagination": {"totalPages": 2},
+                        }
+                    )
+                return _StubResponse(
+                    {
+                        "memories": [
+                            {"id": "doc_e", "metadata": {"conversation_id": "thread_1"}},
+                        ],
+                        "pagination": {"totalPages": 2},
+                    }
+                )
+            if url.endswith("/v3/documents/delete-bulk"):
+                captured_batches.append(list(json.get("ids") or []))
+                return _StubResponse({})
+            raise AssertionError(f"Unexpected URL: {url}")
+
+    stub_client = _StubClient()
+
+    async def fake_get_client():
+        return stub_client
+
+    monkeypatch.setattr(service, "_get_client", fake_get_client)
+
+    result = await service.delete_conversation_memories(
+        user_id=5,
+        conversation_id="thread_1",
+    )
+
+    assert result == {"matchedCount": 4, "deletedCount": 4}
+    assert captured_batches == [["doc_a", "doc_c", "doc_d", "doc_e"]]

@@ -199,6 +199,8 @@ class OpenRouterService:
         "gpt-5.2": "openai/gpt-5.2-chat",  # Default to chat variant
         "gpt-5.2-chat": "openai/gpt-5.2-chat",
         "gpt-5.2-pro": "openai/gpt-5.2-pro",
+        "openai/gpt-oss-120b:fast": "openai/gpt-oss-120b",
+        "z-ai/glm-4.7:fast": "z-ai/glm-4.7",
         "gpt-4o": "openai/gpt-4o",
         "gpt-4-turbo": "openai/gpt-4-turbo",
         "gpt-4o-mini": "openai/gpt-4o-mini",

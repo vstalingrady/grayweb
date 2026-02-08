@@ -25,6 +25,8 @@ MODEL_ALIASES = {
 PATHFINDER_MODEL_IDS = {
     "anthropic/claude-haiku-4.5",
     "google/gemini-3-flash-preview",
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-120b:fast",
     "deepseek/deepseek-v3.2",
     "deepseek/deepseek-v3.2-speciale",
     "x-ai/grok-4.1-fast",
@@ -32,6 +34,8 @@ PATHFINDER_MODEL_IDS = {
     "nvidia/nemotron-3-nano-30b-a3b:free",
     "xiaomi/mimo-v2-flash:free",
     "z-ai/glm-4.7",
+    "z-ai/glm-4.7:fast",
+    # Legacy alias support (kept for existing stored selections).
     "z-ai/glm-4.7-flash",
     "minimax/minimax-m2.1",
     "minimax/minimax-m2-her",
