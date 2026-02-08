@@ -700,11 +700,6 @@ class ProactivityEngine:
         if status != "pending":
             return None
 
-        delivery_key = f"reminder:{reminder_id}"
-        reserved = await self._reserve_delivery_key(user_id, delivery_key, source)
-        if not reserved:
-            return None
-
         remind_at = reminder.get("remind_at")
         if isinstance(remind_at, str):
             try:
@@ -718,8 +713,14 @@ class ProactivityEngine:
         else:
             remind_at_utc = now_utc
 
-        # Never deliver reminders before their due time.
-        if remind_at_utc > now_utc:
+        # Scheduled jobs should only deliver due reminders, with a small grace window
+        # for clock skew between scheduler and worker execution.
+        if source in {"scheduler", "scheduled_reminder"} and remind_at_utc > now_utc + timedelta(seconds=5):
+            return None
+
+        delivery_key = f"reminder:{reminder_id}"
+        reserved = await self._reserve_delivery_key(user_id, delivery_key, source)
+        if not reserved:
             return None
 
         label = (reminder.get("label") or "Reminder").strip()

@@ -109,6 +109,21 @@ def _get_conversation_helpers():
     )
 
 
+def _conversation_helpers():
+    """Return a stable helper tuple length even if providers add extra values."""
+    helpers = list(_get_conversation_helpers())
+    prefix_count = 16
+    tail_count = 9
+    expected = prefix_count + tail_count
+    if len(helpers) < expected:
+        raise RuntimeError(
+            f"Conversation helpers returned {len(helpers)} values, expected at least {expected}."
+        )
+    if len(helpers) > expected:
+        helpers = helpers[:prefix_count] + helpers[-tail_count:]
+    return tuple(helpers)
+
+
 @router.post("/api/conversation/{conversation_id}/message")
 @router.post("/api/conversation/{conversation_id}/messages")
 @limiter.limit("30/minute")
@@ -145,7 +160,7 @@ async def create_conversation_message(
         ConversationUpdateRequest,
         ChatSession,
         ChatSessionCreate,
-    ) = _get_conversation_helpers()
+    ) = _conversation_helpers()
     
     try:
         await _require_conversation_owner(conversation_id, current_user)
@@ -219,7 +234,7 @@ async def get_conversation(
         ConversationUpdateRequest,
         ChatSession,
         ChatSessionCreate,
-    ) = _get_conversation_helpers()
+    ) = _conversation_helpers()
     
     try:
         await _require_conversation_owner(conversation_id, current_user)
@@ -294,7 +309,7 @@ async def create_conversation(
         ConversationUpdateRequest,
         ChatSession,
         ChatSessionCreate,
-    ) = _get_conversation_helpers()
+    ) = _conversation_helpers()
     
     try:
         require_same_user(payload.user_id, current_user)
@@ -348,7 +363,7 @@ async def delete_conversation(
         ConversationUpdateRequest,
         ChatSession,
         ChatSessionCreate,
-    ) = _get_conversation_helpers()
+    ) = _conversation_helpers()
     
     try:
         await _require_conversation_owner(conversation_id, current_user)
@@ -409,7 +424,7 @@ async def delete_all_conversations(
         ConversationUpdateRequest,
         ChatSession,
         ChatSessionCreate,
-    ) = _get_conversation_helpers()
+    ) = _conversation_helpers()
     
     try:
         # Force the user_id to be the authenticated user's ID
@@ -480,7 +495,7 @@ async def _overwrite_conversation_history_logic(
         ConversationUpdateRequest,
         ChatSession,
         ChatSessionCreate,
-    ) = _get_conversation_helpers()
+    ) = _conversation_helpers()
     
     try:
         await _require_conversation_owner(conversation_id, current_user)
@@ -625,7 +640,7 @@ async def update_conversation(
         ConversationUpdateRequest,
         ChatSession,
         ChatSessionCreate,
-    ) = _get_conversation_helpers()
+    ) = _conversation_helpers()
     
     await _require_conversation_owner(conversation_id, current_user)
     return await apply_conversation_update(conversation_id, payload, current_user)
@@ -666,7 +681,7 @@ async def update_conversation_metadata(
         ConversationUpdateRequest,
         ChatSession,
         ChatSessionCreate,
-    ) = _get_conversation_helpers()
+    ) = _conversation_helpers()
     
     await _require_conversation_owner(conversation_id, current_user)
     return await apply_conversation_update(conversation_id, payload, current_user)
@@ -706,7 +721,7 @@ async def get_conversation_usage(
         ConversationUpdateRequest,
         ChatSession,
         ChatSessionCreate,
-    ) = _get_conversation_helpers()
+    ) = _conversation_helpers()
     
     try:
         await _require_conversation_owner(conversation_id, current_user)
@@ -806,7 +821,7 @@ async def compress_conversation(
         ConversationUpdateRequest,
         ChatSession,
         ChatSessionCreate,
-    ) = _get_conversation_helpers()
+    ) = _conversation_helpers()
     
     try:
         await _require_conversation_owner(conversation_id, current_user)
@@ -919,7 +934,7 @@ async def create_chat_session(
         ConversationUpdateRequest,
         ChatSession,
         ChatSessionCreate,
-    ) = _get_conversation_helpers()
+    ) = _conversation_helpers()
     
     user_id = current_user["id"]
     require_same_user(user_id, current_user)
@@ -966,7 +981,7 @@ async def list_user_conversations(
         ConversationUpdateRequest,
         ChatSession,
         ChatSessionCreate,
-    ) = _get_conversation_helpers()
+    ) = _conversation_helpers()
     
     # Force the user_id to be the authenticated user's ID
     user_id = current_user["id"]

@@ -702,10 +702,7 @@ async def _upsert_push_subscription(
                 proactivity_push_subscriptions.c.endpoint == subscription.endpoint
             )
         )
-        if not conflict_row:
-            raise
-        conflict_user_id = int(conflict_row["user_id"])
-        if conflict_user_id != user_id:
+        if conflict_row is not None and int(conflict_row["user_id"]) != user_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Subscription endpoint is already registered to another user",
@@ -713,10 +710,11 @@ async def _upsert_push_subscription(
         await db.execute(
             proactivity_push_subscriptions.update()
             .where(
-                (proactivity_push_subscriptions.c.id == conflict_row["id"])
+                (proactivity_push_subscriptions.c.endpoint == subscription.endpoint)
                 & (proactivity_push_subscriptions.c.user_id == user_id)
             )
             .values(
+                user_id=user_id,
                 p256dh=subscription.p256dh,
                 auth=subscription.auth,
                 updated_at=now,

@@ -68,7 +68,17 @@ def _require_calendar_access(current_user: Dict[str, Any]) -> None:
 
 
 def _validate_event_time_range(start_time: datetime, end_time: datetime) -> None:
-    if end_time < start_time:
+    normalized_start = (
+        start_time.astimezone(timezone.utc)
+        if start_time.tzinfo is not None
+        else start_time.replace(tzinfo=timezone.utc)
+    )
+    normalized_end = (
+        end_time.astimezone(timezone.utc)
+        if end_time.tzinfo is not None
+        else end_time.replace(tzinfo=timezone.utc)
+    )
+    if normalized_end < normalized_start:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="end_time must be greater than or equal to start_time.",
@@ -330,7 +340,7 @@ async def update_calendar_event(
     user_id = current_user["id"]
     require_same_user(user_id, current_user)
     _require_calendar_access(current_user)
-    update_data = event_update.dict(exclude_unset=True)
+    update_data = event_update.model_dump(exclude_unset=True)
 
     sqlite_update_data: Dict[str, Any] = {}
     if update_data:
@@ -349,6 +359,38 @@ async def update_calendar_event(
 
     proposed_start_time = update_data.get("start_time", _row_get(existing, "start_time"))
     proposed_end_time = update_data.get("end_time", _row_get(existing, "end_time"))
+
+    # If only start_time changes, preserve the original event duration by
+    # shifting end_time by the same delta.
+    existing_start_time = _row_get(existing, "start_time")
+    existing_end_time = _row_get(existing, "end_time")
+    if (
+        "start_time" in update_data
+        and "end_time" not in update_data
+        and isinstance(proposed_start_time, datetime)
+        and isinstance(existing_start_time, datetime)
+        and isinstance(existing_end_time, datetime)
+    ):
+        normalized_existing_start = (
+            existing_start_time.astimezone(timezone.utc)
+            if existing_start_time.tzinfo is not None
+            else existing_start_time.replace(tzinfo=timezone.utc)
+        )
+        normalized_existing_end = (
+            existing_end_time.astimezone(timezone.utc)
+            if existing_end_time.tzinfo is not None
+            else existing_end_time.replace(tzinfo=timezone.utc)
+        )
+        normalized_proposed_start = (
+            proposed_start_time.astimezone(timezone.utc)
+            if proposed_start_time.tzinfo is not None
+            else proposed_start_time.replace(tzinfo=timezone.utc)
+        )
+        duration = normalized_existing_end - normalized_existing_start
+        proposed_end_time = normalized_proposed_start + duration
+        update_data["end_time"] = proposed_end_time
+        sqlite_update_data["end_time"] = proposed_end_time
+
     if isinstance(proposed_start_time, datetime) and isinstance(proposed_end_time, datetime):
         _validate_event_time_range(proposed_start_time, proposed_end_time)
 
