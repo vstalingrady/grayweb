@@ -28,6 +28,7 @@ from backend.tier_utils import normalize_plan_tier
 
 from backend.chat_cache import cache_messages, get_cached_messages, invalidate_conversation_cache
 from backend.token_utils import estimate_tokens
+from backend.supermemory import SUPERMEMORY_SERVICE
 
 router = APIRouter(tags=["conversations"])
 
@@ -35,6 +36,30 @@ api_logger = create_logger("backend.api.conversations")
 
 DEFAULT_CONVERSATION_PAGE_SIZE = 40
 MAX_CONVERSATION_PAGE_SIZE = 200
+
+
+async def _delete_supermemory_for_conversation(
+    *,
+    user_id: int,
+    conversation_id: str,
+) -> None:
+    if not SUPERMEMORY_SERVICE.available:
+        return
+    try:
+        await SUPERMEMORY_SERVICE.delete_conversation_memories(
+            user_id=user_id,
+            conversation_id=conversation_id,
+        )
+    except Exception as error:
+        api_logger.warning(
+            "Failed to delete supermemory conversation memories",
+            extra={
+                "event_type": "supermemory_delete_conversation_failed",
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "error": str(error),
+            },
+        )
 
 
 def _normalize_page_limit(limit: Optional[int]) -> Optional[int]:
@@ -367,6 +392,10 @@ async def delete_conversation(
     
     try:
         await _require_conversation_owner(conversation_id, current_user)
+        await _delete_supermemory_for_conversation(
+            user_id=current_user["id"],
+            conversation_id=conversation_id,
+        )
         general_user_id = _general_conversation_user_id(conversation_id)
         if general_user_id is not None:
             await _delete_general_conversation_history(general_user_id)
@@ -431,6 +460,10 @@ async def delete_all_conversations(
         user_id = current_user["id"]
 
         # 1. Delete General Chat History
+        await _delete_supermemory_for_conversation(
+            user_id=user_id,
+            conversation_id=f"general:{user_id}",
+        )
         await _delete_general_conversation_history(user_id, db=db)
         invalidate_conversation_cache(f"general:{user_id}")
 
@@ -446,6 +479,11 @@ async def delete_all_conversations(
             thread_ids = [str(row["id"]) for row in rows]
 
             if thread_ids:
+                for thread_id in thread_ids:
+                    await _delete_supermemory_for_conversation(
+                        user_id=user_id,
+                        conversation_id=thread_id,
+                    )
                 await db.execute(_user_chat_messages.delete().where(_user_chat_messages.c.thread_id.in_(thread_ids)))
                 await db.execute(_user_chat_threads.delete().where(_user_chat_threads.c.id.in_(thread_ids)))
 
@@ -783,6 +821,8 @@ async def get_conversation_usage(
             "context_warning": context_warning,
             "suggested_models": suggested_models,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail="Error fetching conversation usage.")
 

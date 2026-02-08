@@ -71,8 +71,19 @@ export const useCalendarComposer = ({
 
   const handleComposerSubmit = useCallback(
     ({ id, ...payload }: EventComposerPayload) => {
+      const existingEvent = id ? events.find((event) => event.id === id) ?? null : null;
+
       if (payload.entryType === "plan" && onCreatePlan) {
-        onCreatePlan({ id, ...payload });
+        onCreatePlan({ ...payload });
+        // Converting a persisted calendar event into a task should remove the
+        // original calendar event to avoid leaving duplicates.
+        if (
+          existingEvent &&
+          !existingEvent.id.startsWith("plan-event-") &&
+          existingEvent.entryType !== "plan"
+        ) {
+          updateEvents((previous) => previous.filter((event) => event.id !== existingEvent.id));
+        }
         closeComposer();
         return;
       }
@@ -110,7 +121,7 @@ export const useCalendarComposer = ({
       });
       closeComposer();
     },
-    [closeComposer, onCreateHabit, onCreatePlan, updateEvents]
+    [closeComposer, events, onCreateHabit, onCreatePlan, updateEvents]
   );
 
   const handleComposerDelete = useCallback(

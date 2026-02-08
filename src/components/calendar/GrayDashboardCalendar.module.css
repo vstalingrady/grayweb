@@ -1263,10 +1263,13 @@
 }
 
 .eventCardTime {
-  font-size: 0.76rem;
+  font-size: 0.7rem;
   line-height: 1.2;
   color: var(--event-card-time-color, rgba(247, 247, 247, 0.78));
   letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .eventCardDetails {
@@ -1882,6 +1885,8 @@
   padding: 0;
   width: 92px;
   font-variant-numeric: tabular-nums;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
 .composerTimeInput:focus {
@@ -1891,15 +1896,11 @@
 }
 
 .composerTimeInput::-webkit-calendar-picker-indicator {
-  filter: invert(1);
-  opacity: 0.5;
-  cursor: pointer;
-  width: 14px;
-  height: 14px;
+  display: none;
 }
 
 :global(html.light) .composerTimeInput::-webkit-calendar-picker-indicator {
-  filter: invert(0);
+  display: none;
 }
 
 .composerTimeArrow {
@@ -2523,4 +2524,391 @@
   transform: translateY(-50%);
   color: rgba(245, 245, 245, 0.65);
   pointer-events: none;
+}
+
+:global(html.light) .calendarSidebar {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+:global(html.light) .calendarSidebarIntegrated::after {
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+:global(html.light) .calendarSidebar::after {
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+:global(html.light) .calendarSidebarHeader h2 {
+  color: rgba(20, 20, 20, 0.9);
+}
+
+:global(html.light) .calendarSidebarMonthLabel {
+  color: rgba(20, 20, 20, 0.75);
+}
+
+:global(html.light) .calendarSidebarList header {
+  color: rgba(20, 20, 20, 0.55);
+}
+
+:global(html.light) .calendarSidebarChip {
+  color: rgba(20, 20, 20, 0.75);
+}
+
+:global(html.light) .calendarSidebarChip[aria-pressed="true"] {
+  color: rgba(10, 10, 10, 0.95);
+}
+
+:global(html.light) .calendarSidebarHeaderActions button {
+  background: rgba(0, 0, 0, 0.04);
+  color: rgba(20, 20, 20, 0.7);
+}
+
+:global(html.light) .calendarSidebarSwatch {
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+:global(html.light) .calendarSidebarIntegrationButton {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: rgba(20, 20, 20, 0.85);
+}
+
+:global(html.light) .calendarSidebarIntegrationButton:hover {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.18);
+}
+
+:global(html.light) .miniMonthWeekdays {
+  color: rgba(20, 20, 20, 0.45);
+}
+
+:global(html.light) .miniMonthRow[data-active-week="true"] {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+:global(html.light) .miniMonthCell {
+  color: rgba(20, 20, 20, 0.8);
+}
+
+:global(html.light) .miniMonthCell:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+:global(html.light) .miniMonthCell[data-active="false"] {
+  color: rgba(20, 20, 20, 0.35);
+}
+
+:global(html.light) .miniMonthCell[data-selected="true"] {
+  background: rgba(20, 20, 20, 0.9);
+  color: #ffffff;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
+}
+
+:global(html.light) .miniMonthCell[data-today="true"][data-selected="false"] {
+  border-color: rgba(0, 0, 0, 0.4);
+}
+
+:global(html.light) .calendarSurfaceButton {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.15);
+  color: rgba(20, 20, 20, 0.75);
+}
+
+:global(html.light) .calendarSurfaceButton:hover {
+  border-color: rgba(0, 0, 0, 0.25);
+}
+
+:global(html.light) .calendarSurfaceNavArrows button {
+  color: rgba(20, 20, 20, 0.7);
+}
+
+:global(html.light) .calendarSurfaceNavArrows button:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+:global(html.light) .calendarMobileViewToggle {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+:global(html.light) .calendarMobileViewToggleButton {
+  color: rgba(20, 20, 20, 0.6);
+}
+
+:global(html.light) .calendarMobileViewToggleButton[data-active="true"] {
+  background: rgba(20, 20, 20, 0.9);
+  color: #ffffff;
+}
+
+:global(html.light) .calendarMobileViewToggleButton:hover:not([data-active="true"]),
+:global(html.light) .calendarMobileViewToggleButton:focus-visible:not([data-active="true"]) {
+  color: rgba(20, 20, 20, 0.85);
+}
+
+:global(html.light) .composerCard {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+:global(html.light) .composerHeader h2 {
+  color: rgba(20, 20, 20, 0.9);
+}
+
+:global(html.light) .composerHeader button {
+  color: rgba(20, 20, 20, 0.5);
+}
+
+:global(html.light) .composerHeader button:hover {
+  color: rgba(10, 10, 10, 0.85);
+}
+
+:global(html.light) .composerSectionDivider {
+  border-top-color: rgba(0, 0, 0, 0.08);
+}
+
+:global(html.light) .composerTitleInput {
+  background: rgba(0, 0, 0, 0.04);
+  color: rgba(20, 20, 20, 0.9);
+}
+
+:global(html.light) .composerTitleInput::placeholder {
+  color: rgba(20, 20, 20, 0.35);
+}
+
+:global(html.light) .composerSummary {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: rgba(20, 20, 20, 0.85);
+}
+
+:global(html.light) .composerField span {
+  color: rgba(20, 20, 20, 0.55);
+}
+
+:global(html.light) .composerField input[type="text"],
+:global(html.light) .composerField select,
+:global(html.light) .composerField input[type="time"],
+:global(html.light) .composerField textarea {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.12);
+  color: rgba(20, 20, 20, 0.9);
+}
+
+:global(html.light) .composerToggle {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: rgba(20, 20, 20, 0.6);
+}
+
+:global(html.light) .composerToggle[data-active="true"] {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.25);
+  color: rgba(20, 20, 20, 0.85);
+}
+
+:global(html.light) .composerToggleIndicator {
+  background: rgba(0, 0, 0, 0.25);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+:global(html.light) .composerToggle[data-active="true"] .composerToggleIndicator {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+:global(html.light) .composerToggle:focus-within {
+  outline-color: rgba(0, 0, 0, 0.25);
+}
+
+:global(html.light) .composerInlineNumber {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+:global(html.light) .composerInlineNumberInput {
+  color: rgba(20, 20, 20, 0.9);
+}
+
+:global(html.light) .composerInlineNumberInput::placeholder {
+  color: rgba(20, 20, 20, 0.4);
+}
+
+:global(html.light) .composerInlineSelectPopover {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+:global(html.light) .composerInlineSelectOption {
+  color: rgba(20, 20, 20, 0.85);
+}
+
+:global(html.light) .composerInlineSelectOption:hover,
+:global(html.light) .composerInlineSelectOption:focus-visible {
+  background: rgba(0, 0, 0, 0.05);
+  color: rgba(10, 10, 10, 0.95);
+}
+
+:global(html.light) .composerInlineSelectOption[aria-selected="true"] {
+  background: rgba(0, 0, 0, 0.08);
+  color: rgba(10, 10, 10, 0.95);
+}
+
+:global(html.light) .composerInlineControlIcon {
+  color: rgba(20, 20, 20, 0.45);
+}
+
+:global(html.light) .composerInlineControlChevron {
+  color: rgba(20, 20, 20, 0.35);
+}
+
+:global(html.light) .composerTimeRow {
+  color: rgba(20, 20, 20, 0.85);
+}
+
+:global(html.light) .composerTimeInput {
+  color: rgba(20, 20, 20, 0.9);
+}
+
+:global(html.light) .composerTimeInput:focus {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+:global(html.light) .composerTimeArrow {
+  color: rgba(20, 20, 20, 0.35);
+}
+
+:global(html.light) .composerDuration {
+  color: rgba(20, 20, 20, 0.45);
+}
+
+:global(html.light) .composerDateRow {
+  color: rgba(20, 20, 20, 0.55);
+}
+
+:global(html.light) .composerDateTrigger {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.12);
+  color: rgba(20, 20, 20, 0.9);
+}
+
+:global(html.light) .composerDateTrigger:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+:global(html.light) .composerDateTrigger:focus-visible {
+  outline-color: rgba(0, 0, 0, 0.2);
+}
+
+:global(html.light) .composerDatePopover {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+:global(html.light) .composerDatePopoverMonthLabel {
+  color: rgba(20, 20, 20, 0.75);
+}
+
+:global(html.light) .composerDatePopoverNavButton {
+  color: rgba(20, 20, 20, 0.75);
+}
+
+:global(html.light) .composerDatePopoverNavButton:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+:global(html.light) .composerColorPopover {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+:global(html.light) .composerColorPreview {
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+:global(html.light) .composerColorHexLabel span {
+  color: rgba(20, 20, 20, 0.55);
+}
+
+:global(html.light) .composerColorHexLabel input {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.12);
+  color: rgba(20, 20, 20, 0.9);
+}
+
+:global(html.light) .composerColorSliders label span {
+  color: rgba(20, 20, 20, 0.75);
+}
+
+:global(html.light) .composerColorSliders output {
+  color: rgba(20, 20, 20, 0.6);
+}
+
+:global(html.light) .composerColorPaletteSection h3 {
+  color: rgba(20, 20, 20, 0.6);
+}
+
+:global(html.light) .composerColorSwatch {
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+:global(html.light) .composerColorSwatch:hover {
+  border-color: rgba(0, 0, 0, 0.35);
+}
+
+:global(html.light) .composerColorSwatch[data-active="true"] {
+  border-color: rgba(0, 0, 0, 0.55);
+}
+
+:global(html.light) .composerColorDot {
+  background: rgba(0, 0, 0, 0.04);
+  color: rgba(20, 20, 20, 0.9);
+}
+
+:global(html.light) .composerColorDot[data-active="true"] {
+  border-color: rgba(0, 0, 0, 0.45);
+}
+
+:global(html.light) .composerFooter button {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: rgba(20, 20, 20, 0.85);
+}
+
+:global(html.light) .composerFooter button[type="submit"] {
+  background: rgba(20, 20, 20, 0.9);
+  border-color: rgba(0, 0, 0, 0.25);
+  color: #ffffff;
+}
+
+:global(html.light) .calendarAllDayRow {
+  background: rgba(255, 255, 255, 0.98);
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+:global(html.light) .calendarAllDayLabel {
+  color: rgba(20, 20, 20, 0.45);
+  border-right-color: rgba(0, 0, 0, 0.08);
+}
+
+:global(html.light) .calendarAllDayCell {
+  border-right-color: rgba(0, 0, 0, 0.08);
+}
+
+:global(html.light) .calendarSurfaceBody[data-has-sidebar="true"][data-force-narrow-sidebar="true"] .calendarSidebarPanel {
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+:global(html.light) .composerHeaderSelect {
+  color-scheme: light;
+  color: rgba(20, 20, 20, 0.9);
+}
+
+:global(html.light) .composerHeaderSelect option {
+  background-color: #ffffff;
+  color: rgba(20, 20, 20, 0.9);
+}
+
+:global(html.light) .composerHeaderSelectArrow {
+  color: rgba(20, 20, 20, 0.55);
 }

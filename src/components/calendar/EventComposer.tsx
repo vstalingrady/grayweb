@@ -109,52 +109,92 @@ export function EventComposer({
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(referenceDate));
   const [monthDate, setMonthDate] = useState(() => startOfMonth(referenceDate));
   const activeEventId = activeEvent?.id;
+  const lastResetSignatureRef = useRef<string | null>(null);
+  const calendarOptions = useMemo(() => {
+    if (calendars.length === 0) {
+      return [{ id: calendarFallbackId, label: t("Default calendar"), color: "#3D6F73", isVisible: true }];
+    }
+    if (calendars.some((calendar) => calendar.id === state.calendarId)) {
+      return calendars;
+    }
+    return [
+      { id: state.calendarId, label: state.calendarId, color: "#3D6F73", isVisible: true },
+      ...calendars,
+    ];
+  }, [calendarFallbackId, calendars, state.calendarId, t]);
 
   useEffect(() => {
     if (!isOpen) {
+      lastResetSignatureRef.current = null;
       return;
     }
+
+    const resetSignature = activeEventId
+      ? `event:${activeEventId}`
+      : initialRange
+        ? `range:${initialRange.start.getTime()}:${initialRange.end.getTime()}`
+        : `new:${startOfDay(referenceDate).getTime()}`;
+
+    if (lastResetSignatureRef.current === resetSignature) {
+      return;
+    }
+    lastResetSignatureRef.current = resetSignature;
 
     const initialDateSource = activeEvent?.start ?? initialRange?.start ?? referenceDate;
     const normalizedInitialDate = startOfDay(initialDateSource);
-    const syncDates = () => {
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (cancelled) {
+        return;
+      }
+
       setSelectedDate(normalizedInitialDate);
       setMonthDate(startOfMonth(normalizedInitialDate));
-    };
-    syncDates();
 
-    if (activeEvent) {
-      dispatch({ type: "reset", payload: resolveStateFromEvent(activeEvent, calendarFallbackId) });
-      return;
-    }
+      if (activeEvent) {
+        dispatch({ type: "reset", payload: resolveStateFromEvent(activeEvent, calendarFallbackId) });
+        return;
+      }
 
-    if (initialRange) {
+      if (initialRange) {
+        dispatch({
+          type: "reset",
+          payload: {
+            ...DEFAULT_STATE,
+            title: "",
+            calendarId: calendarFallbackId,
+            startTime: formatTimeInput(initialRange.start),
+            endTime: formatTimeInput(initialRange.end),
+            details: "",
+            reminderMinutesBefore: null,
+          },
+        });
+        return;
+      }
+
       dispatch({
         type: "reset",
         payload: {
           ...DEFAULT_STATE,
           title: "",
           calendarId: calendarFallbackId,
-          startTime: formatTimeInput(initialRange.start),
-          endTime: formatTimeInput(initialRange.end),
           details: "",
           reminderMinutesBefore: null,
         },
       });
-      return;
-    }
-
-    dispatch({
-      type: "reset",
-      payload: {
-        ...DEFAULT_STATE,
-        title: "",
-        calendarId: calendarFallbackId,
-        details: "",
-        reminderMinutesBefore: null,
-      },
     });
-  }, [activeEvent, calendarFallbackId, initialRange, isOpen, referenceDate]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeEvent,
+    activeEventId,
+    calendarFallbackId,
+    initialRange,
+    isOpen,
+    referenceDate,
+  ]);
 
   useLayoutEffect(() => {
     if (typeof window === "undefined") {
@@ -527,13 +567,7 @@ export function EventComposer({
       const popoverHeight = popoverRect?.height ?? 340;
 
       const maxLeft = window.innerWidth - viewportPadding - popoverWidth;
-      const preferredLeftOfTrigger = triggerRect.left - gap - popoverWidth;
-      const preferredRightAligned = triggerRect.right - popoverWidth;
-
-      const left =
-        preferredLeftOfTrigger >= viewportPadding
-          ? Math.min(preferredLeftOfTrigger, maxLeft)
-          : clamp(preferredRightAligned, viewportPadding, maxLeft);
+      const left = clamp(triggerRect.left, viewportPadding, maxLeft);
 
       const preferredTop = triggerRect.bottom + gap;
       const canPlaceBelow = preferredTop + popoverHeight <= window.innerHeight - viewportPadding;
@@ -675,6 +709,22 @@ export function EventComposer({
               aria-label={t("Title")}
             />
           </div>
+          <label className={styles.composerField}>
+            <span>{t("Calendar")}</span>
+            <select
+              value={state.calendarId}
+              onChange={(event) =>
+                dispatch({ type: "update", payload: { calendarId: event.target.value } })
+              }
+              aria-label={t("Calendar")}
+            >
+              {calendarOptions.map((calendar) => (
+                <option key={calendar.id} value={calendar.id}>
+                  {calendar.label}
+                </option>
+              ))}
+            </select>
+          </label>
           {!isHabit ? (
             <>
               <div className={styles.composerTimeSection}>

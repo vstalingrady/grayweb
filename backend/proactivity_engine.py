@@ -115,31 +115,30 @@ class ProactivityEngine:
             async with self.db.transaction():
                 await self.db.execute(
                     f"""
-                    INSERT OR IGNORE INTO {PROACTIVITY_DELIVERY_GUARD_TABLE}
+                    INSERT INTO {PROACTIVITY_DELIVERY_GUARD_TABLE}
                     (user_id, delivery_key, created_at)
                     VALUES (:user_id, :delivery_key, :created_at)
                     """,
                     {"user_id": user_id, "delivery_key": delivery_key, "created_at": now},
                 )
-                inserted = await self.db.fetch_val("SELECT changes()")
         except Exception as exc:
+            message = str(exc).lower()
+            if "unique" in message or "duplicate" in message:
+                logger.info(
+                    "Skipping duplicate proactivity send (delivery_key already reserved)",
+                    extra={
+                        "event_type": "proactivity_dedup_skipped",
+                        "user_id": user_id,
+                        "source": source,
+                        "delivery_key": delivery_key,
+                    },
+                )
+                return False
             logger.error(
                 "Failed to reserve proactivity delivery key: %s",
                 exc,
                 exc_info=True,
                 extra={"event_type": "proactivity_delivery_guard_error", "user_id": user_id},
-            )
-            return False
-
-        if not inserted:
-            logger.info(
-                "Skipping duplicate proactivity send (delivery_key already reserved)",
-                extra={
-                    "event_type": "proactivity_dedup_skipped",
-                    "user_id": user_id,
-                    "source": source,
-                    "delivery_key": delivery_key,
-                },
             )
             return False
 

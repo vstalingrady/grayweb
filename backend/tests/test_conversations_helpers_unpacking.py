@@ -10,8 +10,15 @@ def _make_request():
     return SimpleNamespace(client=SimpleNamespace(host="127.0.0.1"), headers={})
 
 
-def _make_helpers(*, require_owner_raises: bool, tier_limit: int = 42):
+def _make_helpers(
+    *,
+    require_owner_raises: bool,
+    tier_limit: int = 42,
+    require_owner_exception: Exception | None = None,
+):
     async def require_owner(_conversation_id, _current_user):
+        if require_owner_exception is not None:
+            raise require_owner_exception
         if require_owner_raises:
             raise RuntimeError("stop")
 
@@ -137,3 +144,28 @@ async def test_list_user_conversations_unpacking_accepts_tier_token_limit(monkey
     )
 
     assert result == []
+
+
+@pytest.mark.asyncio
+async def test_get_conversation_usage_preserves_http_exception(monkeypatch):
+    from backend.api import conversations as conv_module
+    from backend.core.rate_limit import limiter
+
+    monkeypatch.setattr(limiter, "enabled", False, raising=False)
+    monkeypatch.setattr(
+        conv_module,
+        "_get_conversation_helpers",
+        lambda: _make_helpers(
+            require_owner_raises=False,
+            require_owner_exception=HTTPException(status_code=403, detail="forbidden"),
+        ),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await conv_module.get_conversation_usage(
+            request=_make_request(),
+            conversation_id="general:1",
+            current_user={"id": 1},
+        )
+
+    assert exc_info.value.status_code == 403

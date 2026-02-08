@@ -28,6 +28,13 @@ def _normalize_dt(value: datetime | str | None) -> datetime | None:
     return parsed.astimezone(timezone.utc) if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
+def _is_utc_aware(value: datetime | str | None) -> bool:
+    normalized = _normalize_dt(value)
+    if normalized is None:
+        return False
+    return normalized.utcoffset() == timedelta(0)
+
+
 @pytest_asyncio.fixture
 async def connected_db():
     if not main.database.is_connected:
@@ -209,3 +216,45 @@ async def test_update_calendar_event_start_time_preserves_absolute_reminder(conn
 
     assert actual_from_reminder == expected
     assert actual_from_response == expected
+    assert _is_utc_aware(response.get("start_time"))
+    assert _is_utc_aware(response.get("end_time"))
+    assert _is_utc_aware(response.get("reminder_at"))
+
+
+@pytest.mark.asyncio
+async def test_get_user_calendar_events_returns_utc_aware_timestamps(connected_db):
+    db = connected_db
+    user_id = await _create_user(db)
+    calendar_id = await _create_calendar(db, user_id)
+
+    start_time = datetime.now(timezone.utc) + timedelta(hours=6)
+    end_time = start_time + timedelta(minutes=45)
+    reminder_at = start_time - timedelta(minutes=10)
+
+    await _create_event_with_pending_reminder(
+        db,
+        user_id=user_id,
+        calendar_id=calendar_id,
+        title="UTC normalization check",
+        description="Ensure event payload timestamps are UTC aware",
+        start_time=start_time,
+        end_time=end_time,
+        reminder_minutes_before=None,
+        reminder_at=reminder_at,
+    )
+
+    current_user = {"id": user_id, "role": "user", "plan_tier": "voyager", "subscription_expires_at": None}
+    events = await calendars_api.get_user_calendar_events(
+        user_id=user_id,
+        current_user=current_user,
+        start_date=None,
+        end_date=None,
+        db=db,
+    )
+
+    assert len(events) == 1
+    event = events[0]
+    assert _is_utc_aware(event.get("start_time"))
+    assert _is_utc_aware(event.get("end_time"))
+    assert _is_utc_aware(event.get("created_at"))
+    assert _is_utc_aware(event.get("reminder_at"))

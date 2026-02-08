@@ -40,6 +40,24 @@ const resolveGoogleDate = (payload: ApiGoogleCalendarEvent["start"] | ApiGoogleC
   return parsed;
 };
 
+const API_DATE_HAS_ZONE_RE = /(z|[+-]\d{2}:\d{2})$/i;
+
+const parseApiDateTime = (value: string | null | undefined): Date | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const normalized = API_DATE_HAS_ZONE_RE.test(trimmed) ? trimmed : `${trimmed}Z`;
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed;
+};
+
 export function useWorkspaceData(
   userId: number | null,
   variant: "general" | "dashboard" | "chat",
@@ -199,12 +217,15 @@ export function useWorkspaceData(
             const associatedCalendarId = event.calendar_id
               ? event.calendar_id.toString()
               : fallbackCalendarId;
+            const parsedStart = parseApiDateTime(event.start_time) ?? new Date(event.start_time);
+            const parsedEnd = parseApiDateTime(event.end_time) ?? new Date(event.end_time);
+            const parsedReminderAt = parseApiDateTime(event.reminder_at ?? null);
             return {
               id: event.id.toString(),
               calendarId: associatedCalendarId,
               title: event.title,
-              start: new Date(event.start_time),
-              end: new Date(event.end_time),
+              start: parsedStart,
+              end: parsedEnd,
               color: sanitizeEventColor(
                 calendarColorMap.get(associatedCalendarId) ?? fallbackEventColor
               ),
@@ -212,7 +233,7 @@ export function useWorkspaceData(
               isCompleted: event.is_completed,
               recurrence: event.recurrence,
               habitId: event.habit_id,
-              reminderAt: event.reminder_at,
+              reminderAt: parsedReminderAt ? parsedReminderAt.toISOString() : event.reminder_at ?? undefined,
               description: event.description ?? undefined,
               reminderMinutesBefore:
                 typeof event.reminder_minutes_before === "number" ? event.reminder_minutes_before : null,

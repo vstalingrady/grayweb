@@ -575,10 +575,23 @@ export function GrayDashboardView({
     />
   ) : null;
 
+  const selectedComposerDayKey = calendarSelectedDate
+    ? `${calendarSelectedDate.getFullYear()}-${calendarSelectedDate.getMonth()}-${calendarSelectedDate.getDate()}`
+    : null;
+  const currentComposerDayKey = `${currentDate.getFullYear()}-${currentDate.getMonth()}-${currentDate.getDate()}`;
+  const effectiveComposerDayKey = selectedComposerDayKey ?? currentComposerDayKey;
+
+  const standaloneComposerReferenceDate = useMemo(() => {
+    const [year, month, day] = effectiveComposerDayKey
+      .split("-")
+      .map((part) => Number.parseInt(part, 10));
+    return new Date(year, month, day);
+  }, [effectiveComposerDayKey]);
+
   const eventComposer = (
     <EventComposer
       isOpen={composerOpen}
-      referenceDate={currentDate}
+      referenceDate={standaloneComposerReferenceDate}
       activeEvent={editingEvent ?? quickComposerSeedEvent}
       initialRange={composerRange}
       calendars={calendars}
@@ -589,6 +602,7 @@ export function GrayDashboardView({
       onStateChange={setComposerDraft}
     />
   );
+  const showStandaloneComposer = activeTab !== "calendar";
 
   const shouldShowPulseHeader = (hasCalendarAccess || showUpgradeButton) && !hideHeader;
   const pulseGridProps = {
@@ -698,7 +712,7 @@ export function GrayDashboardView({
   return (
     <>
       {proactivityModal}
-      {eventComposer}
+      {showStandaloneComposer ? eventComposer : null}
       <div
         className={styles.dashboardCalendarContainer}
         data-compact={isCompactLayout ? "true" : "false"}

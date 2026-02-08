@@ -574,7 +574,11 @@ function GrayPageClientInner({
     "account" | "preferences" | "personalization" | "data_controls"
   >("account");
   const [contextUsageSummary, setContextUsageSummary] = useState<ContextUsageSummary | null>(null);
-  const [calendarSelectedDate, setCalendarSelectedDate] = useState<Date>(() => new Date(initialTimestamp));
+  const [calendarSelectedDate, setCalendarSelectedDate] = useState<Date>(() => {
+    const initial = new Date(initialTimestamp);
+    initial.setHours(0, 0, 0, 0);
+    return initial;
+  });
 
   const [isHistoryOverlayOpen, setIsHistoryOverlayOpen] = useState(false);
 
@@ -1609,17 +1613,20 @@ function GrayPageClientInner({
       if (!shouldShowWorkspaceGreeting) {
         return null;
       }
-      const isPioneer = normalizedTier === "pioneer";
+      const shouldCenterGreeting =
+        normalizedTier === "pioneer" &&
+        typeof streakCount === "number" &&
+        streakCount > 0;
       return (
         <div
           className={`${greetingStyles.greetingStack} hidden md:block`}
-          {...(isPioneer ? { "data-centered": "true" } : {})}
+          {...(shouldCenterGreeting ? { "data-centered": "true" } : {})}
         >
           <h1 className={greetingStyles.greeting}>{greeting}</h1>
         </div>
       );
     },
-    [greeting, shouldShowWorkspaceGreeting, normalizedTier]
+    [greeting, shouldShowWorkspaceGreeting, normalizedTier, streakCount]
   );
   const dashboardTabAttr = isDashboardView ? dashboardTab : undefined;
   const isMobileCalendarView =

@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 import databases
 import sqlalchemy
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 # Import models
@@ -159,43 +160,70 @@ async def create_dashboard_pulse(
         )
 
     now = utcnow()
-    try:
-        pulse_id = await db.execute(
-            dashboard_pulses.insert().values(
-                user_id=user_id,
-                date_key=pulse.date_key,
-                timestamp=timestamp_dt,
-                plans=plans_payload,
-                habits=habits_payload,
-                proactivity=proactivity_payload,
-                created_at=now,
-                updated_at=now,
-            )
+    upsert_values = {
+        "user_id": user_id,
+        "date_key": pulse.date_key,
+        "timestamp": timestamp_dt,
+        "plans": plans_payload,
+        "habits": habits_payload,
+        "proactivity": proactivity_payload,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+    db_scheme = getattr(getattr(db, "url", None), "scheme", "")
+    if isinstance(db_scheme, str) and db_scheme.startswith("sqlite"):
+        # Use SQLite native upsert to avoid emitting integrity errors on normal
+        # same-day concurrent writes.
+        insert_stmt = sqlite_insert(dashboard_pulses).values(**upsert_values)
+        upsert_stmt = insert_stmt.on_conflict_do_update(
+            index_elements=[dashboard_pulses.c.user_id, dashboard_pulses.c.date_key],
+            set_={
+                "timestamp": insert_stmt.excluded.timestamp,
+                "plans": insert_stmt.excluded.plans,
+                "habits": insert_stmt.excluded.habits,
+                "proactivity": insert_stmt.excluded.proactivity,
+                "updated_at": insert_stmt.excluded.updated_at,
+            },
         )
-        record = await db.fetch_one(
-            dashboard_pulses.select().where(dashboard_pulses.c.id == pulse_id)
-        )
-    except (sqlite3.IntegrityError, sqlalchemy.exc.IntegrityError):
-        await db.execute(
-            dashboard_pulses.update()
-            .where(
-                (dashboard_pulses.c.user_id == user_id)
-                & (dashboard_pulses.c.date_key == pulse.date_key)
+        await db.execute(upsert_stmt)
+    else:
+        record = await _load_dashboard_pulse_by_date(db, user_id, pulse.date_key)
+        if record:
+            await db.execute(
+                dashboard_pulses.update()
+                .where(
+                    (dashboard_pulses.c.user_id == user_id)
+                    & (dashboard_pulses.c.date_key == pulse.date_key)
+                )
+                .values(
+                    timestamp=timestamp_dt,
+                    plans=plans_payload,
+                    habits=habits_payload,
+                    proactivity=proactivity_payload,
+                    updated_at=now,
+                )
             )
-            .values(
-                timestamp=timestamp_dt,
-                plans=plans_payload,
-                habits=habits_payload,
-                proactivity=proactivity_payload,
-                updated_at=now,
-            )
-        )
-        record = await db.fetch_one(
-            dashboard_pulses.select().where(
-                (dashboard_pulses.c.user_id == user_id)
-                & (dashboard_pulses.c.date_key == pulse.date_key)
-            )
-        )
+        else:
+            try:
+                await db.execute(dashboard_pulses.insert().values(**upsert_values))
+            except (sqlite3.IntegrityError, sqlalchemy.exc.IntegrityError):
+                await db.execute(
+                    dashboard_pulses.update()
+                    .where(
+                        (dashboard_pulses.c.user_id == user_id)
+                        & (dashboard_pulses.c.date_key == pulse.date_key)
+                    )
+                    .values(
+                        timestamp=timestamp_dt,
+                        plans=plans_payload,
+                        habits=habits_payload,
+                        proactivity=proactivity_payload,
+                        updated_at=now,
+                    )
+                )
+
+    record = await _load_dashboard_pulse_by_date(db, user_id, pulse.date_key)
 
     payload = _serialize_dashboard_pulse_record(record)
     if not payload:

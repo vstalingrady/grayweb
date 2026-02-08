@@ -54,6 +54,26 @@ def _resolve_event_reminder_at(
     return reminder_at
 
 
+def _as_utc_aware(value: Optional[datetime]) -> Optional[datetime]:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _serialize_calendar_event_record(
+    record: Dict[str, Any],
+    *,
+    reminder_at: Optional[datetime] = None,
+) -> Dict[str, Any]:
+    payload = dict(record)
+    for field in ("start_time", "end_time", "created_at"):
+        payload[field] = _as_utc_aware(payload.get(field))
+    payload["reminder_at"] = _as_utc_aware(reminder_at if reminder_at is not None else payload.get("reminder_at"))
+    return payload
+
+
 def _require_calendar_access(current_user: Dict[str, Any]) -> None:
     tier = normalize_plan_tier(
         _row_get(current_user, "plan_tier"),
@@ -260,8 +280,12 @@ async def get_user_calendar_events(
         record = dict(row)
         if _row_get(record, "created_at") is None:
             record["created_at"] = now
-        record["reminder_at"] = reminder_map.get(int(record["id"]))
-        normalized.append(record)
+        normalized.append(
+            _serialize_calendar_event_record(
+                record,
+                reminder_at=reminder_map.get(int(record["id"])),
+            )
+        )
     return normalized
 
 
@@ -324,9 +348,9 @@ async def create_calendar_event(
 
     query = calendar_events.select().where(calendar_events.c.id == event_id)
     result = await db.fetch_one(query)
-    record = dict(result)
-    record["reminder_at"] = resolved_reminder_at
-    return record
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create event")
+    return _serialize_calendar_event_record(dict(result), reminder_at=resolved_reminder_at)
 
 
 @router.patch("/users/{user_id}/calendar-events/{event_id}", response_model=CalendarEvent)
@@ -510,8 +534,10 @@ async def update_calendar_event(
         entity_ids=[event_id],
         db=db,
     )
-    res_payload["reminder_at"] = rem_map.get(event_id)
-    return res_payload
+    return _serialize_calendar_event_record(
+        res_payload,
+        reminder_at=rem_map.get(event_id),
+    )
 
 
 @router.delete("/users/{user_id}/calendar-events/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
