@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { Flame, Menu, MessageCircle, MessageSquarePlus, Zap } from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
 
@@ -26,10 +27,73 @@ export function GrayMobileHeader({
   onSelectPulse,
   onCreateNewChat,
 }: GrayMobileHeaderProps) {
+  const UNDERLINE_WIDTH_PX = 34;
   const { t } = useI18n();
   const isPulseTabActive = isPulseActive;
+  const activeHeaderTab = isPulseTabActive ? "pulse" : "chat";
   const showStreak = typeof streakCount === "number" && streakCount > 0;
   const streakLabel = showStreak ? t("{count} day streak", { count: streakCount }) : "";
+  const mobileToggleRef = useRef<HTMLDivElement | null>(null);
+  const chatToggleRef = useRef<HTMLButtonElement | null>(null);
+  const pulseToggleRef = useRef<HTMLButtonElement | null>(null);
+  const [underlineX, setUnderlineX] = useState(0);
+
+  const updateUnderlinePosition = useCallback(() => {
+    if (hideControls) {
+      return;
+    }
+
+    const toggleElement = mobileToggleRef.current;
+    const activeButton = isPulseTabActive ? pulseToggleRef.current : chatToggleRef.current;
+    if (!toggleElement || !activeButton) {
+      return;
+    }
+
+    const toggleRect = toggleElement.getBoundingClientRect();
+    const activeRect = activeButton.getBoundingClientRect();
+    const centeredOffset = activeRect.left - toggleRect.left + activeRect.width / 2 - UNDERLINE_WIDTH_PX / 2;
+    setUnderlineX(Math.max(0, centeredOffset));
+  }, [hideControls, isPulseTabActive]);
+
+  useEffect(() => {
+    updateUnderlinePosition();
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(updateUnderlinePosition);
+    window.addEventListener("resize", updateUnderlinePosition);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", updateUnderlinePosition);
+    };
+  }, [updateUnderlinePosition, isSidebarExpanded]);
+
+  useEffect(() => {
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => {
+      updateUnderlinePosition();
+    });
+
+    if (mobileToggleRef.current) {
+      observer.observe(mobileToggleRef.current);
+    }
+    if (chatToggleRef.current) {
+      observer.observe(chatToggleRef.current);
+    }
+    if (pulseToggleRef.current) {
+      observer.observe(pulseToggleRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [updateUnderlinePosition]);
+
+  const mobileToggleStyle = {
+    "--mobile-toggle-underline-x": `${underlineX}px`,
+  } as CSSProperties;
 
   return (
     <div
@@ -52,8 +116,15 @@ export function GrayMobileHeader({
 
       {!hideControls ? (
         <div className={styles.mobileHeaderToggle}>
-          <div className={styles.mobileToggle}>
+          <div
+            ref={mobileToggleRef}
+            className={styles.mobileToggle}
+            data-active-tab={activeHeaderTab}
+            style={mobileToggleStyle}
+          >
+            <span className={styles.mobileToggleActiveUnderline} aria-hidden="true" />
             <button
+              ref={chatToggleRef}
               type="button"
               className={styles.mobileToggleOption}
               data-active={!isPulseActive ? "true" : "false"}
@@ -65,6 +136,7 @@ export function GrayMobileHeader({
               <span>Chat</span>
             </button>
             <button
+              ref={pulseToggleRef}
               type="button"
               className={styles.mobileToggleOption}
               data-active={isPulseTabActive ? "true" : "false"}

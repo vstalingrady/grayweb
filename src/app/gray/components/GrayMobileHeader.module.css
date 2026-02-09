@@ -4,29 +4,36 @@
   align-items: center;
   box-sizing: border-box;
   padding: 8px 16px;
-  background: var(--background, #050505);
+  background: var(--background, #121212);
   border-bottom: none;
   position: fixed;
   top: env(safe-area-inset-top, 0px);
   left: 0;
   right: 0;
-  z-index: 100;
+  z-index: 10010;
   height: 48px;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   box-shadow: none;
   transform: translateX(0);
   transition: transform 0.3s ease;
+  --mobile-header-fade-opacity: 0.34;
 }
 
 .mobileHeader::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--background, #121212);
   opacity: 0;
   transition: opacity 0.3s ease;
   pointer-events: none;
+  z-index: 0;
+}
+
+.mobileHeader > * {
+  position: relative;
+  z-index: 1;
 }
 
 .mobileHeader[data-sidebar-expanded="true"] {
@@ -34,7 +41,7 @@
 }
 
 .mobileHeader[data-sidebar-expanded="true"]::after {
-  opacity: 1;
+  opacity: var(--mobile-header-fade-opacity);
 }
 
 .mobileHeaderLeft {
@@ -142,7 +149,7 @@
   display: flex !important;
   align-items: center;
   background: transparent;
-  padding: 0;
+  padding: 0 0 4px;
   border-radius: 0;
   border: none;
   gap: 0;
@@ -152,6 +159,27 @@
   min-width: 0;
   max-width: none;
   box-shadow: none;
+  isolation: isolate;
+  --mobile-toggle-underline-width: 34px;
+  --mobile-toggle-underline-x: 0px;
+}
+
+.mobileToggleActiveUnderline {
+  position: absolute;
+  left: 0;
+  bottom: 1px;
+  width: var(--mobile-toggle-underline-width);
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  transform: translate3d(var(--mobile-toggle-underline-x), 0, 0);
+  transform-origin: left center;
+  transition:
+    transform 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform, width;
+  pointer-events: none;
+  z-index: 2;
 }
 
 .mobileToggleOption {
@@ -170,11 +198,12 @@
   /* Smaller text as requested */
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+  transition: color 0.2s cubic-bezier(0.2, 0, 0, 1);
   flex: 1;
   width: auto;
   text-align: center;
   position: relative;
+  z-index: 1;
 }
 
 .mobileToggleOption[data-active="true"] {
@@ -189,11 +218,17 @@
   color: rgba(255, 255, 255, 0.8);
 }
 
+.mobileToggleOption:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 2px;
+}
+
 .mobileToggleIcon {
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0.8;
+  transition: opacity 0.2s cubic-bezier(0.2, 0, 0, 1);
 }
 
 .mobileToggleOption[data-active="true"] .mobileToggleIcon {
@@ -204,10 +239,11 @@
 :global(html.light) .mobileHeader {
   background: var(--gray-ui-surface, #ffffff);
   border-bottom: 1px solid var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+  --mobile-header-fade-opacity: 0.2;
 }
 
 :global(html.light) .mobileHeader::after {
-  background: rgba(15, 23, 42, 0.2);
+  background: var(--gray-ui-overlay, #f8f8fa);
 }
 
 :global(html.light) .mobileMenuButton,
@@ -235,6 +271,10 @@
   border-color: transparent;
 }
 
+:global(html.light) .mobileToggleActiveUnderline {
+  background: rgba(24, 24, 27, 0.88);
+}
+
 :global(html.light) .mobileToggleOption {
   color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.9));
 }
@@ -247,4 +287,16 @@
 :global(html.light) .mobileToggleOption:hover:not([data-active="true"]) {
   background: transparent;
   color: var(--gray-ui-text, rgba(24, 24, 27, 0.88));
+}
+
+:global(html.light) .mobileToggleOption:focus-visible {
+  outline-color: rgba(24, 24, 27, 0.58);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobileToggleActiveUnderline,
+  .mobileToggleOption,
+  .mobileToggleIcon {
+    transition: none;
+  }
 }

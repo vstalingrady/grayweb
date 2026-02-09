@@ -300,16 +300,19 @@ export const useSendGeneralMessage = ({
                 shouldClearToolStatusOnNextToken = false;
               }
               accumulated = accumulated && delta.startsWith(accumulated) ? delta : accumulated + delta;
-              const extraction = extractGrayRemindersFromText(stripMcpToolBlocks(accumulated));
               if (assistantMessageId) {
-                const updates: Partial<ChatMessage> = { content: extraction.cleanText };
+                const updates: Partial<ChatMessage> = { content: stripMcpToolBlocks(accumulated) };
                 if (!didReceiveToken && reasoningStartTimeRef.current) {
                   const elapsed = (Date.now() - reasoningStartTimeRef.current) / 1000;
                   reasoningStartTimeRef.current = null;
                   updates.reasoningSeconds = elapsed;
                   didReceiveToken = true;
                 }
-                updateMessageThrottled(generalSession.id, assistantMessageId, updates);
+                updateMessageThrottled(
+                  generalSession.id,
+                  assistantMessageId,
+                  { ...updates, __streamingPatch: true } as Partial<ChatMessage>
+                );
               }
               continue;
             }

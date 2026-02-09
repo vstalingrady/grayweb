@@ -42,6 +42,10 @@ export const useChatViewScroll = ({
   const isAtBottomRef = useRef(true);
   const userScrolledAwayRef = useRef(false);
   const lastScrollTopRef = useRef(0);
+  const isProgrammaticScrollRef = useRef(false);
+  const programmaticScrollResetTimeoutRef = useRef<number | null>(null);
+  const userScrollIntentRef = useRef(false);
+  const userScrollIntentResetTimeoutRef = useRef<number | null>(null);
   const [composerHeight, setComposerHeight] = useState(0);
   const prevMessageCountRef = useRef(0);
   const prevSessionKeyRef = useRef<string | null>(null);
@@ -62,6 +66,16 @@ export const useChatViewScroll = ({
 
   const scrollToBottom = useCallback(() => {
     const viewport = chatViewportRef.current;
+    if (typeof window !== "undefined") {
+      isProgrammaticScrollRef.current = true;
+      if (programmaticScrollResetTimeoutRef.current !== null) {
+        window.clearTimeout(programmaticScrollResetTimeoutRef.current);
+      }
+      programmaticScrollResetTimeoutRef.current = window.setTimeout(() => {
+        isProgrammaticScrollRef.current = false;
+        programmaticScrollResetTimeoutRef.current = null;
+      }, 140);
+    }
     if (viewport) {
       const maxScroll = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
       viewport.scrollTop = maxScroll;
@@ -159,6 +173,25 @@ export const useChatViewScroll = ({
 
   useEffect(() => () => clearInitialSyncTimers(), [clearInitialSyncTimers]);
 
+  useEffect(
+    () => () => {
+      if (typeof window === "undefined") {
+        return;
+      }
+      if (programmaticScrollResetTimeoutRef.current !== null) {
+        window.clearTimeout(programmaticScrollResetTimeoutRef.current);
+        programmaticScrollResetTimeoutRef.current = null;
+      }
+      if (userScrollIntentResetTimeoutRef.current !== null) {
+        window.clearTimeout(userScrollIntentResetTimeoutRef.current);
+        userScrollIntentResetTimeoutRef.current = null;
+      }
+      isProgrammaticScrollRef.current = false;
+      userScrollIntentRef.current = false;
+    },
+    []
+  );
+
   const streamingTargetId = useMemo(() => {
     if (activeStreamingMessageId) {
       return activeStreamingMessageId;
@@ -195,10 +228,15 @@ export const useChatViewScroll = ({
     const threshold = 120;
     const currentScrollTop = viewport.scrollTop;
     const isNearBottom = viewport.scrollHeight - currentScrollTop - viewport.clientHeight <= threshold;
-    const isScrollingUp = currentScrollTop < lastScrollTopRef.current;
     lastScrollTopRef.current = currentScrollTop;
     isAtBottomRef.current = isNearBottom;
-    if (isScrollingUp) {
+    if (isProgrammaticScrollRef.current) {
+      if (isNearBottom) {
+        userScrolledAwayRef.current = false;
+      }
+      return;
+    }
+    if (!isNearBottom && userScrollIntentRef.current) {
       userScrolledAwayRef.current = true;
       return;
     }
@@ -224,7 +262,6 @@ export const useChatViewScroll = ({
   useEffect(() => {
     if (
       !streamingContentSignature ||
-      !isAtBottomRef.current ||
       userScrolledAwayRef.current
     ) {
       return;
@@ -247,6 +284,10 @@ export const useChatViewScroll = ({
       if (userScrolledAwayRef.current) {
         return;
       }
+      if (streamingTargetId) {
+        scrollToBottom();
+        return;
+      }
       const nearBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 160;
       if (!nearBottom && initialScrollDoneRef.current) {
         return;
@@ -256,7 +297,49 @@ export const useChatViewScroll = ({
 
     observer.observe(observedNode);
     return () => observer.disconnect();
-  }, [hasHydrated, scrollToBottom, sessionKey, suppressAutoScroll]);
+  }, [hasHydrated, scrollToBottom, sessionKey, suppressAutoScroll, streamingTargetId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const viewport = chatViewportRef.current;
+    if (!viewport) {
+      return;
+    }
+
+    const markUserScrollIntent = () => {
+      userScrollIntentRef.current = true;
+      const nearBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 120;
+      if (!nearBottom) {
+        userScrolledAwayRef.current = true;
+      }
+      if (userScrollIntentResetTimeoutRef.current !== null) {
+        window.clearTimeout(userScrollIntentResetTimeoutRef.current);
+      }
+      userScrollIntentResetTimeoutRef.current = window.setTimeout(() => {
+        userScrollIntentRef.current = false;
+        userScrollIntentResetTimeoutRef.current = null;
+      }, 280);
+    };
+
+    viewport.addEventListener("wheel", markUserScrollIntent, { passive: true });
+    viewport.addEventListener("touchstart", markUserScrollIntent, { passive: true });
+    viewport.addEventListener("touchmove", markUserScrollIntent, { passive: true });
+    viewport.addEventListener("pointerdown", markUserScrollIntent, { passive: true });
+
+    return () => {
+      viewport.removeEventListener("wheel", markUserScrollIntent);
+      viewport.removeEventListener("touchstart", markUserScrollIntent);
+      viewport.removeEventListener("touchmove", markUserScrollIntent);
+      viewport.removeEventListener("pointerdown", markUserScrollIntent);
+      if (userScrollIntentResetTimeoutRef.current !== null) {
+        window.clearTimeout(userScrollIntentResetTimeoutRef.current);
+        userScrollIntentResetTimeoutRef.current = null;
+      }
+      userScrollIntentRef.current = false;
+    };
+  }, [hasHydrated, sessionKey]);
 
   useLayoutEffect(() => {
     const composer = composerDockRef.current;

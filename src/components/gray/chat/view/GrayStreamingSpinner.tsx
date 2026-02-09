@@ -20,16 +20,10 @@ export const GrayStreamingSpinner = ({
   const { t } = useI18n();
   const resolvedLabel = toolLabel ?? (variant === "search" ? t("Searching") : null);
   const hasSearchQuery = variant === "search" && typeof searchQuery === "string" && searchQuery.trim().length > 0;
-  const searchLeadText =
-    variant === "search" && hasSearchQuery
-      ? searchState === "completed"
-        ? t("I searched for \"{query}\".", { query: searchQuery!.trim() })
-        : t("Let me search for \"{query}\"...", { query: searchQuery!.trim() })
-      : null;
+  const shouldShimmerSearchLabel = variant === "search" && searchState === "active";
 
   return (
     <div className={styles.chatStreamingInline} data-variant={variant}>
-      {searchLeadText ? <div className={styles.chatSearchLeadText}>{searchLeadText}</div> : null}
       <div className={styles.chatStreamingInlineHeader}>
         {variant === "search" ? (
           <Search className={styles.chatSearchIcon} size={16} aria-hidden="true" />
@@ -42,7 +36,13 @@ export const GrayStreamingSpinner = ({
             className={styles.chatStreamingSpinner}
           />
         )}
-        {resolvedLabel && <span className={styles.chatToolStatus}>{resolvedLabel}</span>}
+        {resolvedLabel ? (
+          <span
+            className={`${styles.chatToolStatus} ${shouldShimmerSearchLabel ? styles.chatToolStatusShimmer : ""}`}
+          >
+            {resolvedLabel}
+          </span>
+        ) : null}
       </div>
       {hasSearchQuery ? (
         <div className={styles.chatSearchQueryBar} data-search-state={searchState}>

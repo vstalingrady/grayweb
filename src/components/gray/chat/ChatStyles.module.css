@@ -145,14 +145,22 @@
 
 .chatFade {
   display: block;
-  position: absolute;
+  --chat-fade-height: clamp(24px, 6vh, 44px);
+  position: sticky;
   top: 0;
   left: 0;
   right: 0;
-  height: clamp(28px, 7vh, 52px);
+  height: var(--chat-fade-height);
+  margin-bottom: calc(-1 * var(--chat-fade-height));
   pointer-events: none;
   z-index: 3;
-  background: linear-gradient(180deg, rgba(5, 5, 5, 1) 0%, rgba(5, 5, 5, 0.94) 42%, rgba(5, 5, 5, 0) 100%);
+  background: var(--background, #121212);
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0%, transparent 100%);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
 }
 
 
@@ -758,6 +766,24 @@
   letter-spacing: 0.02em;
 }
 
+.chatToolStatusShimmer {
+  color: transparent;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.34) 0%,
+    rgba(255, 255, 255, 0.95) 48%,
+    rgba(255, 255, 255, 0.34) 100%
+  );
+  background-size: 220% 100%;
+  background-position: 120% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation:
+    toolFadeIn 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards,
+    chatSearchingTextShimmer 1.15s linear infinite;
+}
+
 .chatSearchQueryBar {
   display: inline-flex;
   align-items: center;
@@ -787,13 +813,19 @@
 }
 
 .chatSearchQueryBar[data-search-state="active"]::after {
-  opacity: 1;
-  animation: chatSearchProgressShimmer 1.8s ease-in-out infinite;
+  opacity: 0;
+  animation: none;
 }
 
 @keyframes chatSearchProgressShimmer {
   to {
     transform: translateX(120%);
+  }
+}
+
+@keyframes chatSearchingTextShimmer {
+  to {
+    background-position: -120% 0;
   }
 }
 
@@ -1046,7 +1078,6 @@
 
 .chatMarkdownStreaming {
   position: relative;
-  animation: none;
 }
 
 .chatMarkdownStreaming::after {
@@ -1072,12 +1103,10 @@
 @keyframes chatTokenFadeIn {
   from {
     opacity: 0;
-    filter: blur(0.3px);
   }
 
   to {
     opacity: 1;
-    filter: blur(0);
   }
 }
 
@@ -2053,7 +2082,7 @@
 }
 
 :global(html.light) .chatFade {
-  background: linear-gradient(180deg, rgba(250, 250, 252, 1) 0%, rgba(250, 250, 252, 0.94) 42%, rgba(250, 250, 252, 0) 100%);
+  background: var(--background, #fdfdfd);
 }
 
 :global(html.light) .chatViewport::-webkit-scrollbar-thumb:hover {
@@ -2071,6 +2100,16 @@
   border-color: rgba(0, 0, 0, 0.2);
   background: var(--gray-ui-hover-strong, rgba(0, 0, 0, 0.1));
   color: rgba(12, 12, 12, 1);
+}
+
+:global(html.light) .chatToolStatusShimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(82, 82, 91, 0.36) 0%,
+    rgba(24, 24, 27, 0.95) 48%,
+    rgba(82, 82, 91, 0.36) 100%
+  );
+  background-size: 220% 100%;
 }
 
 :global(html.light) .chatBubble {

@@ -37,16 +37,23 @@ type StreamingTokenPiece = {
 };
 
 const STREAMING_MARKDOWN_PATTERN =
-  /(?:\*\*|__|~~|`{1,3}|(?:^|\n)\s{0,3}#{1,6}\s|(?:^|\n)\s*[-*+]\s|(?:^|\n)\s*\d+\.\s|\[[^\]]+\]\([^)]+\))/m;
+  /(?:\*\*|__|~~|`{1,3}|(?:^|\n)\s{0,3}#{1,6}\s|(?:^|\n)\s*[-*+]\s|(?:^|\n)\s*\d+\.\s|\[[^\]]+\]\([^)]+\)|(?:^|\n)\s*>\s)/m;
 
-const splitStreamingChunk = (chunk: string): string[] => {
-  if (!chunk) {
-    return [];
+const shouldPreferMarkdownStreamingRender = (text: string): boolean => {
+  if (!text) {
+    return false;
   }
-  return chunk.split(/(\s+)/).filter((piece) => piece.length > 0);
+  return STREAMING_MARKDOWN_PATTERN.test(text);
 };
 
-const shouldPreferMarkdownStreamingRender = (text: string): boolean => STREAMING_MARKDOWN_PATTERN.test(text);
+const getCommonPrefixLength = (left: string, right: string): number => {
+  const maxLength = Math.min(left.length, right.length);
+  let index = 0;
+  while (index < maxLength && left[index] === right[index]) {
+    index += 1;
+  }
+  return index;
+};
 
 const StreamingTokenText = memo(({ text, ariaLive }: { text: string; ariaLive?: "polite" }) => {
   const [pieces, setPieces] = useState<StreamingTokenPiece[]>([]);
@@ -65,35 +72,44 @@ const StreamingTokenText = memo(({ text, ariaLive }: { text: string; ariaLive?: 
       state.nextPieceId = 0;
       state.pieces = [];
       nextPieces = [];
-    } else if (state.previousText && text.startsWith(state.previousText)) {
-      const appendedChunk = text.slice(state.previousText.length);
-      const appendedPieces = splitStreamingChunk(appendedChunk).map((value) => ({
-        id: state.nextPieceId++,
-        value,
-      }));
-      nextPieces = appendedPieces.length > 0 ? [...state.pieces, ...appendedPieces] : state.pieces;
+    } else if (!state.previousText) {
+      nextPieces = [{ id: state.nextPieceId++, value: text }];
       state.previousText = text;
       state.pieces = nextPieces;
     } else {
-      state.nextPieceId = 0;
-      const rebuiltPieces = splitStreamingChunk(text).map((value) => ({
-        id: state.nextPieceId++,
-        value,
-      }));
+      const previousText = state.previousText;
+      const commonPrefixLength = getCommonPrefixLength(previousText, text);
+
+      if (commonPrefixLength === previousText.length && text.length > previousText.length) {
+        const appendedChunk = text.slice(previousText.length);
+        const appendedPieces = appendedChunk
+          ? [{ id: state.nextPieceId++, value: appendedChunk }]
+          : [];
+        nextPieces = appendedPieces.length > 0 ? [...state.pieces, ...appendedPieces] : state.pieces;
+      } else {
+        let keepCount = 0;
+        let consumedTextLength = 0;
+        while (keepCount < state.pieces.length) {
+          const piece = state.pieces[keepCount];
+          const nextConsumedLength = consumedTextLength + piece.value.length;
+          if (nextConsumedLength > commonPrefixLength) {
+            break;
+          }
+          consumedTextLength = nextConsumedLength;
+          keepCount += 1;
+        }
+
+        const keptPieces = keepCount > 0 ? state.pieces.slice(0, keepCount) : [];
+        const suffix = text.slice(consumedTextLength);
+        const suffixPieces = suffix ? [{ id: state.nextPieceId++, value: suffix }] : [];
+        nextPieces = suffixPieces.length > 0 ? [...keptPieces, ...suffixPieces] : keptPieces;
+      }
+
       state.previousText = text;
-      state.pieces = rebuiltPieces;
-      nextPieces = rebuiltPieces;
+      state.pieces = nextPieces;
     }
 
-    let cancelled = false;
-    Promise.resolve().then(() => {
-      if (!cancelled) {
-        setPieces(nextPieces);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
+    setPieces((previousPieces) => (previousPieces === nextPieces ? previousPieces : nextPieces));
   }, [text]);
 
   return (

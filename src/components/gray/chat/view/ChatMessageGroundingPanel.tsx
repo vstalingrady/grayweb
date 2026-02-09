@@ -396,14 +396,6 @@ const isLikelyInternalHost = (hostname: string): boolean => {
   return false;
 };
 
-const buildWebsiteScreenshotCandidates = (url: URL): string[] => {
-  const target = encodeURIComponent(url.toString());
-  return [
-    `https://s.wordpress.com/mshots/v1/${target}?w=1200&h=675`,
-    `https://s0.wp.com/mshots/v1/${target}?w=1200&h=675`,
-  ];
-};
-
 const buildWebsiteThumbnailCandidatesFromHref = (href?: string): string[] => {
   if (!href) {
     return [];
@@ -425,7 +417,7 @@ const buildWebsiteThumbnailCandidatesFromHref = (href?: string): string[] => {
     if (hasDirectImageExtension) {
       return [parsed.toString()];
     }
-    return buildWebsiteScreenshotCandidates(parsed);
+    return [];
   } catch {
     return [];
   }
@@ -678,6 +670,7 @@ export function ChatMessageGroundingPanel({ metadata, t }: ChatMessageGroundingP
   const previewLookupCandidates = Array.from(
     new Set(
       cards
+        .filter((card) => !card.previewImageUrl)
         .map((card) => card.href?.trim())
         .filter((href): href is string => Boolean(href) && HTTP_URL_PATTERN.test(href))
     )
@@ -718,7 +711,6 @@ export function ChatMessageGroundingPanel({ metadata, t }: ChatMessageGroundingP
     }
 
     const loadPreviews = async () => {
-      const discovered: Record<string, string> = {};
       await Promise.all(
         pendingFetches.map(async (href) => {
           try {
@@ -730,27 +722,31 @@ export function ChatMessageGroundingPanel({ metadata, t }: ChatMessageGroundingP
               signal: controller.signal,
             });
             if (!response.ok) {
-              if (response.status >= 400 && response.status < 500) {
-                linkPreviewImageCache.set(href, null);
-              }
+              linkPreviewImageCache.set(href, null);
               return;
             }
             const payload = (await response.json()) as unknown;
             const imageUrl = resolveLinkPreviewImage(payload);
             linkPreviewImageCache.set(href, imageUrl);
             if (imageUrl) {
-              discovered[href] = imageUrl;
+              if (cancelled) {
+                return;
+              }
+              setResolvedPreviewByHref((previous) => {
+                if (previous[href] === imageUrl) {
+                  return previous;
+                }
+                return { ...previous, [href]: imageUrl };
+              });
             }
-          } catch {
-            // Transient network failures should be retryable on a future render.
+          } catch (error) {
+            if (error instanceof DOMException && error.name === "AbortError") {
+              return;
+            }
+            linkPreviewImageCache.set(href, null);
           }
         })
       );
-
-      if (cancelled || Object.keys(discovered).length === 0) {
-        return;
-      }
-      setResolvedPreviewByHref((previous) => ({ ...previous, ...discovered }));
     };
 
     void loadPreviews();

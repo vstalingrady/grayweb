@@ -207,7 +207,8 @@ export function EventComposer({
     }
 
     const updatePosition = () => {
-      if (!isOpen || !anchorRect) {
+      const isMobileViewport = window.innerWidth <= 768;
+      if (!isOpen || !anchorRect || isMobileViewport) {
         setAnchoredPosition(null);
         setAnchorSide(null);
         return;
@@ -217,23 +218,25 @@ export function EventComposer({
       const cardRect = card?.getBoundingClientRect();
       const cardWidth = cardRect?.width ?? 360;
       const cardHeight = cardRect?.height ?? 420;
-      const padding = 16;
-      const maxLeft = Math.max(padding, window.innerWidth - padding - cardWidth);
-      const preferredRight = anchorRect.left + anchorRect.width + padding;
+      const horizontalPadding = 16;
+      const topPadding = 16;
+      const bottomPadding = 16;
+      const maxLeft = Math.max(horizontalPadding, window.innerWidth - horizontalPadding - cardWidth);
+      const preferredRight = anchorRect.left + anchorRect.width + horizontalPadding;
       let left = Math.min(preferredRight, maxLeft);
       let side: "left" | "right" = "right";
 
       if (preferredRight > maxLeft) {
-        const altLeft = anchorRect.left - cardWidth - padding;
-        left = Math.min(Math.max(padding, altLeft), maxLeft);
+        const altLeft = anchorRect.left - cardWidth - horizontalPadding;
+        left = Math.min(Math.max(horizontalPadding, altLeft), maxLeft);
         side = "left";
       } else {
-        left = Math.max(padding, left);
+        left = Math.max(horizontalPadding, left);
       }
 
       let top = anchorRect.top + anchorRect.height / 2 - cardHeight / 2;
-      const maxTop = Math.max(padding, window.innerHeight - padding - cardHeight);
-      top = Math.min(Math.max(padding, top), maxTop);
+      const maxTop = Math.max(topPadding, window.innerHeight - bottomPadding - cardHeight);
+      top = Math.min(Math.max(topPadding, top), maxTop);
 
       setAnchoredPosition({ top, left });
       setAnchorSide(side);

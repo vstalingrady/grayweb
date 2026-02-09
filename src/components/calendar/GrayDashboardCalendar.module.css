@@ -1554,12 +1554,57 @@
   position: relative;
   z-index: 1;
   pointer-events: auto;
-  width: min(340px, 92vw);
+  width: min(324px, 90vw);
   background: rgba(24, 24, 24, 0.96);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
   padding: 16px 16px 14px;
   box-shadow: none;
+}
+
+@media (max-width: 768px) {
+  .composerOverlay {
+    --composer-mobile-card-shift: 24px;
+    --composer-mobile-top-offset: calc(env(safe-area-inset-top, 0px) + 78px + var(--composer-mobile-card-shift));
+    --composer-mobile-bottom-offset: calc(env(safe-area-inset-bottom, 0px) + 16px);
+    align-items: flex-start;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: var(--composer-mobile-top-offset) 12px var(--composer-mobile-bottom-offset);
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .composerCard {
+    display: flex;
+    flex-direction: column;
+    width: min(324px, 92vw);
+    margin: 0 auto;
+    max-height: calc(100vh - var(--composer-mobile-top-offset) - var(--composer-mobile-bottom-offset));
+    max-height: calc(100dvh - var(--composer-mobile-top-offset) - var(--composer-mobile-bottom-offset));
+    overflow: hidden;
+  }
+
+  .composerHeader {
+    flex: 0 0 auto;
+  }
+
+  .composerForm {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 2px);
+  }
+
+  .composerDatePopover,
+  .composerColorPopover {
+    max-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px);
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px);
+    overflow-y: auto;
+  }
 }
 
 .composerHeader {
@@ -2038,7 +2083,7 @@
   z-index: 100;
 }
 
-@media (min-width: 768px) {
+@media (min-width: 769px) {
   .composerDatePopover {
     transform: translateX(calc(-100% - 20px));
   }
@@ -2434,6 +2479,13 @@
 
   .calendarMonthNavArrows {
     margin-left: auto;
+  }
+
+  /* Keep header rows stacked as a single block to avoid mobile overlap with top controls. */
+  .stickyHeaderGroup .calendarMonthRow,
+  .stickyHeaderGroup .calendarHeaderRow,
+  .stickyHeaderGroup .calendarAllDayRow {
+    position: static;
   }
 }
 

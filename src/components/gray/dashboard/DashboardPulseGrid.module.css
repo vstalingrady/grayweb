@@ -2,13 +2,64 @@
   display: grid;
   width: 100%;
   grid-template-columns: 320px 1fr;
-  grid-template-rows: 1fr;
-  grid-template-areas: "proactivity events";
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    "calendar events"
+    "proactivity events";
   gap: 24px;
   padding: 24px 0;
   max-width: 1400px;
   margin: 0 auto;
   align-items: start;
+}
+
+.mobilePulseLayout {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(var(--chat-column-max-width, 680px), 100%);
+  height: 100%;
+  min-height: 0;
+  margin: 0 auto;
+  padding: 0 0 calc(env(safe-area-inset-bottom, 0px) + 8px);
+  gap: 12px;
+}
+
+.mobilePulseSection {
+  background: #090909;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+}
+
+.mobilePulseCalendarSection {
+  padding-bottom: 12px;
+}
+
+.mobilePulseEventsSection {
+  min-height: 0;
+}
+
+.mobilePulseProactivitySection {
+  align-self: stretch;
+}
+
+.mobilePulseSectionBody {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mobileEventList {
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.mobileProactivityChecklist {
+  gap: 6px;
 }
 
 .dashboardHeaderArea {
@@ -81,10 +132,69 @@
   min-height: 240px;
 }
 
+.dashboardCardCalendar {
+  grid-area: calendar;
+  min-height: 260px;
+}
+
 .dashboardCardProactivity {
   grid-area: proactivity;
   height: 100%;
   min-height: 480px;
+}
+
+.miniCalendarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+}
+
+.miniCalendarMonthLabel {
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: rgba(240, 240, 240, 0.82);
+  white-space: nowrap;
+}
+
+.miniCalendarHeaderControls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.miniCalendarNavButton {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: rgba(245, 245, 245, 0.9);
+  cursor: pointer;
+}
+
+.miniCalendarNavButton:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.miniCalendarBody {
+  padding-top: 0;
+  gap: 12px;
+}
+
+.miniCalendarCompact {
+  --mini-month-gap: 8px;
+  --mini-month-week-gap: 3px;
+  --mini-month-day-gap: 1px;
+  --mini-month-cell-max: clamp(22px, calc((100% - (6 * var(--mini-month-day-gap))) / 7), 34px);
+  --mini-month-day-font: 0.62rem;
+  --mini-month-weekday-font: 0.48rem;
+  --mini-month-weekday-letter-spacing: 0.22em;
 }
 
 .dashboardCardAction {
@@ -204,6 +314,7 @@
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  min-height: 0;
 }
 
 .dashboardSection {
@@ -458,9 +569,10 @@
     grid-template-columns: 1fr;
     grid-template-rows: auto;
     grid-template-areas:
+      "calendar"
       "events"
       "proactivity";
-    padding: 16px 0;
+    padding: calc(env(safe-area-inset-top, 0px) + 8px) 0 calc(env(safe-area-inset-bottom, 0px) + 8px);
   }
 
   .dashboardHeaderArea {
@@ -474,17 +586,36 @@
 
   .dashboardCard {
     height: auto;
-    min-height: 210px;
+    min-height: 0;
+    padding: 14px;
+  }
+
+  .dashboardCardCalendar {
+    min-height: 0;
+  }
+
+  .dashboardCardEvents {
+    min-height: 0;
   }
 
   .dashboardCardProactivity {
-    min-height: 210px;
+    min-height: 0;
+    height: auto;
+  }
+
+  .dashboardCardBody {
+    overflow: visible;
   }
 }
 
 /* Light mode: dashboard card surfaces and control contrast */
 :global(html.light) .dashboardHeaderArea,
 :global(html.light) .dashboardCard {
+  background: var(--gray-ui-surface-elevated, #ffffff);
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+}
+
+:global(html.light) .mobilePulseSection {
   background: var(--gray-ui-surface-elevated, #ffffff);
   border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
 }
@@ -521,6 +652,18 @@
 :global(html.light) .dashboardCardAction:focus-visible {
   background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
   color: var(--gray-ui-text, rgba(24, 24, 27, 0.94));
+}
+
+:global(html.light) .miniCalendarMonthLabel {
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.9));
+}
+
+:global(html.light) .miniCalendarNavButton {
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.9));
+}
+
+:global(html.light) .miniCalendarNavButton:hover {
+  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
 }
 
 :global(html.light) .dashboardSection + .dashboardSection {

@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Check,
+  ChevronLeft,
+  ChevronRight,
   Plus,
   Settings,
   Square,
@@ -17,6 +19,7 @@ import {
 import { PLAN_EVENT_ID_PREFIX } from "@/components/gray/planCalendarUtils";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
 import { toDateKey } from "@/app/gray/utils";
+import { MiniMonth } from "@/components/calendar/MiniMonth";
 import type { ProactivityItem } from "@/components/gray/types";
 import type { CalendarEvent } from "@/components/calendar/types";
 
@@ -105,6 +108,8 @@ type DashboardPulseGridProps = {
   canConfigureProactivity: boolean;
   onConfigureProactivity: () => void;
   onAddEvent?: (date: Date) => void;
+  onSelectDate?: (date: Date) => void;
+  isCompactLayout?: boolean;
 };
 
 export function DashboardPulseGrid({
@@ -117,6 +122,8 @@ export function DashboardPulseGrid({
   canConfigureProactivity,
   onConfigureProactivity,
   onAddEvent,
+  onSelectDate,
+  isCompactLayout = false,
 }: DashboardPulseGridProps) {
   const { t } = useI18n();
   const { notificationPreferences, setNotificationPreference } = useNotificationPreferences();
@@ -197,6 +204,68 @@ export function DashboardPulseGrid({
   const selectedDay = selectedDate ?? currentDate;
   const selectedDayKey = toDateKey(selectedDay);
   const isViewingToday = selectedDayKey === toDateKey(currentDate);
+  const [calendarReferenceDate, setCalendarReferenceDate] = useState(() => {
+    const initial = new Date(selectedDay);
+    initial.setDate(1);
+    initial.setHours(0, 0, 0, 0);
+    return initial;
+  });
+
+  useEffect(() => {
+    const nextReference = new Date(selectedDay);
+    nextReference.setDate(1);
+    nextReference.setHours(0, 0, 0, 0);
+
+    setCalendarReferenceDate((previous) => {
+      if (
+        previous.getFullYear() === nextReference.getFullYear() &&
+        previous.getMonth() === nextReference.getMonth()
+      ) {
+        return previous;
+      }
+      return nextReference;
+    });
+  }, [selectedDay]);
+
+  const shiftCalendarMonth = useCallback((delta: number) => {
+    setCalendarReferenceDate((previous) => {
+      const next = new Date(previous);
+      next.setMonth(previous.getMonth() + delta, 1);
+      next.setHours(0, 0, 0, 0);
+      return next;
+    });
+  }, []);
+
+  const calendarMonthLabel = useMemo(
+    () =>
+      calendarReferenceDate.toLocaleDateString(undefined, {
+        month: "long",
+        year: "numeric",
+      }),
+    [calendarReferenceDate]
+  );
+
+  const handleMiniMonthSelect = useCallback(
+    (nextDate: Date) => {
+      const normalized = new Date(nextDate);
+      normalized.setHours(0, 0, 0, 0);
+
+      setCalendarReferenceDate((previous) => {
+        if (
+          previous.getFullYear() === normalized.getFullYear() &&
+          previous.getMonth() === normalized.getMonth()
+        ) {
+          return previous;
+        }
+        const nextReference = new Date(normalized);
+        nextReference.setDate(1);
+        return nextReference;
+      });
+
+      onSelectDate?.(normalized);
+    },
+    [onSelectDate]
+  );
 
   const eventsForDay = useMemo(() => {
     return events
@@ -219,10 +288,67 @@ export function DashboardPulseGrid({
     [eventsForDay, t]
   );
 
+  const rootClassName = isCompactLayout ? styles.mobilePulseLayout : styles.dashboardGridFinal;
+  const calendarSectionClassName = isCompactLayout
+    ? `${styles.mobilePulseSection} ${styles.mobilePulseCalendarSection}`
+    : `${styles.dashboardCard} ${styles.dashboardCardCalendar}`;
+  const eventsSectionClassName = isCompactLayout
+    ? `${styles.mobilePulseSection} ${styles.mobilePulseEventsSection}`
+    : `${styles.dashboardCard} ${styles.dashboardCardEvents}`;
+  const proactivitySectionClassName = isCompactLayout
+    ? `${styles.mobilePulseSection} ${styles.mobilePulseProactivitySection}`
+    : `${styles.dashboardCard} ${styles.dashboardCardProactivity}`;
+  const bodyClassName = isCompactLayout
+    ? `${styles.dashboardCardBody} ${styles.mobilePulseSectionBody}`
+    : styles.dashboardCardBody;
+  const miniCalendarBodyClassName = `${bodyClassName} ${styles.miniCalendarBody}`;
+  const eventListClassName = isCompactLayout
+    ? `${styles.dashboardEventList} ${styles.mobileEventList}`
+    : styles.dashboardEventList;
+  const checklistClassName = isCompactLayout
+    ? `${styles.proactivityChecklist} ${styles.mobileProactivityChecklist}`
+    : styles.proactivityChecklist;
+
   return (
-    <div className={styles.dashboardGridFinal}>
-      {/* EVENTS */}
-      <div className={`${styles.dashboardCard} ${styles.dashboardCardEvents}`}>
+    <div className={rootClassName}>
+      <div className={calendarSectionClassName}>
+        <div className={styles.dashboardCardHeader}>
+          <span className={styles.miniCalendarHeader}>
+            <span className={styles.miniCalendarMonthLabel}>{calendarMonthLabel}</span>
+            <span className={styles.miniCalendarHeaderControls}>
+              <button
+                type="button"
+                className={styles.miniCalendarNavButton}
+                aria-label={t("Previous")}
+                title={t("Go to previous month")}
+                onClick={() => shiftCalendarMonth(-1)}
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <button
+                type="button"
+                className={styles.miniCalendarNavButton}
+                aria-label={t("Next")}
+                title={t("Go to next month")}
+                onClick={() => shiftCalendarMonth(1)}
+              >
+                <ChevronRight size={14} />
+              </button>
+            </span>
+          </span>
+        </div>
+        <div className={miniCalendarBodyClassName}>
+          <div className={styles.miniCalendarCompact}>
+            <MiniMonth
+              referenceDate={calendarReferenceDate}
+              selectedDate={selectedDay}
+              onSelectDate={handleMiniMonthSelect}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className={eventsSectionClassName}>
         <div className={styles.dashboardCardHeader}>
           <h2 className={styles.dashboardCardTitle}>{t("Events")}</h2>
           {onAddEvent && (
@@ -236,10 +362,10 @@ export function DashboardPulseGrid({
             </button>
           )}
         </div>
-        <div className={styles.dashboardCardBody}>
+        <div className={bodyClassName}>
           <div className={styles.dashboardSection}>
             {eventEntries.length > 0 ? (
-              <ul className={styles.dashboardEventList}>
+              <ul className={eventListClassName}>
                 {eventEntries.map((entry) => (
                   <li key={`event-${entry.id}`} className={styles.dashboardEventItem}>
                     <div
@@ -267,8 +393,7 @@ export function DashboardPulseGrid({
         </div>
       </div>
 
-      {/* PROACTIVITY CARD SECOND */}
-      <div className={`${styles.dashboardCard} ${styles.dashboardCardProactivity}`}>
+      <div className={proactivitySectionClassName}>
         <div className={styles.dashboardCardHeader}>
           <h2 className={styles.dashboardCardTitle}>{t("Proactivity")}</h2>
           {canConfigureProactivity && (
@@ -282,7 +407,7 @@ export function DashboardPulseGrid({
             </button>
           )}
         </div>
-        <div className={styles.dashboardCardBody}>
+        <div className={bodyClassName}>
           {shouldShowNotificationBanner ? (
             <div className={styles.proactivityNotificationBanner}>
               <p>{notificationBannerLabel}</p>
@@ -298,7 +423,7 @@ export function DashboardPulseGrid({
             </div>
           ) : null}
           {scheduleEntries.length > 0 ? (
-            <ul className={styles.proactivityChecklist}>
+            <ul className={checklistClassName}>
               {scheduleEntries.map(({ label, delivered }, index) => (
                 <li key={`${label}-${index}`} className={styles.proactivityChecklistItem}>
                   <span className={styles.proactivityChecklistIcon} aria-hidden="true">
@@ -318,7 +443,6 @@ export function DashboardPulseGrid({
           )}
         </div>
       </div>
-
     </div>
   );
 }

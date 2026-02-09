@@ -113,21 +113,37 @@ export const resolveClientTimezone = (): string => {
 // Message utilities
 export const buildAssistantReply = (prompt: string) => {
     void prompt;
-    return "I encountered an unexpected issue and couldn't generate a response. Please try again.";
+    return "I couldn't complete that response. Please try again.";
 };
 
 export const buildAssistantErrorReply = (cause: unknown) => {
-    const base = "I couldn't reach the Gray backend to finish that request.";
+    const base = "I couldn't complete that request.";
     if (!cause) {
-        return `${base} Make sure the API service is running (try \`npm run backend\`) and then retry.`;
+        return `${base} Please try again.`;
     }
-    if (cause instanceof Error && cause.message.trim()) {
-        return `${base} Details: ${cause.message.trim()} — verify the service is up and try again.`;
+    if (cause instanceof Error) {
+        const details = cause.message.trim();
+        const normalized = details.toLowerCase();
+        if (normalized.includes("search")) {
+            return "Web search failed for that request. Please try again.";
+        }
+        if (normalized.includes("fetch") || normalized.includes("network")) {
+            return "I hit a network issue while generating that response. Please try again.";
+        }
+        if (details) {
+            return `${base} ${details}`;
+        }
+        return `${base} Please try again.`;
     }
     if (typeof cause === "string" && cause.trim().length > 0) {
-        return `${base} Details: ${cause.trim()}.`;
+        const details = cause.trim();
+        const normalized = details.toLowerCase();
+        if (normalized.includes("search")) {
+            return "Web search failed for that request. Please try again.";
+        }
+        return `${base} ${details}`;
     }
-    return `${base} Check that the API is reachable and try again.`;
+    return `${base} Please try again.`;
 };
 
 const MCP_TOOL_BLOCK_REGEX = /<use_mcp_tool[\s\S]*?<\/use_mcp_tool>/gi;

@@ -14,6 +14,7 @@ import {
   buildGeneralConversationId,
   normalizeAssistantContent,
   normalizeConversationIdValue,
+  stripMcpToolBlocks,
   resolveConversationMemoryEnabled,
   resolveClientTimezone,
   shouldIncludeWorkspaceContext,
@@ -337,7 +338,7 @@ export const useStreamAssistantReply = ({
               shouldClearToolStatusOnNextToken = false;
             }
             const prevAccumulated = accumulated;
-            accumulated = accumulated + delta;
+            accumulated = accumulated && delta.startsWith(accumulated) ? delta : accumulated + delta;
 
             const hasThinkingTag = accumulated.toLowerCase().includes("<thinking>");
             const hadThinkingTag = prevAccumulated.toLowerCase().includes("<thinking>");
@@ -355,8 +356,11 @@ export const useStreamAssistantReply = ({
             }
 
             if (assistantMessageId) {
-              updateMessage(targetSessionId, assistantMessageId, { content: accumulated });
-              updateSession(targetSessionId, { isResponding: true, pendingAutoStream: false });
+              updateMessage(
+                targetSessionId,
+                assistantMessageId,
+                { content: stripMcpToolBlocks(accumulated), __streamingPatch: true } as Partial<ChatMessage>
+              );
             }
             continue;
           }

@@ -74,7 +74,7 @@
 }
 
 .dashboardCalendarContainer[data-compact="true"] {
-  padding: clamp(12px, 4vh, 18px) clamp(16px, 6vw, 24px);
+  padding: 0 clamp(12px, 4vw, 18px) 0;
   overflow: visible;
 }
 
@@ -93,10 +93,9 @@
   border: none;
   padding: 0;
   box-shadow: none;
-  gap: clamp(16px, 5vh, 24px);
-  overflow-y: auto;
-  padding-bottom: 24px;
-  scrollbar-gutter: stable;
+  gap: 12px;
+  overflow: visible;
+  padding-bottom: 0;
 }
 
 :global([data-dashboard-tab="calendar"]) .dashboardCalendarSurface[data-compact="true"] {

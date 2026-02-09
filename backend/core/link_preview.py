@@ -15,7 +15,8 @@ import httpx
 from backend.core.cache import TTLCache
 
 MAX_PREVIEW_HTML_CHARS = 700_000
-LINK_PREVIEW_TIMEOUT_SECONDS = 9.0
+LINK_PREVIEW_TIMEOUT_SECONDS = 4.0
+LINK_PREVIEW_DNS_TIMEOUT_SECONDS = 1.5
 LINK_PREVIEW_MAX_IMAGE_BYTES = 5 * 1024 * 1024
 LINK_PREVIEW_CACHE = TTLCache(ttl_seconds=60 * 30, max_size=2048)
 
@@ -97,7 +98,12 @@ def _is_disallowed_hostname(hostname: str) -> bool:
 async def _validate_public_dns(hostname: str) -> None:
     loop = asyncio.get_running_loop()
     try:
-        infos = await loop.getaddrinfo(hostname, None, type=socket.SOCK_STREAM)
+        infos = await asyncio.wait_for(
+            loop.getaddrinfo(hostname, None, type=socket.SOCK_STREAM),
+            timeout=LINK_PREVIEW_DNS_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError as exc:
+        raise ValueError("Unable to resolve host.") from exc
     except socket.gaierror as exc:
         raise ValueError("Unable to resolve host.") from exc
 

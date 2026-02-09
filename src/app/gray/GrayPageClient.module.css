@@ -91,18 +91,19 @@
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: var(--background, #121212);
+    --mobile-sidebar-overlay-opacity: 0.42;
     z-index: 9998;
     transition: opacity 0.3s ease;
   }
 
   .overlay[data-visible="true"] {
-    opacity: 1;
+    opacity: var(--mobile-sidebar-overlay-opacity);
     pointer-events: auto;
   }
 
   .layout[data-mobile-sidebar="true"][data-sidebar-expanded="true"] .overlay {
-    opacity: 1;
+    opacity: var(--mobile-sidebar-overlay-opacity);
     pointer-events: auto;
   }
 }
@@ -193,8 +194,8 @@
     position: relative;
     width: 100%;
     flex-shrink: 0;
-    padding-top: 48px;
-    padding-top: calc(48px + env(safe-area-inset-top));
+    padding-top: 60px;
+    padding-top: calc(60px + env(safe-area-inset-top));
     /* Account for mobile header */
     /* Use full viewport height; padding offsets the header */
     height: 100vh;
@@ -2869,6 +2870,17 @@
 
 .page[data-compact="true"] .main[data-dashboard="true"][data-dashboard-free="true"] {
   padding: 0;
+}
+
+@media (max-width: 768px) {
+  .page[data-dashboard-tab="pulse"] .main[data-dashboard="true"][data-dashboard-free="true"],
+  .page[data-dashboard-tab="calendar"] .main[data-dashboard="true"][data-dashboard-free="true"] {
+    padding-top: calc(60px + env(safe-area-inset-top, 0px));
+    padding-right: 0;
+    padding-bottom: 0;
+    padding-left: 0;
+    overflow-y: auto;
+  }
 }
 
 .page[data-compact="true"] .main[data-view="general"] {

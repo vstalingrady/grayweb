@@ -137,6 +137,9 @@ export const useSessionActions = ({
 
   const updateMessage = useCallback(
     (sessionId: string, messageId: string, partial: Partial<ChatMessage>) => {
+      const { __streamingPatch, ...incomingPartial } = partial as Partial<ChatMessage> & {
+        __streamingPatch?: boolean;
+      };
       const throttledKey = `${sessionId}:${messageId}`;
       const existingTimeout = throttledUpdateTimeoutsRef.current.get(throttledKey);
       if (existingTimeout) {
@@ -157,28 +160,36 @@ export const useSessionActions = ({
               return message;
             }
             didUpdate = true;
-            let nextPartial = partial;
-            if (typeof partial.content === "string" && message.role === "assistant") {
-              const parsedContent = parseGrayTitleMarkers(partial.content);
-              const normalized = normalizeAssistantMessage(message.role, parsedContent.cleanText);
-              nextPartial = {
-                ...partial,
-                content: normalized.content,
-              };
-              const incomingReminders =
-                Array.isArray(partial.reminders) && partial.reminders.length > 0
-                  ? partial.reminders
-                  : undefined;
-              const parsedReminders =
-                normalized.reminders && normalized.reminders.length > 0 ? normalized.reminders : undefined;
-              const existingReminders =
-                message.reminders && message.reminders.length > 0 ? message.reminders : undefined;
-              if (incomingReminders || parsedReminders || existingReminders) {
-                nextPartial.reminders = incomingReminders ?? parsedReminders ?? existingReminders;
-              }
+            let nextPartial: Partial<ChatMessage> = incomingPartial;
+            if (typeof incomingPartial.content === "string" && message.role === "assistant") {
+              if (__streamingPatch) {
+                // Keep streaming patches append-only and defer expensive normalization to the final update.
+                nextPartial = {
+                  ...incomingPartial,
+                  content: incomingPartial.content,
+                };
+              } else {
+                const parsedContent = parseGrayTitleMarkers(incomingPartial.content);
+                const normalized = normalizeAssistantMessage(message.role, parsedContent.cleanText);
+                nextPartial = {
+                  ...incomingPartial,
+                  content: normalized.content,
+                };
+                const incomingReminders =
+                  Array.isArray(incomingPartial.reminders) && incomingPartial.reminders.length > 0
+                    ? incomingPartial.reminders
+                    : undefined;
+                const parsedReminders =
+                  normalized.reminders && normalized.reminders.length > 0 ? normalized.reminders : undefined;
+                const existingReminders =
+                  message.reminders && message.reminders.length > 0 ? message.reminders : undefined;
+                if (incomingReminders || parsedReminders || existingReminders) {
+                  nextPartial.reminders = incomingReminders ?? parsedReminders ?? existingReminders;
+                }
 
-              if (parsedContent.title) {
-                assistantAutoTitle = parsedContent.title;
+                if (parsedContent.title) {
+                  assistantAutoTitle = parsedContent.title;
+                }
               }
             }
             return { ...message, ...nextPartial };
@@ -193,6 +204,9 @@ export const useSessionActions = ({
         });
         if (!didUpdate) {
           return prev;
+        }
+        if (__streamingPatch) {
+          return next;
         }
         const ordered = normalizeSessionsList(next);
         persistSessions(ordered);
