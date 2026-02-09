@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useMemo, useRef, useState, type RefObject } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import styles from "@/components/gray/chat/ChatStyles.module.css";
@@ -30,6 +30,78 @@ type InlineSourceLink = {
   href: string;
   label: string;
 };
+
+type StreamingTokenPiece = {
+  id: number;
+  value: string;
+};
+
+const splitStreamingChunk = (chunk: string): string[] => {
+  if (!chunk) {
+    return [];
+  }
+  return chunk.split(/(\s+)/).filter((piece) => piece.length > 0);
+};
+
+const StreamingTokenText = memo(({ text, ariaLive }: { text: string; ariaLive?: "polite" }) => {
+  const [pieces, setPieces] = useState<StreamingTokenPiece[]>([]);
+  const streamStateRef = useRef<{ previousText: string; nextPieceId: number; pieces: StreamingTokenPiece[] }>({
+    previousText: "",
+    nextPieceId: 0,
+    pieces: [],
+  });
+
+  useEffect(() => {
+    const state = streamStateRef.current;
+    let nextPieces: StreamingTokenPiece[];
+
+    if (!text) {
+      state.previousText = "";
+      state.nextPieceId = 0;
+      state.pieces = [];
+      nextPieces = [];
+    } else if (state.previousText && text.startsWith(state.previousText)) {
+      const appendedChunk = text.slice(state.previousText.length);
+      const appendedPieces = splitStreamingChunk(appendedChunk).map((value) => ({
+        id: state.nextPieceId++,
+        value,
+      }));
+      nextPieces = appendedPieces.length > 0 ? [...state.pieces, ...appendedPieces] : state.pieces;
+      state.previousText = text;
+      state.pieces = nextPieces;
+    } else {
+      state.nextPieceId = 0;
+      const rebuiltPieces = splitStreamingChunk(text).map((value) => ({
+        id: state.nextPieceId++,
+        value,
+      }));
+      state.previousText = text;
+      state.pieces = rebuiltPieces;
+      nextPieces = rebuiltPieces;
+    }
+
+    let cancelled = false;
+    Promise.resolve().then(() => {
+      if (!cancelled) {
+        setPieces(nextPieces);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [text]);
+
+  return (
+    <div className={styles.chatStreamingText} aria-live={ariaLive}>
+      {pieces.map((piece) => (
+        <span key={piece.id} className={styles.chatStreamingToken}>
+          {piece.value}
+        </span>
+      ))}
+    </div>
+  );
+});
+StreamingTokenText.displayName = "StreamingTokenText";
 
 const extractGroundingChunks = (metadata?: GroundingMetadata | null) =>
   metadata?.grounding_chunks ??
@@ -450,13 +522,17 @@ export const ChatMessagesList = memo(
                         data-streaming={isStreamingMessage ? "true" : undefined}
                         aria-live={isStreamingMessage ? "polite" : undefined}
                       >
-                        <ReactMarkdown
-                          components={markdownComponents}
-                          remarkPlugins={MARKDOWN_PLUGINS}
-                          rehypePlugins={[[rehypeKatex, { strict: false }]]}
-                        >
-                          {visibleAssistantText}
-                        </ReactMarkdown>
+                        {isStreamingMessage ? (
+                          <StreamingTokenText text={visibleAssistantText} ariaLive="polite" />
+                        ) : (
+                          <ReactMarkdown
+                            components={markdownComponents}
+                            remarkPlugins={MARKDOWN_PLUGINS}
+                            rehypePlugins={[[rehypeKatex, { strict: false }]]}
+                          >
+                            {visibleAssistantText}
+                          </ReactMarkdown>
+                        )}
                       </div>
                     ) : null}
                     {isAssistant && message.groundingMetadata ? (
