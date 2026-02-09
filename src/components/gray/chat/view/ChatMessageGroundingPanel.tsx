@@ -857,7 +857,7 @@ export function ChatMessageGroundingPanel({ metadata, t }: ChatMessageGroundingP
           </div>
           <div className={styles.chatGroundingCardContent}>
             <div className={styles.chatGroundingCardTitle}>{card.title}</div>
-            {card.snippet ? <div className={styles.chatGroundingCardSnippet}>{card.snippet}</div> : null}
+            {card.siteLabel ? <div className={styles.chatGroundingCardSite}>{card.siteLabel}</div> : null}
           </div>
         </div>
       </>
