@@ -219,7 +219,8 @@ def resolve_web_search_enabled(
 
     - `on`: always enabled.
     - `off`: disabled unless the user explicitly asks to search.
-    - `auto`: enabled by default (model decides when to call web search).
+    - `auto`: enabled only when the client/heuristic signals search intent
+      (Codex-style constrained auto mode), or on explicit search.
     - `None`: legacy payload behavior (`client_hint` or explicit search).
 
     Cross-chat memory prompts are blocked from implicit web search.
@@ -235,7 +236,9 @@ def resolve_web_search_enabled(
     if is_cross_chat_memory_request(message) and not explicit_search:
         return False
     if mode == "auto":
-        return True
+        if bool(client_hint):
+            return True
+        return should_enable_search(message, conversation_history=conversation_history)
 
     return bool(client_hint) or explicit_search
 

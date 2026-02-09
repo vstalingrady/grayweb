@@ -65,6 +65,11 @@ def test_mode_auto_disables_meta_search_history_question() -> None:
     assert _resolve_web_search_enabled(request) is False
 
 
-def test_mode_auto_defaults_to_model_driven_search_enabled() -> None:
+def test_mode_auto_respects_client_signal_for_non_search_prompt() -> None:
     request = _build_request("write me a haiku", mode="auto", enabled=False)
+    assert _resolve_web_search_enabled(request) is False
+
+
+def test_mode_auto_enables_when_client_signals_search_intent() -> None:
+    request = _build_request("latest nba score", mode="auto", enabled=True)
     assert _resolve_web_search_enabled(request) is True

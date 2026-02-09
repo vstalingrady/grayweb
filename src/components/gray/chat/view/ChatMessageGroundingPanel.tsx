@@ -186,12 +186,15 @@ const classifyGroundingHref = (href?: string, siteLabel?: string): string => {
 };
 
 const buildGroundingCardDetail = (href?: string, siteLabel?: string, fallbackSnippet?: string): string | undefined => {
+  const fallback = extractSourceSnippet(fallbackSnippet);
+  if (fallback) {
+    return fallback;
+  }
   const classification = classifyGroundingHref(href, siteLabel);
-  if (classification) {
+  if (classification && classification !== "Web reference") {
     return classification;
   }
-  const fallback = extractSourceSnippet(fallbackSnippet);
-  return fallback;
+  return undefined;
 };
 
 const collapseWhitespace = (value: string): string => value.replace(/\s+/g, " ").trim();
@@ -854,7 +857,6 @@ export function ChatMessageGroundingPanel({ metadata, t }: ChatMessageGroundingP
           </div>
           <div className={styles.chatGroundingCardContent}>
             <div className={styles.chatGroundingCardTitle}>{card.title}</div>
-            {card.siteLabel ? <div className={styles.chatGroundingCardSite}>{card.siteLabel}</div> : null}
             {card.snippet ? <div className={styles.chatGroundingCardSnippet}>{card.snippet}</div> : null}
           </div>
         </div>

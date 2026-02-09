@@ -220,7 +220,7 @@ export const shouldEnableWebSearch = (message: string, recentUserMessages?: stri
     return true;
   }
 
-  if (normalized.includes("what's happening") || normalized.includes("whats happening")) {
+  if ((normalized.includes("what's happening") || normalized.includes("whats happening")) && wordCount > 3) {
     return true;
   }
 
