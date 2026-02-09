@@ -125,6 +125,15 @@ export const useDismissableLayer = ({
       document.removeEventListener("keydown", handleKeyDown);
 
       if (focusTrapElement || returnFocusElement) {
+        const activeElement = document.activeElement as HTMLElement | null;
+        const hasUserFocusedNewTarget =
+          activeElement &&
+          activeElement !== document.body &&
+          activeElement !== document.documentElement;
+        if (hasUserFocusedNewTarget) {
+          return;
+        }
+
         const focusTarget = returnFocusElement ?? previouslyFocusedElement;
         if (focusTarget && document.contains(focusTarget)) {
           focusTarget.focus();

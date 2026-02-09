@@ -37,21 +37,22 @@
 }
 
 .closeButton {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  border: none;
+  background: transparent;
   color: rgba(255, 255, 255, 0.88);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
+  padding: 2px;
 }
 
 .closeButton:hover {
-  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 1);
 }
 
 .closeButton:focus-visible {
@@ -71,7 +72,7 @@
   color: rgba(255, 255, 255, 0.9);
   outline: none;
   font-family: inherit;
-  padding: 0;
+  padding: 0 0 0 8px;
 }
 
 .searchInput:focus-visible {
@@ -304,13 +305,13 @@
 }
 
 :global(html.light) .closeButton {
-  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.1));
-  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+  border-color: transparent;
+  background: transparent;
   color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.92));
 }
 
 :global(html.light) .closeButton:hover {
-  background: var(--gray-ui-hover-strong, rgba(0, 0, 0, 0.1));
+  background: transparent;
   color: var(--gray-ui-text, rgba(24, 24, 27, 0.94));
 }
 

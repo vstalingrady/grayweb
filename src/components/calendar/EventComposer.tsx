@@ -94,7 +94,6 @@ export function EventComposer({
   });
   const cardRef = useRef<HTMLDivElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
-  const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
   const colorPickerRef = useRef<HTMLDivElement | null>(null);
   const colorPickerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const colorPickerPopoverRef = useRef<HTMLDivElement | null>(null);
@@ -386,9 +385,6 @@ export function EventComposer({
       return undefined;
     }
 
-    previouslyFocusedElementRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-
     const focusInitialField = () => {
       const card = cardRef.current;
       if (!card) return;
@@ -459,10 +455,6 @@ export function EventComposer({
     return () => {
       window.cancelAnimationFrame(animationFrame);
       window.removeEventListener("keydown", handleKeyDown);
-      const previous = previouslyFocusedElementRef.current;
-      if (previous && document.contains(previous)) {
-        previous.focus();
-      }
     };
   }, [isOpen]);
 

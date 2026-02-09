@@ -17,38 +17,13 @@ import {
 import { PLAN_EVENT_ID_PREFIX } from "@/components/gray/planCalendarUtils";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
 import { toDateKey } from "@/app/gray/utils";
-import type { PlanItem, ProactivityItem } from "@/components/gray/types";
+import type { ProactivityItem } from "@/components/gray/types";
 import type { CalendarEvent } from "@/components/calendar/types";
 
 type ProactivityScheduleEntry = {
   label: string;
   delivered: boolean;
 };
-
-type VisibleTaskEntry = {
-  id: string;
-  label: string;
-  completed: boolean;
-  scheduleSlot: string | null;
-  deadline: string | null;
-};
-
-type UnifiedEntry =
-  | {
-    kind: "event";
-    id: string;
-    title: string;
-    color: string;
-    meta: string;
-    details: string | null;
-  }
-  | {
-    kind: "task";
-    id: string;
-    title: string;
-    completed: boolean;
-    meta: string;
-  };
 
 const TIME_LABEL_OPTIONS: Intl.DateTimeFormatOptions = {
   hour: "2-digit",
@@ -62,29 +37,13 @@ const DATE_TIME_LABEL_OPTIONS: Intl.DateTimeFormatOptions = {
   minute: "2-digit",
 };
 
-const DATE_ONLY_LABEL_OPTIONS: Intl.DateTimeFormatOptions = {
-  month: "short",
-  day: "numeric",
-};
-
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const formatTimeLabel = (value: Date): string =>
   value.toLocaleTimeString(undefined, TIME_LABEL_OPTIONS);
 
-const parseDateValue = (value: string | null | undefined): Date | null => {
-  if (!value) {
-    return null;
-  }
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
-
 const formatDateTimeLabel = (value: Date): string =>
   value.toLocaleString(undefined, DATE_TIME_LABEL_OPTIONS);
-
-const formatDateOnlyLabel = (value: Date): string =>
-  value.toLocaleDateString(undefined, DATE_ONLY_LABEL_OPTIONS);
 
 const isExactlyMidnight = (value: Date) =>
   value.getHours() === 0 &&
@@ -136,57 +95,16 @@ const doesEventIntersectDay = (event: CalendarEvent, day: Date): boolean => {
   return event.start < dayEnd && event.end > dayStart;
 };
 
-const parseScheduleSlotRange = (
-  baseDate: Date,
-  slot: string | null | undefined
-): { start: Date; end: Date } | null => {
-  if (!slot) {
-    return null;
-  }
-  const match = slot.match(/^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/);
-  if (!match) {
-    return null;
-  }
-  const startHours = Number(match[1]);
-  const startMinutes = Number(match[2]);
-  const endHours = Number(match[3]);
-  const endMinutes = Number(match[4]);
-  if (
-    [startHours, startMinutes, endHours, endMinutes].some((value) => Number.isNaN(value)) ||
-    startHours < 0 ||
-    startHours > 23 ||
-    endHours < 0 ||
-    endHours > 23 ||
-    startMinutes < 0 ||
-    startMinutes > 59 ||
-    endMinutes < 0 ||
-    endMinutes > 59
-  ) {
-    return null;
-  }
-
-  const start = new Date(baseDate);
-  start.setHours(startHours, startMinutes, 0, 0);
-  const end = new Date(baseDate);
-  end.setHours(endHours, endMinutes, 0, 0);
-  if (end.getTime() <= start.getTime()) {
-    end.setDate(end.getDate() + 1);
-  }
-  return { start, end };
-};
-
 type DashboardPulseGridProps = {
   currentDate: Date;
   selectedDate: Date;
   viewerName: string | null;
   proactivity: ProactivityItem | null;
   events: CalendarEvent[];
-  plans?: PlanItem[];
   proactivityDeliveryKeys?: ReadonlySet<string>;
   canConfigureProactivity: boolean;
   onConfigureProactivity: () => void;
   onAddEvent?: (date: Date) => void;
-  onTogglePlan?: (id: string) => void;
 };
 
 export function DashboardPulseGrid({
@@ -195,12 +113,10 @@ export function DashboardPulseGrid({
   viewerName: _viewerName,
   proactivity,
   events,
-  plans = [],
   proactivityDeliveryKeys,
   canConfigureProactivity,
   onConfigureProactivity,
   onAddEvent,
-  onTogglePlan,
 }: DashboardPulseGridProps) {
   const { t } = useI18n();
   const { notificationPreferences, setNotificationPreference } = useNotificationPreferences();
@@ -291,143 +207,24 @@ export function DashboardPulseGrid({
       .sort((a, b) => a.start.getTime() - b.start.getTime());
   }, [events, selectedDay]);
 
-  const visibleTasks = useMemo<VisibleTaskEntry[]>(
-    () => {
-      const uniquePlans = new Map<string, VisibleTaskEntry>();
-      plans.forEach((plan) => {
-        if (!plan || uniquePlans.has(plan.id)) {
-          return;
-        }
-        const deadlineDate = parseDateValue(plan.deadline);
-        const shouldInclude = deadlineDate
-          ? toDateKey(deadlineDate) === selectedDayKey
-          : isViewingToday;
-        if (!shouldInclude) {
-          return;
-        }
-        uniquePlans.set(plan.id, {
-          id: plan.id,
-          label: plan.label,
-          completed: Boolean(plan.completed),
-          scheduleSlot: plan.scheduleSlot ?? null,
-          deadline: plan.deadline ?? null,
-        });
-      });
-      return Array.from(uniquePlans.values());
-    },
-    [isViewingToday, plans, selectedDayKey]
+  const eventEntries = useMemo(
+    () =>
+      eventsForDay.map((event) => ({
+        id: event.id,
+        title: event.title,
+        color: event.color,
+        meta: getEventMetaLabel(event, t),
+        details: event.description?.trim() || null,
+      })),
+    [eventsForDay, t]
   );
-
-  const unifiedEntries = useMemo<UnifiedEntry[]>(() => {
-    type SortableEntry = {
-      entry: UnifiedEntry;
-      sortStart: number;
-      sortEnd: number;
-      sequence: number;
-    };
-
-    const buildTaskTimeline = (task: VisibleTaskEntry) => {
-      const deadlineDate = parseDateValue(task.deadline);
-      const scheduleRange = parseScheduleSlotRange(selectedDay, task.scheduleSlot);
-      return {
-        deadlineDate,
-        scheduleRange,
-      };
-    };
-
-    const taskMetadata = (timeline: ReturnType<typeof buildTaskTimeline>): string => {
-      const labels: string[] = [];
-      if (timeline.scheduleRange) {
-        labels.push(
-          t("{start} – {end}", {
-            start: formatTimeLabel(timeline.scheduleRange.start),
-            end: formatTimeLabel(timeline.scheduleRange.end),
-          })
-        );
-      }
-
-      if (timeline.deadlineDate) {
-        const hasTime =
-          timeline.deadlineDate.getHours() !== 0 || timeline.deadlineDate.getMinutes() !== 0;
-        const deadlineLabel = hasTime
-          ? formatDateTimeLabel(timeline.deadlineDate)
-          : formatDateOnlyLabel(timeline.deadlineDate);
-        labels.push(t("Due {date}", { date: deadlineLabel }));
-      }
-
-      return labels.length > 0 ? labels.join(" • ") : t("Task");
-    };
-
-    const sortableEntries: SortableEntry[] = [];
-
-    eventsForDay.forEach((event, index) => {
-      sortableEntries.push({
-        entry: {
-          kind: "event",
-          id: event.id,
-          title: event.title,
-          color: event.color,
-          meta: getEventMetaLabel(event, t),
-          details: event.description?.trim() || null,
-        },
-        sortStart: event.start.getTime(),
-        sortEnd: event.end.getTime(),
-        sequence: index,
-      });
-    });
-
-    visibleTasks.forEach((task, index) => {
-      const timeline = buildTaskTimeline(task);
-      const scheduleStart = timeline.scheduleRange?.start.getTime();
-      const scheduleEnd = timeline.scheduleRange?.end.getTime();
-      const deadlineTime = timeline.deadlineDate?.getTime();
-      const sortStart = scheduleStart ?? deadlineTime ?? Number.POSITIVE_INFINITY;
-      const sortEnd = scheduleEnd ?? deadlineTime ?? sortStart;
-
-      sortableEntries.push({
-        entry: {
-          kind: "task",
-          id: task.id,
-          title: task.label,
-          completed: task.completed,
-          meta: taskMetadata(timeline),
-        },
-        sortStart,
-        sortEnd,
-        sequence: eventsForDay.length + index,
-      });
-    });
-
-    sortableEntries.sort((left, right) => {
-      if (left.sortStart !== right.sortStart) {
-        return left.sortStart - right.sortStart;
-      }
-      if (left.sortEnd !== right.sortEnd) {
-        return left.sortEnd - right.sortEnd;
-      }
-      if (left.entry.kind !== right.entry.kind) {
-        return left.entry.kind === "event" ? -1 : 1;
-      }
-      const titleComparison = left.entry.title.localeCompare(right.entry.title);
-      if (titleComparison !== 0) {
-        return titleComparison;
-      }
-      const idComparison = left.entry.id.localeCompare(right.entry.id);
-      if (idComparison !== 0) {
-        return idComparison;
-      }
-      return left.sequence - right.sequence;
-    });
-
-    return sortableEntries.map((item) => item.entry);
-  }, [eventsForDay, selectedDay, t, visibleTasks]);
 
   return (
     <div className={styles.dashboardGridFinal}>
-      {/* EVENTS + TASKS */}
+      {/* EVENTS */}
       <div className={`${styles.dashboardCard} ${styles.dashboardCardEvents}`}>
         <div className={styles.dashboardCardHeader}>
-          <h2 className={styles.dashboardCardTitle}>{t("Events + Tasks")}</h2>
+          <h2 className={styles.dashboardCardTitle}>{t("Events")}</h2>
           {onAddEvent && (
             <button
               type="button"
@@ -441,66 +238,29 @@ export function DashboardPulseGrid({
         </div>
         <div className={styles.dashboardCardBody}>
           <div className={styles.dashboardSection}>
-            {unifiedEntries.length > 0 ? (
+            {eventEntries.length > 0 ? (
               <ul className={styles.dashboardEventList}>
-                {unifiedEntries.map((entry) =>
-                  entry.kind === "event" ? (
-                    <li key={`event-${entry.id}`} className={styles.dashboardEventItem}>
-                      <div
-                        className={styles.dashboardEventMarker}
-                        style={{ backgroundColor: entry.color }}
-                      />
-                      <div className={styles.dashboardEventInfo}>
-                        <div className={styles.dashboardEventTitle}>{entry.title}</div>
-                        <div className={styles.dashboardEventTime}>{entry.meta}</div>
-                        {entry.details ? (
-                          <div className={styles.dashboardEventDetails}>{entry.details}</div>
-                        ) : null}
-                      </div>
-                    </li>
-                  ) : (
-                    <li key={`task-${entry.id}`} className={styles.dashboardEventItem}>
-                      <button
-                        type="button"
-                        className={styles.planCheckboxButton}
-                        data-completed={entry.completed ? "true" : "false"}
-                        role="checkbox"
-                        aria-checked={entry.completed}
-                        disabled={!onTogglePlan}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          if (!onTogglePlan) {
-                            return;
-                          }
-                          onTogglePlan(entry.id);
-                        }}
-                        aria-label={
-                          entry.completed
-                            ? t("Mark task {title} as incomplete", { title: entry.title })
-                            : t("Mark task {title} as complete", { title: entry.title })
-                        }
-                      >
-                        {entry.completed ? <Check size={14} /> : <Square size={14} />}
-                      </button>
-                      <div className={styles.dashboardEventInfo}>
-                        <div
-                          className={styles.dashboardTaskLabel}
-                          data-completed={entry.completed ? "true" : "false"}
-                        >
-                          {entry.title}
-                        </div>
-                        <div className={styles.dashboardEventTime}>{entry.meta}</div>
-                      </div>
-                    </li>
-                  )
-                )}
+                {eventEntries.map((entry) => (
+                  <li key={`event-${entry.id}`} className={styles.dashboardEventItem}>
+                    <div
+                      className={styles.dashboardEventMarker}
+                      style={{ backgroundColor: entry.color }}
+                    />
+                    <div className={styles.dashboardEventInfo}>
+                      <div className={styles.dashboardEventTitle}>{entry.title}</div>
+                      <div className={styles.dashboardEventTime}>{entry.meta}</div>
+                      {entry.details ? (
+                        <div className={styles.dashboardEventDetails}>{entry.details}</div>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
               </ul>
             ) : (
               <div className={styles.dashboardListEmpty}>
                 {isViewingToday
-                  ? t("No events or tasks for today")
-                  : t("No events or tasks for selected day")}
+                  ? t("No events for today")
+                  : t("No events for selected day")}
               </div>
             )}
           </div>

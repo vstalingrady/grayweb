@@ -494,6 +494,11 @@ export function GrayDashboardView({
     return () => {
       window.cancelAnimationFrame(frame);
       window.removeEventListener("keydown", handleKeyDown);
+      const activeElement = document.activeElement as HTMLElement | null;
+      const isFocusInsideDialog = Boolean(activeElement?.closest('[role="dialog"][aria-modal="true"]'));
+      if (isFocusInsideDialog) {
+        return;
+      }
       const restoreTarget = mobileQuickActionsLastFocusedRef.current ?? fabElement;
       if (restoreTarget && document.contains(restoreTarget)) {
         restoreTarget.focus();
@@ -611,7 +616,6 @@ export function GrayDashboardView({
       onRequestClose={handleComposerClose}
       onSubmit={handleComposerSubmit}
       onDelete={handleComposerDelete}
-      onStateChange={setComposerDraft}
     />
   );
   const showStandaloneComposer = activeTab !== "calendar";
@@ -623,14 +627,12 @@ export function GrayDashboardView({
     viewerName: user?.full_name ?? null,
     proactivity: displayProactivity ?? null,
     events: mergedEvents,
-    plans: displayPlans,
     proactivityDeliveryKeys,
     canConfigureProactivity: Boolean(onProactivitySelect),
     onConfigureProactivity: handleOpenProactivityModal,
     onSelectDate: (date: Date) => onCalendarSelectedDateChange?.(date),
     isCompactLayout,
     onAddEvent: (date: Date) => handleComposerOpenAt(date),
-    onTogglePlan,
   };
 
   const pulseContent = (

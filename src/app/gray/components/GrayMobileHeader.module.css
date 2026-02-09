@@ -142,14 +142,14 @@
   align-items: center;
   background: transparent;
   padding: 0;
-  border-radius: 999px;
+  border-radius: 0;
   border: none;
   gap: 0;
   pointer-events: auto;
   position: relative;
-  width: min(320px, 100%);
+  width: auto;
   min-width: 0;
-  max-width: 100%;
+  max-width: none;
   box-shadow: none;
 }
 
