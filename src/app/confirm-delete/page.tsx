@@ -1,14 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { clearSupabaseAuthStorage } from "@/lib/supabaseStorage";
 import { clearAuthCookies } from "@/lib/auth/cookies";
 import { useI18n } from "@/contexts/I18nContext";
 
 export default function ConfirmDeletePage() {
   const { t } = useI18n();
-  const router = useRouter();
 
   useEffect(() => {
     // Ensure all auth state is cleared immediately
@@ -22,7 +20,7 @@ export default function ConfirmDeletePage() {
     }, 2500);
 
     return () => clearTimeout(timeout);
-  }, [router]);
+  }, []);
 
   return (
     <main
@@ -36,18 +34,18 @@ export default function ConfirmDeletePage() {
         width: "100vw",
         height: "100vh",
         boxSizing: "border-box",
-        background: "#020202",
-        color: "#f5f5f5",
+        background: "var(--bg-base, #020202)",
+        color: "var(--fg-primary, #f5f5f5)",
       }}
     >
       <div style={{ maxWidth: 520, width: "100%", textAlign: "center" }}>
         <h1 style={{ fontSize: "1.8rem", fontWeight: 600, margin: "0 0 1rem 0" }}>
           {t("Account Deleted")}
         </h1>
-        <p style={{ fontSize: "1.1rem", marginTop: "0.75rem", color: "#6b7280" }}>
+        <p style={{ fontSize: "1.1rem", marginTop: "0.75rem", color: "var(--fg-muted, #6b7280)" }}>
           {t("Your account and all associated data have been permanently deleted.")}
         </p>
-        <p style={{ fontSize: "0.9rem", marginTop: "1rem", color: "#4a4a4a" }}>
+        <p style={{ fontSize: "0.9rem", marginTop: "1rem", color: "var(--fg-subtle, #4a4a4a)" }}>
           {t("Redirecting to login page...")}
         </p>
       </div>

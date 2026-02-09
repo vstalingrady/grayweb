@@ -10,6 +10,7 @@ import type { CalendarEvent, PositionedEvent } from "./types";
 import { isSameDay } from "./dateUtils";
 import { ViewModeSelect } from "@/components/gray/ViewModeSelect";
 import { useI18n } from "@/contexts/I18nContext";
+import type { CalendarHoliday } from "./holidayTypes";
 
 import type { CalendarViewMode } from "./dashboardCalendarTypes";
 
@@ -24,6 +25,8 @@ type DayViewProps = {
   showHeaderDates: boolean;
   dayIndicatorOffset: number | null;
   dayLayouts: PositionedEvent[];
+  dayAllDayEvents: CalendarEvent[];
+  dayHolidayEntries: CalendarHoliday[];
   draggingEventIds: Set<string> | null;
   selectedEventIds: Set<string>;
   dayColumnRef: MutableRefObject<HTMLDivElement | null>;
@@ -31,7 +34,7 @@ type DayViewProps = {
   onUpdateViewMode: (mode: CalendarViewMode) => void;
   onColumnClick: (event: MouseEvent<HTMLDivElement>, day: Date) => void;
   onEventClick: (
-    event: PositionedEvent,
+    event: CalendarEvent,
     anchorRect: DOMRect,
     mouseEvent: MouseEvent
   ) => void;
@@ -53,6 +56,8 @@ export function GrayDashboardCalendarDayView({
   showHeaderDates,
   dayIndicatorOffset,
   dayLayouts,
+  dayAllDayEvents,
+  dayHolidayEntries,
   draggingEventIds,
   selectedEventIds,
   dayColumnRef,
@@ -114,28 +119,6 @@ export function GrayDashboardCalendarDayView({
               </div>
             )}
             <div className={styles.calendarMonthControls}>
-              {showViewSelect && (
-                <div className={styles.calendarMobileViewToggle} role="group" aria-label={t("View mode")}>
-                  <button
-                    type="button"
-                    className={styles.calendarMobileViewToggleButton}
-                    data-active="false"
-                    aria-pressed="false"
-                    onClick={() => onUpdateViewMode("week")}
-                  >
-                    {t("Week")}
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.calendarMobileViewToggleButton}
-                    data-active="true"
-                    aria-pressed="true"
-                    onClick={() => onUpdateViewMode("day")}
-                  >
-                    {t("Day")}
-                  </button>
-                </div>
-              )}
               <div className={`${styles.calendarSurfaceNavArrows} ${styles.calendarMonthNavArrows}`}>
                 <button
                   type="button"
@@ -170,6 +153,39 @@ export function GrayDashboardCalendarDayView({
             </div>
           </div>
         )}
+        <div className={`${styles.calendarAllDayRow} ${styles.calendarAllDayRowStatic}`}>
+          <div className={styles.calendarAllDayLabel}>
+            <span>{t("All day")}</span>
+          </div>
+          <div className={styles.calendarAllDayCell}>
+            <div className={styles.calendarAllDayItems}>
+              {dayHolidayEntries.map((holiday) => (
+                <span
+                  key={holiday.id}
+                  className={`${styles.calendarAllDayItem} ${styles.calendarAllDayHolidayItem}`}
+                  title={holiday.localName || holiday.name}
+                >
+                  {holiday.localName || holiday.name}
+                </span>
+              ))}
+              {dayAllDayEvents.map((allDayEvent) => (
+                <button
+                  key={allDayEvent.id}
+                  type="button"
+                  className={`${styles.calendarAllDayItem} ${styles.calendarAllDayEventItem}`}
+                  style={{ "--all-day-item-color": allDayEvent.color } as CSSProperties}
+                  title={allDayEvent.title}
+                  onClick={(mouseEvent) => {
+                    const anchorRect = mouseEvent.currentTarget.getBoundingClientRect();
+                    onEventClick(allDayEvent, anchorRect, mouseEvent as unknown as MouseEvent);
+                  }}
+                >
+                  {allDayEvent.title}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
         <div className={styles.calendarBodyScroll} ref={dayColumnRef}>
           <div className={styles.calendarTimesColumn}>
             {HOURS_LABEL.map((label, hour) => (

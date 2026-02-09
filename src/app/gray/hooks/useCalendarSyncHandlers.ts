@@ -3,6 +3,7 @@ import { calendarService, workspaceService } from "@/lib/api";
 import { type CalendarEvent, type CalendarInfo } from "@/components/calendar/types";
 import { PLAN_EVENT_ID_PREFIX } from "@/components/gray/planCalendarUtils";
 import { type PlanItem } from "@/components/gray/types";
+import { toDateKey } from "@/app/gray/utils";
 
 // Helper to determine if an error is a network error
 const isApiNetworkError = (error: unknown) => {
@@ -13,9 +14,15 @@ const isApiNetworkError = (error: unknown) => {
   );
 };
 
+const formatTimeHHMM = (value: Date) =>
+  `${String(value.getHours()).padStart(2, "0")}:${String(value.getMinutes()).padStart(2, "0")}`;
+
+const formatScheduleSlot = (start: Date, end: Date) => `${formatTimeHHMM(start)}-${formatTimeHHMM(end)}`;
+
 type UseCalendarSyncHandlersOptions = {
   userId: number | null;
   plans: PlanItem[];
+  setPlans?: React.Dispatch<React.SetStateAction<PlanItem[]>>;
   events: CalendarEvent[];
   calendars: CalendarInfo[];
   setEvents: React.Dispatch<React.SetStateAction<CalendarEvent[]>>;
@@ -25,6 +32,7 @@ type UseCalendarSyncHandlersOptions = {
 export const useCalendarSyncHandlers = ({
   userId,
   plans,
+  setPlans,
   events,
   calendars,
   setEvents,
@@ -95,32 +103,42 @@ export const useCalendarSyncHandlers = ({
         const originalPlan = plans.find((p) => p.id === String(planId));
         if (!originalPlan) return;
 
-        const newScheduleSlot = event.start.toTimeString().slice(0, 5);
-        const nextDeadlineIso = event.start.toISOString().split("T")[0];
+        const newScheduleSlot = formatScheduleSlot(event.start, event.end);
+        const nextDeadline = toDateKey(event.start);
 
         const scheduleChanged = originalPlan.scheduleSlot !== newScheduleSlot;
-        const deadlineChanged = originalPlan.deadline !== nextDeadlineIso;
+        const deadlineChanged = originalPlan.deadline !== nextDeadline;
 
         if (!scheduleChanged && !deadlineChanged) {
           return;
         }
 
+        setPlans?.((currentPlans) =>
+          currentPlans.map((plan) =>
+            plan.id === String(planId)
+              ? {
+                  ...plan,
+                  deadline: nextDeadline,
+                  scheduleSlot: newScheduleSlot,
+                }
+              : plan
+          )
+        );
+
         void persistPlanFromCalendarMove(planId, {
           label: originalPlan.label,
           description: originalPlan.details ?? null,
-          deadline: nextDeadlineIso,
+          deadline: nextDeadline,
           scheduleSlot: newScheduleSlot,
         });
       });
 
-      const previousEvents = events;
-      const previousStandardEvents = previousEvents.filter(
+      const previousStandardEvents = events.filter(
         (event) => !event.id.startsWith(PLAN_EVENT_ID_PREFIX)
       );
       const nextStandardEvents = standardEvents;
 
-      const nextStateEvents = [...nextStandardEvents, ...planEvents];
-      setEvents(nextStateEvents);
+      setEvents(nextStandardEvents);
 
       if (typeof userId !== "number") {
         return;
@@ -128,16 +146,16 @@ export const useCalendarSyncHandlers = ({
 
       // Revert helpers
       const revertUpdate = (failedId: string) => {
-        const original = previousEvents.find((event) => event.id === failedId);
+        const original = previousStandardEvents.find((event) => event.id === failedId);
         if (original) {
           setEvents((current) => current.map((event) => (event.id === failedId ? original : event)));
         }
       };
 
       const revertDelete = (failedId: string) => {
-        const original = previousEvents.find((event) => event.id === failedId);
+        const original = previousStandardEvents.find((event) => event.id === failedId);
         if (original) {
-          setEvents((current) => [...current, original]);
+          setEvents((current) => (current.some((event) => event.id === failedId) ? current : [...current, original]));
         }
       };
 
@@ -297,7 +315,7 @@ export const useCalendarSyncHandlers = ({
         }
       }
     },
-    [events, persistPlanFromCalendarMove, plans, setEvents, userId]
+    [events, persistPlanFromCalendarMove, plans, setEvents, setPlans, userId]
   );
 
   return { handleCalendarsChange, handleEventsChange };

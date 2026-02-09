@@ -422,6 +422,11 @@
   color: #71717a;
 }
 
+.settingsErrorText {
+  color: #fca5a5;
+  margin-top: 10px;
+}
+
 .comingSoonText {
   margin-top: 24px;
   color: #71717a;
@@ -606,9 +611,13 @@
     display: none;
   }
 
+  /*
+   * Mobile root view scroll ownership:
+   * Keep the container clipped and let `.mobileSettingsRoot` handle vertical scrolling.
+   * This prevents nested-scroll clipping regressions on small screens.
+   */
   .settingsContainer[data-mobile-view="root"] {
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+    overflow: hidden;
   }
 }
 
@@ -889,7 +898,9 @@
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
-  min-height: 100%;
+  /* Height-constrained scroll container for the mobile root settings list. */
+  height: 100%;
+  min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
@@ -940,8 +951,14 @@
   gap: 10px;
 }
 
-.mobileProfileAvatar {
+.mobileProfileAvatarWrap {
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobileProfileAvatar {
   width: 88px;
   height: 88px;
   border-radius: 999px;
@@ -956,29 +973,33 @@
 
 .mobileProfileAvatarEdit {
   position: absolute;
-  right: 4px;
-  bottom: 4px;
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(10, 10, 10, 0.86);
-  color: rgba(245, 245, 245, 0.88);
+  right: -13px;
+  bottom: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: rgba(245, 245, 245, 0.82);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  line-height: 0;
+  transition: color 0.2s ease, transform 0.2s ease;
+  appearance: none;
 }
 
 .mobileProfileAvatarEdit:hover {
-  background: rgba(28, 28, 28, 0.95);
-  border-color: rgba(255, 255, 255, 0.28);
   color: rgba(255, 255, 255, 0.98);
+  transform: translateY(-1px);
+}
+
+.mobileProfileAvatarEdit:focus-visible {
+  color: rgba(255, 255, 255, 0.98);
+  outline: none;
 }
 
 .mobileProfileAvatarEdit:disabled {
-  opacity: 0.58;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
@@ -1002,23 +1023,27 @@
 }
 
 .mobileProfileNameEdit {
-  width: 24px;
-  height: 24px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(245, 245, 245, 0.75);
+  padding: 0;
+  border: none;
+  background: none;
+  color: rgba(245, 245, 245, 0.72);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  line-height: 0;
+  transition: color 0.2s ease, transform 0.2s ease;
+  appearance: none;
 }
 
 .mobileProfileNameEdit:hover {
-  background: rgba(255, 255, 255, 0.09);
-  border-color: rgba(255, 255, 255, 0.22);
   color: rgba(255, 255, 255, 0.95);
+  transform: translateY(-1px);
+}
+
+.mobileProfileNameEdit:focus-visible {
+  color: rgba(255, 255, 255, 0.95);
+  outline: none;
 }
 
 .mobileProfileHandle {
@@ -1038,12 +1063,31 @@
   white-space: nowrap;
 }
 
-.mobileProfilePlanRow {
-  width: min(100%, 360px);
-  margin-top: 2px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
+.mobileSubscriptionBlock {
+  align-self: stretch;
+  width: 100%;
+  max-width: 360px;
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mobileSubscriptionLabel {
+  font-size: 0.86rem;
+  font-weight: 500;
+  color: rgba(245, 245, 245, 0.9);
+}
+
+.mobileSubscriptionBlock .settingsSubscriptionCard {
+  width: 100%;
+  padding: 16px;
+  border-radius: 16px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55);
+}
+
+.mobileSubscriptionBlock .settingsSubscriptionButton {
+  padding: 0.62rem 1rem;
 }
 
 .mobileProfileError {
@@ -1192,4 +1236,460 @@ button.mobileGroupItem {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.mobileThemeOptionLabel {
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.mobileThemeIcon {
+  color: currentColor;
+}
+
+.mobileThemePreviewDark {
+  background: #050505;
+  border-color: rgba(255, 255, 255, 0.22);
+  color: rgba(245, 245, 245, 0.94);
+}
+
+.mobileThemePreviewLight {
+  background: #f5f5f5;
+  border-color: rgba(15, 23, 42, 0.12);
+  color: #111827;
+}
+
+.mobileThemePreviewSystem {
+  position: relative;
+  overflow: hidden;
+  color: rgba(245, 245, 245, 0.94);
+}
+
+.mobileThemePreviewSystem[data-system-light="true"] {
+  background: #f3f4f6;
+  border-color: rgba(15, 23, 42, 0.14);
+  color: #111827;
+}
+
+.mobileThemePreviewSystem[data-system-light="false"] {
+  background: #09090b;
+  border-color: rgba(255, 255, 255, 0.22);
+  color: rgba(245, 245, 245, 0.94);
+}
+
+.mobileThemeSystemDeviceIcon {
+  opacity: 0.92;
+}
+
+.mobileThemeSystemModeBadge {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  color: inherit;
+}
+
+.mobileThemePreviewSystem[data-system-light="true"] .mobileThemeSystemModeBadge {
+  background: rgba(255, 255, 255, 0.86);
+  border-color: rgba(15, 23, 42, 0.2);
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               Light Settings                               */
+/* -------------------------------------------------------------------------- */
+
+:global(html.light) .settingsOverlay {
+  background: rgba(15, 23, 42, 0.22);
+}
+
+:global(html.light) .settingsContainer {
+  background: #f8fafc;
+  color: #0f172a;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  box-shadow:
+    0 24px 48px rgba(15, 23, 42, 0.16),
+    0 0 0 1px rgba(255, 255, 255, 0.75);
+}
+
+:global(html.light) .settingsSidebar {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 250, 252, 0.98) 100%);
+  border-right-color: rgba(15, 23, 42, 0.08);
+}
+
+:global(html.light) .settingsSidebarBack {
+  color: rgba(15, 23, 42, 0.66);
+}
+
+:global(html.light) .settingsSidebarBack:hover {
+  color: #0f172a;
+}
+
+:global(html.light) .settingsNavLabel {
+  color: rgba(15, 23, 42, 0.46);
+}
+
+:global(html.light) .settingsNavItem {
+  color: rgba(15, 23, 42, 0.7);
+}
+
+:global(html.light) .settingsNavItem:hover {
+  color: #0f172a;
+  background: rgba(15, 23, 42, 0.06);
+}
+
+:global(html.light) .settingsNavItem[data-active="true"] {
+  color: #0f172a;
+  background: rgba(15, 23, 42, 0.1);
+}
+
+:global(html.light) .settingsSidebarFooterDivider {
+  background: rgba(15, 23, 42, 0.1);
+}
+
+:global(html.light) .settingsSidebarContextTitle {
+  color: rgba(15, 23, 42, 0.9);
+}
+
+:global(html.light) .settingsSidebarContextAction {
+  background: rgba(15, 23, 42, 0.04);
+  border-color: rgba(15, 23, 42, 0.12);
+  color: rgba(15, 23, 42, 0.78);
+}
+
+:global(html.light) .settingsSidebarContextAction:hover {
+  background: rgba(15, 23, 42, 0.08);
+  border-color: rgba(15, 23, 42, 0.22);
+  color: #0f172a;
+}
+
+:global(html.light) .settingsSidebarContextMeta,
+:global(html.light) .settingsSidebarContextMeta[data-variant="muted"] {
+  color: rgba(15, 23, 42, 0.56);
+}
+
+:global(html.light) .settingsPageHeader {
+  border-bottom-color: rgba(15, 23, 42, 0.12);
+}
+
+:global(html.light) .settingsContextBar {
+  background: rgba(15, 23, 42, 0.12);
+}
+
+:global(html.light) .settingsContextBarFill {
+  background: linear-gradient(90deg, rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.45));
+}
+
+:global(html.light) .settingsPageTitle,
+:global(html.light) .settingsSectionTitle,
+:global(html.light) .settingsLabel,
+:global(html.light) .settingsInputLabel,
+:global(html.light) .settingsItemTitle,
+:global(html.light) .settingsFormLabel {
+  color: #0f172a;
+}
+
+:global(html.light) .settingsItemDescription,
+:global(html.light) .settingsValue,
+:global(html.light) .settingsItemSubtitle,
+:global(html.light) .deleteAccountHelper,
+:global(html.light) .comingSoonText {
+  color: rgba(15, 23, 42, 0.62);
+}
+
+:global(html.light) .settingsRow,
+:global(html.light) .settingsTierSeparator {
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
+:global(html.light) .settingsTierSeparatorTitle {
+  color: rgba(15, 23, 42, 0.72);
+}
+
+:global(html.light) .settingsTierSeparatorSubtitle {
+  color: rgba(15, 23, 42, 0.56);
+}
+
+:global(html.light) .settingsRowLink {
+  color: rgba(15, 23, 42, 0.62);
+}
+
+:global(html.light) .settingsRowLink:hover {
+  color: #0f172a;
+}
+
+:global(html.light) .settingsAction {
+  border-color: rgba(15, 23, 42, 0.14);
+  color: #0f172a;
+}
+
+:global(html.light) .settingsAction:hover {
+  background: rgba(15, 23, 42, 0.05);
+  border-color: rgba(15, 23, 42, 0.22);
+}
+
+:global(html.light) .settingsActionDanger {
+  border-color: rgba(220, 38, 38, 0.35);
+  color: #b91c1c;
+}
+
+:global(html.light) .settingsActionDanger:hover {
+  background: rgba(220, 38, 38, 0.12);
+  border-color: rgba(220, 38, 38, 0.52);
+  color: #991b1b;
+}
+
+:global(html.light) .settingsPrimaryButton {
+  background: #111827;
+  color: #f8fafc;
+}
+
+:global(html.light) .settingsPrimaryButton:hover {
+  background: #1f2937;
+}
+
+:global(html.light) .settingsSecondaryButton {
+  border-color: rgba(15, 23, 42, 0.16);
+  color: #0f172a;
+}
+
+:global(html.light) .settingsSecondaryButton:hover {
+  background: rgba(15, 23, 42, 0.05);
+  border-color: rgba(15, 23, 42, 0.24);
+}
+
+:global(html.light) .userProfileCard {
+  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+:global(html.light) .userName {
+  color: #0f172a;
+}
+
+:global(html.light) .avatarLarge {
+  background: rgba(15, 23, 42, 0.08);
+  color: rgba(15, 23, 42, 0.62);
+}
+
+:global(html.light) .settingsUpgradeCard {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+:global(html.light) .settingsUpgradeText h4 {
+  color: #0f172a;
+}
+
+:global(html.light) .settingsUpgradeText p,
+:global(html.light) .settingsSubscriptionCard .settingsUpgradeText p {
+  color: rgba(15, 23, 42, 0.62);
+}
+
+:global(html.light) .settingsSubscriptionCard {
+  border-color: rgba(15, 23, 42, 0.16);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.14);
+}
+
+:global(html.light) .settingsSubscriptionCard[data-variant="highlighted"] {
+  background-image: linear-gradient(
+    135deg,
+    rgba(15, 23, 42, 0.08),
+    rgba(248, 250, 252, 0.98) 60%,
+    rgba(59, 130, 246, 0.1)
+  );
+  box-shadow: 0 24px 52px rgba(15, 23, 42, 0.16);
+}
+
+:global(html.light) .settingsSubscriptionCard[data-variant="primary"] {
+  background-image: linear-gradient(158deg, rgba(99, 102, 241, 0.14) 0%, rgba(248, 250, 252, 0.98) 100%);
+  box-shadow: 0 26px 56px rgba(15, 23, 42, 0.18);
+}
+
+:global(html.light) .settingsSubscriptionButtonOutline {
+  border-color: rgba(15, 23, 42, 0.24);
+  background: rgba(255, 255, 255, 0.9);
+  color: #0f172a;
+}
+
+:global(html.light) .settingsSubscriptionButtonOutline:hover {
+  border-color: rgba(15, 23, 42, 0.36);
+  background: #ffffff;
+}
+
+:global(html.light) .settingsSubscriptionButtonPrimary {
+  color: #f8fafc;
+  background: linear-gradient(135deg, #111827, #1f2937);
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.22);
+}
+
+:global(html.light) .settingsSubscriptionButtonPrimary:hover {
+  box-shadow: 0 20px 36px rgba(15, 23, 42, 0.26);
+}
+
+:global(html.light) .settingsDangerCard {
+  background: rgba(220, 38, 38, 0.06);
+  border-color: rgba(220, 38, 38, 0.28);
+}
+
+:global(html.light) .settingsInput,
+:global(html.light) .settingsTextarea {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(15, 23, 42, 0.16);
+  color: #0f172a;
+}
+
+:global(html.light) .settingsInput:focus,
+:global(html.light) .settingsTextarea:focus {
+  border-color: rgba(59, 130, 246, 0.6);
+}
+
+:global(html.light) .settingsInput::placeholder,
+:global(html.light) .settingsTextarea::placeholder {
+  color: rgba(15, 23, 42, 0.42);
+}
+
+:global(html.light) .settingsToggle {
+  background: rgba(15, 23, 42, 0.14);
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+:global(html.light) .settingsToggle[aria-checked="true"] {
+  background: #0f172a;
+  border-color: #0f172a;
+}
+
+:global(html.light) .settingsToggleThumb {
+  background: #f8fafc;
+}
+
+:global(html.light) .settingsToggle[aria-checked="true"] .settingsToggleThumb {
+  background: #ffffff;
+}
+
+:global(html.light) .settingsSelectButton {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(15, 23, 42, 0.16);
+  color: #0f172a;
+}
+
+:global(html.light) .settingsSelectButton:hover {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.24);
+}
+
+:global(html.light) .settingsSelectMenu {
+  border-color: rgba(15, 23, 42, 0.16);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 22px 46px rgba(15, 23, 42, 0.18);
+}
+
+:global(html.light) .settingsSelectOption {
+  color: rgba(15, 23, 42, 0.86);
+}
+
+:global(html.light) .settingsSelectOption:hover,
+:global(html.light) .settingsSelectOption:focus-visible {
+  background: rgba(15, 23, 42, 0.08);
+  color: #0f172a;
+}
+
+:global(html.light) .settingsSelectOption[data-selected="true"] {
+  background: rgba(59, 130, 246, 0.16);
+  color: #0f172a;
+}
+
+:global(html.light) .mobileSettingsHeader {
+  border-bottom-color: rgba(15, 23, 42, 0.1);
+}
+
+:global(html.light) .mobileSettingsBack {
+  color: rgba(15, 23, 42, 0.75);
+}
+
+:global(html.light) .mobileSettingsBack:hover {
+  color: #0f172a;
+  background: rgba(15, 23, 42, 0.06);
+}
+
+:global(html.light) .mobileSettingsTitle,
+:global(html.light) .mobileProfileName,
+:global(html.light) .mobileGroupItem {
+  color: #0f172a;
+}
+
+:global(html.light) .mobileProfileAvatarEdit,
+:global(html.light) .mobileProfileNameEdit {
+  color: rgba(15, 23, 42, 0.66);
+}
+
+:global(html.light) .mobileProfileAvatarEdit:hover,
+:global(html.light) .mobileProfileAvatarEdit:focus-visible,
+:global(html.light) .mobileProfileNameEdit:hover,
+:global(html.light) .mobileProfileNameEdit:focus-visible {
+  color: #0f172a;
+}
+
+:global(html.light) .mobileProfileAvatar {
+  background: rgba(15, 23, 42, 0.06);
+  border-color: rgba(15, 23, 42, 0.12);
+  color: rgba(15, 23, 42, 0.82);
+}
+
+:global(html.light) .mobileProfileHandle,
+:global(html.light) .mobileProfileEmail,
+:global(html.light) .mobileSubscriptionLabel,
+:global(html.light) .mobileGroupLabel,
+:global(html.light) .mobileGroupItemValue,
+:global(html.light) .mobileMonoText {
+  color: rgba(15, 23, 42, 0.62);
+}
+
+:global(html.light) .mobileGroup {
+  border-color: rgba(15, 23, 42, 0.1);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+:global(html.light) .mobileGroupItem + .mobileGroupItem {
+  border-top-color: rgba(15, 23, 42, 0.08);
+}
+
+:global(html.light) .mobileGroupItemIcon,
+:global(html.light) .mobileGroupItemArrow {
+  color: rgba(15, 23, 42, 0.56);
+}
+
+:global(html.light) .mobileThemeOption {
+  border-color: rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.88);
+  color: rgba(15, 23, 42, 0.82);
+}
+
+:global(html.light) .mobileThemeOption[data-active="true"] {
+  border-color: rgba(15, 23, 42, 0.28);
+  background: rgba(15, 23, 42, 0.08);
+  color: #0f172a;
+}
+
+:global(html.light) .mobileThemePreview {
+  border-color: rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.95);
+}
+
+:global(html.light) .settingsErrorText {
+  color: #b91c1c;
+}
+
+@media (max-width: 768px) {
+  :global(html.light) .settingsOverlay {
+    background: #f4f7fb;
+  }
 }

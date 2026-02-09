@@ -447,6 +447,7 @@ export const ChatMessagesList = memo(
                     {hasTextContent ? (
                       <div
                         className={`${styles.chatMarkdown} ${isStreamingMessage ? styles.chatMarkdownStreaming : ""}`}
+                        data-streaming={isStreamingMessage ? "true" : undefined}
                         aria-live={isStreamingMessage ? "polite" : undefined}
                       >
                         <ReactMarkdown

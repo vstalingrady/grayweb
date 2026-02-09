@@ -82,6 +82,9 @@ export const useSessionActions = ({
   userId,
   userEmail,
 }: UseSessionActionsOptions): UseSessionActionsResult => {
+  const pendingUpdatesRef = useRef<Map<string, Partial<ChatMessage>>>(new Map());
+  const throttledUpdateTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+
   const updateSession = useCallback(
     (sessionId: string, partial: Partial<ChatSession>) => {
       setSessions((prev) => {
@@ -134,6 +137,14 @@ export const useSessionActions = ({
 
   const updateMessage = useCallback(
     (sessionId: string, messageId: string, partial: Partial<ChatMessage>) => {
+      const throttledKey = `${sessionId}:${messageId}`;
+      const existingTimeout = throttledUpdateTimeoutsRef.current.get(throttledKey);
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+        throttledUpdateTimeoutsRef.current.delete(throttledKey);
+      }
+      pendingUpdatesRef.current.delete(throttledKey);
+
       let assistantAutoTitle: string | null = null;
       setSessions((prev) => {
         let didUpdate = false;
@@ -195,9 +206,6 @@ export const useSessionActions = ({
     [applyAutoTitle, persistSessions, setSessions]
   );
 
-  const pendingUpdatesRef = useRef<Map<string, Partial<ChatMessage>>>(new Map());
-  const throttledUpdateTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
-
   const updateMessageThrottled = useCallback(
     (sessionId: string, messageId: string, partial: Partial<ChatMessage>, throttleMs = 30) => {
       const key = `${sessionId}:${messageId}`;
@@ -223,9 +231,11 @@ export const useSessionActions = ({
 
   useEffect(() => {
     const timeouts = throttledUpdateTimeoutsRef.current;
+    const pendingUpdates = pendingUpdatesRef.current;
     return () => {
       timeouts.forEach((timeout) => clearTimeout(timeout));
       timeouts.clear();
+      pendingUpdates.clear();
     };
   }, []);
 

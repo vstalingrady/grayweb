@@ -8227,6 +8227,57 @@ h1.greeting {
   background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
 }
 
+:global(html.light) .historyListShell li[data-active="true"] {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+:global(html.light) .historyListButton {
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.95));
+}
+
+:global(html.light) .historyListShell li:hover .historyListButton,
+:global(html.light) .historyListShell li:focus-within .historyListButton,
+:global(html.light) .historyListShell li[data-active="true"] .historyListButton {
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.96));
+}
+
+:global(html.light) .historyRowBadge {
+  border-color: var(--gray-ui-border, rgba(0, 0, 0, 0.14));
+  color: rgba(63, 63, 70, 0.84);
+  background: rgba(255, 255, 255, 0.88);
+}
+
+:global(html.light) .historyRowActions button {
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.92));
+}
+
+:global(html.light) .historyRowActions button:hover,
+:global(html.light) .historyRowActions button:focus-visible {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.96));
+}
+
+:global(html.light) .historyRowSection {
+  color: rgba(82, 82, 91, 0.58);
+}
+
+:global(html.light) .historyRowDate {
+  color: rgba(82, 82, 91, 0.78);
+}
+
+:global(html.light) .historyEmptyState {
+  color: rgba(82, 82, 91, 0.82);
+}
+
+:global(html.light) .historyLink {
+  color: rgba(63, 63, 70, 0.84);
+}
+
+:global(html.light) .historyLink[data-active="true"],
+:global(html.light) .historyLink:hover {
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.96));
+}
+
 :global(html.light) .calendarSidebarSearch input {
   color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
 }

@@ -153,14 +153,35 @@ def normalize_plan_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 return False
         return False
 
+    def _coerce_optional_string(value: Any) -> Optional[str]:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return value
+        return str(value)
+
     normalized = []
     for item in items:
+        schedule_slot = _coerce_optional_string(
+            _row_get(item, "schedule_slot", _row_get(item, "scheduleSlot"))
+        )
+        description = _coerce_optional_string(
+            _row_get(item, "description", _row_get(item, "details"))
+        )
+        reminder_at = _coerce_optional_string(
+            _row_get(item, "reminder_at", _row_get(item, "reminderAt"))
+        )
+        color = _coerce_optional_string(_row_get(item, "color"))
         normalized.append(
             {
                 "id": _row_get(item, "id"),
                 "label": str(_row_get(item, "label", "")),
                 "completed": _coerce_bool(_row_get(item, "completed", False)),
                 "deadline": _row_get(item, "deadline"),
+                "schedule_slot": schedule_slot,
+                "description": description,
+                "reminder_at": reminder_at,
+                "color": color,
             }
         )
     return normalized

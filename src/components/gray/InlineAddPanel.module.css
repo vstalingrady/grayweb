@@ -301,3 +301,91 @@
   border-color: rgba(255, 255, 255, 0.15);
 }
 
+/* Light mode: panel surface, form controls, and action legibility */
+:global(html.light) .inlineAddPanel {
+  background: var(--gray-ui-surface-elevated, #ffffff);
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+  box-shadow:
+    0 20px 40px rgba(15, 23, 42, 0.14),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.72);
+}
+
+:global(html.light) .inlineAddPanelTitle {
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .inlineAddPanelClose {
+  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.9));
+}
+
+:global(html.light) .inlineAddPanelClose:hover:not(:disabled) {
+  background: var(--gray-ui-hover-strong, rgba(0, 0, 0, 0.1));
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .dashboardTasksToggle {
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+  background: var(--gray-ui-surface, #ffffff);
+}
+
+:global(html.light) .dashboardTasksToggleButton {
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.9));
+}
+
+:global(html.light) .dashboardTasksToggleButton:hover:not([data-active="true"]) {
+  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.9));
+}
+
+:global(html.light) .dashboardTasksToggleButton[data-active="true"] {
+  background: var(--gray-ui-hover-strong, rgba(0, 0, 0, 0.1));
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.94));
+}
+
+:global(html.light) .dashboardTasksToggleButton:focus-visible {
+  outline-color: rgba(15, 23, 42, 0.36);
+}
+
+:global(html.light) .personalizationFieldGroup label,
+:global(html.light) .personalizationHint,
+:global(html.light) .reminderCheckboxLabel {
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.88));
+}
+
+:global(html.light) .personalizationField {
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+  background: var(--gray-ui-surface, #ffffff);
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .reminderCheckboxInput {
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.18));
+  background: var(--gray-ui-surface, #ffffff);
+}
+
+:global(html.light) .reminderCheckboxInput:focus-visible {
+  outline-color: rgba(15, 23, 42, 0.45);
+}
+
+:global(html.light) .reminderCheckboxInput:checked {
+  border-color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+  background: var(--gray-ui-hover-strong, rgba(0, 0, 0, 0.1));
+}
+
+:global(html.light) .reminderCheckboxInput:checked::after {
+  background: var(--gray-ui-text, rgba(24, 24, 27, 0.94));
+}
+
+:global(html.light) .dashboardButtonNeutral,
+:global(html.light) .secondaryAction {
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.16));
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .dashboardButtonNeutral:hover:not(:disabled),
+:global(html.light) .secondaryAction:hover:not(:disabled) {
+  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.24));
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.96));
+}

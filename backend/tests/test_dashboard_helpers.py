@@ -1,6 +1,10 @@
 from datetime import datetime, timezone
 
-from backend.core.dashboard_helpers import normalize_habit_items, serialize_dashboard_pulse_record
+from backend.core.dashboard_helpers import (
+    normalize_habit_items,
+    normalize_plan_items,
+    serialize_dashboard_pulse_record,
+)
 
 
 def test_normalize_habit_items_preserves_completion_and_previous_label():
@@ -21,6 +25,36 @@ def test_normalize_habit_items_preserves_completion_and_previous_label():
             "label": "Read",
             "previous_label": "Read books",
             "completed": True,
+        }
+    ]
+
+
+def test_normalize_plan_items_preserves_extended_plan_fields():
+    payload = normalize_plan_items(
+        [
+            {
+                "id": "plan-1",
+                "label": "Ship dashboard patch",
+                "completed": False,
+                "deadline": "2026-02-09",
+                "scheduleSlot": "09:00-10:00",
+                "details": "Carry plan metadata in pulse history",
+                "reminderAt": "2026-02-09T08:45:00Z",
+                "color": "#6f8bff",
+            }
+        ]
+    )
+
+    assert payload == [
+        {
+            "id": "plan-1",
+            "label": "Ship dashboard patch",
+            "completed": False,
+            "deadline": "2026-02-09",
+            "schedule_slot": "09:00-10:00",
+            "description": "Carry plan metadata in pulse history",
+            "reminder_at": "2026-02-09T08:45:00Z",
+            "color": "#6f8bff",
         }
     ]
 

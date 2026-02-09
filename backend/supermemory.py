@@ -138,7 +138,9 @@ def _float_env(name: str, default: float) -> float:
 
 
 def supermemory_force_enabled() -> bool:
-    return _bool_env("GRAY_SUPERMEMORY_FORCE", True)
+    # Force mode is an explicit ops override and should remain opt-in.
+    # Defaulting to False ensures the user's memory toggle is respected.
+    return _bool_env("GRAY_SUPERMEMORY_FORCE", False)
 
 
 def supermemory_force_plan_tier(plan_tier: Optional[str]) -> Optional[str]:

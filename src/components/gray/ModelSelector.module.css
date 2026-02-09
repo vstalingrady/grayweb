@@ -503,3 +503,121 @@
     display: none;
   }
 }
+
+/* Light mode: selector menu surface, text, and hover states */
+:global(html.light) .container {
+  --model-selector-surface: var(--gray-ui-surface-elevated, #ffffff);
+  --model-selector-border: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+  --model-selector-text: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+  --model-selector-muted: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.9));
+  --model-selector-hover: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+  --model-selector-hover-strong: var(--gray-ui-hover-strong, rgba(0, 0, 0, 0.1));
+}
+
+:global(html.light) .trigger,
+:global(html.light) .triggerLabel,
+:global(html.light) .itemLabel,
+:global(html.light) .upgradeTitle,
+:global(html.light) .customInstLabel,
+:global(html.light) .actionItem,
+:global(html.light) .backButton {
+  color: var(--model-selector-text);
+}
+
+:global(html.light) .trigger:hover,
+:global(html.light) .menuItem:hover,
+:global(html.light) .customInstButton:hover,
+:global(html.light) .actionItem:hover:not(:disabled),
+:global(html.light) .backButton:hover {
+  background: var(--model-selector-hover);
+}
+
+:global(html.light) .chevron,
+:global(html.light) .itemIconWrapper,
+:global(html.light) .itemDescription,
+:global(html.light) .costIndicator,
+:global(html.light) .customInstLeft,
+:global(html.light) .customInstSub,
+:global(html.light) .actionArrow,
+:global(html.light) .actionUpgradeArrow {
+  color: var(--model-selector-muted);
+}
+
+:global(html.light) .menu {
+  background: var(--model-selector-surface);
+  border-color: var(--model-selector-border);
+  box-shadow: 0 14px 28px -10px rgba(15, 23, 42, 0.24);
+}
+
+:global(html.light) .menuItem {
+  color: var(--model-selector-text);
+}
+
+:global(html.light) .menuItemActive {
+  background: var(--model-selector-hover-strong);
+}
+
+:global(html.light) .menuItemLocked {
+  color: var(--model-selector-muted);
+  opacity: 0.82;
+}
+
+:global(html.light) .menuItemLocked .itemIconWrapper,
+:global(html.light) .menuItemLocked .itemLabel,
+:global(html.light) .menuItemLocked .itemDescription {
+  color: var(--model-selector-muted);
+}
+
+:global(html.light) .divider,
+:global(html.light) .groupModels::before {
+  background: var(--model-selector-border);
+}
+
+:global(html.light) .toggle {
+  background: var(--model-selector-hover);
+}
+
+:global(html.light) .toggleOn {
+  background: var(--model-selector-text);
+}
+
+:global(html.light) .toggleKnob {
+  background: var(--model-selector-muted);
+}
+
+:global(html.light) .toggleOn .toggleKnob {
+  background: var(--gray-ui-surface, #ffffff);
+}
+
+:global(html.light) .thinkingLevelLow {
+  background: var(--model-selector-hover);
+  color: var(--model-selector-muted);
+}
+
+:global(html.light) .thinkingLevelHigh {
+  background: var(--model-selector-text);
+  color: var(--gray-ui-surface, #ffffff);
+}
+
+:global(html.light) .comfyUpgradeCard {
+  background: var(--gray-ui-surface, #ffffff);
+  border-color: var(--model-selector-border);
+}
+
+:global(html.light) .upgradeBody {
+  color: var(--model-selector-muted);
+}
+
+:global(html.light) .upgradePill {
+  background: var(--model-selector-text);
+  color: var(--gray-ui-surface, #ffffff);
+}
+
+:global(html.light) .customInstAction {
+  color: var(--model-selector-text);
+  background: var(--model-selector-hover);
+}
+
+:global(html.light) .customInstButton:hover .customInstAction {
+  background: var(--model-selector-hover-strong);
+}

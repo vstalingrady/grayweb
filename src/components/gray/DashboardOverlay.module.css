@@ -110,8 +110,46 @@
         border: none;
     }
 
+    /*
+     * Mobile overlay scroll ownership:
+     * Keep `.overlayContent` as the height-constrained scroll root.
+     * Avoid nested scroll containers that can clip on small screens.
+     */
+    .overlayContent {
+        overflow-y: auto;
+    }
+
     .closeButton {
         top: 12px;
         right: 12px;
     }
+}
+
+/* Light mode: modal shell and control contrast */
+:global(html.light) .overlayBackdrop {
+    background: rgba(15, 23, 42, 0.24);
+}
+
+:global(html.light) .overlayContainer {
+    background: var(--gray-ui-surface-elevated, #ffffff);
+    border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+    box-shadow:
+        0 34px 64px -18px rgba(15, 23, 42, 0.24),
+        0 0 0 1px rgba(255, 255, 255, 0.72);
+}
+
+:global(html.light) .closeButton {
+    background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+    border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.1));
+    color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.9));
+}
+
+:global(html.light) .closeButton:hover {
+    background: var(--gray-ui-hover-strong, rgba(0, 0, 0, 0.1));
+    color: var(--gray-ui-text, rgba(24, 24, 27, 0.94));
+    border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.16));
+}
+
+:global(html.light) .closeButton:focus-visible {
+    outline-color: rgba(15, 23, 42, 0.45);
 }

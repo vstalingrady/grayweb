@@ -30,6 +30,7 @@ export function DashboardOverlay({
     ...dashboardProps
 }: DashboardOverlayProps) {
     const containerRef = useRef<HTMLDivElement>(null);
+    const scrollRootRef = useRef<HTMLDivElement>(null);
     const closeButtonRef = useRef<HTMLButtonElement>(null);
     const previousFocusRef = useRef<HTMLElement | null>(null);
 
@@ -99,6 +100,46 @@ export function DashboardOverlay({
         return () => window.removeEventListener("keydown", handleFocusTrap);
     }, [isOpen]);
 
+    useEffect(() => {
+        if (process.env.NODE_ENV === "production") {
+            return;
+        }
+        if (!isOpen) {
+            return;
+        }
+        if (typeof window === "undefined") {
+            return;
+        }
+        if (!window.matchMedia("(max-width: 900px)").matches) {
+            return;
+        }
+
+        const frameId = window.requestAnimationFrame(() => {
+            const scrollRoot = scrollRootRef.current;
+            if (!scrollRoot) {
+                return;
+            }
+            const overflowY = window.getComputedStyle(scrollRoot).overflowY;
+            const hasScrollableOverflow =
+                overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay";
+            const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+            const hasConstrainedHeight =
+                scrollRoot.clientHeight > 0 && scrollRoot.clientHeight <= viewportHeight + 1;
+
+            if (!hasScrollableOverflow || !hasConstrainedHeight) {
+                console.warn("[DashboardOverlay] Mobile scroll ownership regression detected.", {
+                    overflowY,
+                    rootClientHeight: scrollRoot.clientHeight,
+                    viewportHeight,
+                });
+            }
+        });
+
+        return () => {
+            window.cancelAnimationFrame(frameId);
+        };
+    }, [isOpen]);
+
     return (
         <AnimatePresence>
             {isOpen && (
@@ -134,7 +175,10 @@ export function DashboardOverlay({
                             <X size={18} />
                         </button>
 
-                        <div className={styles.overlayContent}>
+                        <div
+                            ref={scrollRootRef}
+                            className={styles.overlayContent}
+                        >
                             <GrayDashboardView
                                 {...dashboardProps}
                                 // Force compact layout or specific overrides for modal if needed

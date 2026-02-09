@@ -67,7 +67,17 @@ async def test_create_dashboard_pulse_is_idempotent_per_user_and_date(connected_
     first_payload = DashboardPulseCreate(
         date_key=date_key,
         timestamp=now_ms,
-        plans=[{"id": "p1", "label": "first", "completed": False}],
+        plans=[
+            {
+                "id": "p1",
+                "label": "first",
+                "completed": False,
+                "schedule_slot": "09:00-10:00",
+                "description": "initial description",
+                "reminder_at": "2026-02-08T08:45:00Z",
+                "color": "#6f8bff",
+            }
+        ],
         habits=[],
         proactivity={},
         carry_forward=False,
@@ -75,7 +85,17 @@ async def test_create_dashboard_pulse_is_idempotent_per_user_and_date(connected_
     second_payload = DashboardPulseCreate(
         date_key=date_key,
         timestamp=now_ms + 1000,
-        plans=[{"id": "p1", "label": "second", "completed": True}],
+        plans=[
+            {
+                "id": "p1",
+                "label": "second",
+                "completed": True,
+                "schedule_slot": "10:30-11:00",
+                "description": "updated description",
+                "reminder_at": "2026-02-08T10:15:00Z",
+                "color": "#00a86b",
+            }
+        ],
         habits=[],
         proactivity={},
         carry_forward=False,
@@ -105,3 +125,7 @@ async def test_create_dashboard_pulse_is_idempotent_per_user_and_date(connected_
     assert len(second.plans) == 1
     assert second.plans[0].label == "second"
     assert second.plans[0].completed is True
+    assert second.plans[0].schedule_slot == "10:30-11:00"
+    assert second.plans[0].description == "updated description"
+    assert second.plans[0].reminder_at == "2026-02-08T10:15:00Z"
+    assert second.plans[0].color == "#00a86b"

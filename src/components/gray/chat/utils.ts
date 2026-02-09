@@ -132,8 +132,12 @@ export const buildAssistantErrorReply = (cause: unknown) => {
 
 const MCP_TOOL_BLOCK_REGEX = /<use_mcp_tool[\s\S]*?<\/use_mcp_tool>/gi;
 
+export const stripMcpToolBlocks = (value: string | null | undefined): string => {
+    return (value ?? "").replace(MCP_TOOL_BLOCK_REGEX, "");
+};
+
 export const normalizeAssistantContent = (candidate: string | null | undefined, prompt: string) => {
-    const raw = (candidate ?? "").replace(MCP_TOOL_BLOCK_REGEX, "");
+    const raw = stripMcpToolBlocks(candidate);
     const trimmed = raw.trim();
     return trimmed.length > 0 ? trimmed : buildAssistantReply(prompt);
 };

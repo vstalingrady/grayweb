@@ -1031,3 +1031,70 @@
 :global(html.light) .profileMenuDivider {
   background: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
 }
+
+:global(html.light) .profileMenuUpgradeCard {
+  border-color: rgba(15, 23, 42, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 14px 24px rgba(15, 23, 42, 0.12);
+}
+
+:global(html.light) .profileMenuUpgradeCard::before {
+  background:
+    radial-gradient(140% 100% at 50% 0%, rgba(255, 255, 255, 0.72), transparent 58%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(15, 23, 42, 0.08));
+  opacity: 0.84;
+}
+
+:global(html.light) .profileMenuUpgrade:hover .profileMenuUpgradeCard,
+:global(html.light) .profileMenuUpgrade:focus-visible .profileMenuUpgradeCard {
+  border-color: rgba(15, 23, 42, 0.26);
+}
+
+:global(html.light) .profileMenuUpgradeTitle {
+  color: rgba(15, 23, 42, 0.95);
+}
+
+:global(html.light) .profileMenuUpgradeSubtext {
+  color: rgba(71, 85, 105, 0.86);
+}
+
+:global(html.light) .profileMenuUpgradePill {
+  background: rgba(15, 23, 42, 0.9);
+  color: rgba(248, 250, 252, 0.96);
+}
+
+:global(html.light) .profileMenuUpgradeCard[data-variant="voyager"] {
+  border-color: rgba(148, 163, 184, 0.4);
+  background-image: linear-gradient(
+    135deg,
+    rgba(237, 242, 249, 0.96),
+    rgba(227, 235, 246, 0.95) 58%,
+    rgba(215, 226, 243, 0.96)
+  );
+}
+
+:global(html.light) .profileMenuUpgradeCard[data-variant="voyager"]::before {
+  background:
+    radial-gradient(140% 100% at 50% 0%, rgba(255, 255, 255, 0.86), transparent 56%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(59, 130, 246, 0.12));
+}
+
+:global(html.light) .profileMenuUpgradeCard[data-variant="pioneer"] {
+  border-color: rgba(100, 116, 139, 0.38);
+  background: linear-gradient(
+    158deg,
+    rgba(236, 242, 255, 0.97) 0%,
+    rgba(223, 233, 251, 0.95) 100%
+  );
+}
+
+:global(html.light) .profileMenuUpgradeCard[data-variant="pioneer"]::before {
+  background:
+    radial-gradient(140% 100% at 50% 0%, rgba(255, 255, 255, 0.92), transparent 56%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(37, 99, 235, 0.14));
+}
+
+:global(html.light) .profileMenuUpgradeCard[data-variant="pioneer"] .profileMenuUpgradeSubtext {
+  color: rgba(51, 65, 85, 0.9);
+}

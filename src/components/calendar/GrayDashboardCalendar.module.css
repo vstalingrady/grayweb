@@ -232,6 +232,11 @@
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.4);
 }
 
+.miniMonthCell[data-holiday="true"][data-selected="false"] {
+  color: rgba(255, 96, 96, 0.95);
+  font-weight: 700;
+}
+
 .miniMonthCell[data-today="true"][data-selected="false"] {
   border-color: rgba(245, 245, 245, 0.65);
 }
@@ -263,6 +268,50 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.calendarSidebarHolidayPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.calendarSidebarHolidayToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  color: rgba(235, 235, 235, 0.75);
+  cursor: pointer;
+}
+
+.calendarSidebarHolidayToggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: #ff4c4c;
+}
+
+.calendarSidebarHolidaySelect {
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(12, 12, 12, 0.7);
+  color: rgba(245, 245, 245, 0.88);
+  font-size: 0.66rem;
+  letter-spacing: 0.03em;
+  padding: 7px 10px;
+}
+
+.calendarSidebarHolidaySelect:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.calendarSidebarHolidayStatus {
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+  color: rgba(220, 220, 220, 0.54);
 }
 
 .calendarSidebarExtra {
@@ -1286,6 +1335,19 @@
   max-width: 100%;
 }
 
+.eventCard[data-compact="true"] {
+  padding: 3px 8px;
+}
+
+.eventCard[data-compact="true"] .eventCardText {
+  gap: 0;
+}
+
+.eventCard[data-compact="true"] .eventCardTime,
+.eventCard[data-compact="true"] .eventCardDetails {
+  display: none;
+}
+
 .eventCard[data-dragging="true"] {
   box-shadow: none;
   z-index: 10;
@@ -1378,7 +1440,7 @@
   z-index: 11;
   width: 18px;
   height: 18px;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 999px;
   padding: 0;
   margin: 0;
@@ -1388,6 +1450,15 @@
   background: rgba(0, 0, 0, 0.22);
   color: inherit;
   cursor: pointer;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.eventCardTaskToggle:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline-offset: 1px;
 }
 
 /* The horizontal line */
@@ -1471,7 +1542,9 @@
 .composerOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(5, 6, 8, 0.72);
+  backdrop-filter: blur(10px) saturate(1.08);
+  -webkit-backdrop-filter: blur(10px) saturate(1.08);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1480,13 +1553,16 @@
 }
 
 .composerOverlayAnchored {
-  background: transparent;
+  background: rgba(5, 6, 8, 0.62);
   padding: 0;
   align-items: flex-start;
   justify-content: flex-start;
 }
 
 .composerCard {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
   width: min(340px, 92vw);
   background: rgba(24, 24, 24, 0.96);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -2238,6 +2314,19 @@
   border-color: rgba(255, 255, 255, 0.65);
 }
 
+.composerColorCustomTrigger {
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 3px;
+}
+
+.composerColorCustomIndicator {
+  width: 13px;
+  height: 3px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
 .composerFooter {
   display: flex;
   justify-content: flex-end;
@@ -2395,7 +2484,12 @@
   background: rgba(30, 30, 30, 0.98);
   z-index: 10;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  min-height: 20px;
+  min-height: 30px;
+}
+
+.calendarAllDayRowStatic {
+  position: relative;
+  top: 0;
 }
 
 .calendarAllDayLabel {
@@ -2408,22 +2502,64 @@
   text-transform: none;
   letter-spacing: 0.02em;
   border-right: 1px solid rgba(255, 255, 255, 0.04);
-  padding: 0 6px 0 0;
+  padding: 4px 6px 4px 0;
   text-align: right;
-  min-height: 20px;
+  min-height: 30px;
 }
 
 .calendarAllDayCell {
   border-right: 1px solid rgba(255, 255, 255, 0.04);
-  min-height: 20px;
+  min-height: 30px;
   position: relative;
   display: flex;
   flex-direction: column;
-  padding: 0 2px 2px;
+  padding: 3px 4px 4px;
 }
 
 .calendarAllDayCell:last-child {
   border-right: none;
+}
+
+.calendarAllDayItems {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 22px;
+}
+
+.calendarAllDayItem {
+  width: 100%;
+  display: block;
+  text-align: left;
+  border-radius: 4px;
+  padding: 2px 5px;
+  font-size: 0.58rem;
+  line-height: 1.2;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.calendarAllDayEventItem {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(245, 245, 245, 0.9);
+  border-left: 3px solid var(--all-day-item-color, rgba(255, 255, 255, 0.8));
+  cursor: pointer;
+  font: inherit;
+}
+
+.calendarAllDayEventItem:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.calendarAllDayHolidayItem {
+  border: 1px solid rgba(255, 76, 76, 0.28);
+  background: rgba(255, 76, 76, 0.14);
+  color: rgba(255, 124, 124, 0.96);
 }
 
 .composerHeaderTypeSelect {
@@ -2526,6 +2662,279 @@
   pointer-events: none;
 }
 
+:global(html.light) .dashboardCalendar {
+  --calendar-grid-line-color: rgba(0, 0, 0, 0.08);
+}
+
+:global(html.light) .calendarSurfaceBody {
+  --calendar-grid-line-color: rgba(0, 0, 0, 0.08);
+}
+
+:global(html.light) .calendarSurface {
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.08);
+}
+
+:global(html.light) .calendarSurfaceCompact {
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+:global(html.light) .calendarSurfaceHeader {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+:global(html.light) .calendarSurfaceLabel {
+  color: rgba(63, 63, 70, 0.62);
+}
+
+:global(html.light) .calendarSurfaceTitle {
+  color: rgba(20, 20, 20, 0.92);
+}
+
+:global(html.light) .calendarSurfaceRange {
+  color: rgba(63, 63, 70, 0.68);
+}
+
+:global(html.light) .calendarSurfaceTabs {
+  border-color: rgba(0, 0, 0, 0.14);
+  background: rgba(0, 0, 0, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+:global(html.light) .calendarSurfaceTab {
+  color: rgba(20, 20, 20, 0.6);
+}
+
+:global(html.light) .calendarSurfaceTab:hover,
+:global(html.light) .calendarSurfaceTab:focus-visible {
+  color: rgba(20, 20, 20, 0.9);
+}
+
+:global(html.light) .calendarSurfaceTab[data-active="true"] {
+  background: rgba(20, 20, 20, 0.9);
+  color: #ffffff;
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.2);
+}
+
+:global(html.light) .calendarSurfaceTab[data-active="true"]:hover,
+:global(html.light) .calendarSurfaceTab[data-active="true"]:focus-visible {
+  color: #ffffff;
+}
+
+:global(html.light) .calendarViewSelect {
+  border-color: rgba(0, 0, 0, 0.14);
+  background-color: rgba(255, 255, 255, 0.94);
+  color: rgba(20, 20, 20, 0.88);
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2012%208%27%3E%3Cpath%20fill=%27%23171717%27%20d=%27M1%202l5%204%205-4%27/%3E%3C/svg%3E");
+}
+
+:global(html.light) .calendarViewSelect:focus-visible {
+  border-color: rgba(0, 0, 0, 0.28);
+}
+
+:global(html.light) .calendarViewSelectCaret {
+  border-top-color: rgba(20, 20, 20, 0.72);
+}
+
+:global(html.light) .calendarViewMenu {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.12);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.14);
+}
+
+:global(html.light) .calendarViewMenuItem {
+  color: rgba(20, 20, 20, 0.86);
+}
+
+:global(html.light) .calendarViewMenuItem:hover,
+:global(html.light) .calendarViewMenuItem:focus-visible {
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(10, 10, 10, 0.95);
+}
+
+:global(html.light) .calendarViewMenuItem[data-active="true"] {
+  background: rgba(20, 20, 20, 0.9);
+  color: #ffffff;
+}
+
+:global(html.light) .calendarSidebarPanel {
+  border-right-color: rgba(0, 0, 0, 0.08);
+}
+
+:global(html.light) .calendarBoard {
+  background: rgba(255, 255, 255, 0.98);
+  scrollbar-color: rgba(0, 0, 0, 0.22) transparent;
+}
+
+:global(html.light) .calendarBoard::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.22);
+}
+
+:global(html.light) .calendarMonthRow {
+  background: rgba(255, 255, 255, 0.98);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+:global(html.light) .calendarHeaderRow {
+  color: rgba(63, 63, 70, 0.62);
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+  background: rgba(249, 250, 252, 0.98);
+}
+
+:global(html.light) .calendarHeaderPlaceholder {
+  border-right-color: rgba(0, 0, 0, 0.1);
+}
+
+:global(html.light) .calendarTimezoneLabel {
+  color: rgba(63, 63, 70, 0.68);
+}
+
+:global(html.light) .calendarHeaderCell {
+  border-right-color: rgba(0, 0, 0, 0.06);
+}
+
+:global(html.light) .calendarHeaderCell span {
+  color: rgba(63, 63, 70, 0.72);
+}
+
+:global(html.light) .calendarHeaderCell strong {
+  color: rgba(20, 20, 20, 0.88);
+}
+
+:global(html.light) .calendarHeaderCell[data-selected="true"][data-today="false"] strong,
+:global(html.light) .calendarHeaderCell[data-today="true"] strong {
+  background: rgba(20, 20, 20, 0.9);
+  border-color: rgba(20, 20, 20, 0.9);
+  color: #ffffff;
+  box-shadow: 0 8px 14px rgba(15, 23, 42, 0.22);
+}
+
+:global(html.light) .calendarTimesColumn {
+  color: rgba(71, 85, 105, 0.72);
+  border-right-color: rgba(0, 0, 0, 0.08);
+}
+
+:global(html.light) .calendarTimesColumn span {
+  color: rgba(71, 85, 105, 0.72);
+}
+
+:global(html.light) .calendarWeekColumn,
+:global(html.light) .calendarDayColumn {
+  background-color: #ffffff;
+  box-shadow:
+    inset 0 1px 0 rgba(0, 0, 0, 0.02),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.03);
+}
+
+:global(html.light) .calendarWeekColumn::after {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+:global(html.light) .calendarWeekColumn::before,
+:global(html.light) .calendarDayColumn::before {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+:global(html.light) .calendarWeekColumn[data-today="true"]::before,
+:global(html.light) .calendarDayColumn[data-today="true"]::before {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+:global(html.light) .calendarWeekColumn[data-selected="true"]::before,
+:global(html.light) .calendarDayColumn[data-selected="true"]::before {
+  opacity: 0.8;
+  background: rgba(15, 23, 42, 0.06);
+}
+
+:global(html.light) .calendarHourRow {
+  border-top-color: rgba(0, 0, 0, 0.08);
+}
+
+:global(html.light) .calendarHourRow:last-child {
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+:global(html.light) .calendarColumnSurfaceButton:focus-visible,
+:global(html.light) .eventCardAction:focus-visible {
+  outline-color: rgba(15, 23, 42, 0.45);
+}
+
+:global(html.light) .eventCard {
+  border-color: rgba(0, 0, 0, 0.14);
+  box-shadow: 0 6px 12px rgba(15, 23, 42, 0.12);
+}
+
+:global(html.light) .eventCard[data-display-hint="line"],
+:global(html.light) .eventCard[data-entry-type="reminder"] {
+  box-shadow: none;
+}
+
+:global(html.light) .eventCard[data-display-hint="line"]::after,
+:global(html.light) .eventCard[data-display-hint="line"]::before,
+:global(html.light) .eventCard[data-entry-type="reminder"]::before,
+:global(html.light) .eventCard[data-entry-type="reminder"]::after {
+  background: var(--event-line-color, rgba(15, 23, 42, 0.62));
+}
+
+:global(html.light) .eventCardTaskToggle {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(15, 23, 42, 0.2);
+  color: rgba(15, 23, 42, 0.86);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.14);
+}
+
+:global(html.light) .eventCard[data-task-completed="true"] .eventCardTaskToggle {
+  background: rgba(15, 23, 42, 0.88);
+  border-color: rgba(15, 23, 42, 0.88);
+  color: #ffffff;
+}
+
+:global(html.light) .eventCardTaskToggle:focus-visible {
+  outline-color: rgba(15, 23, 42, 0.38);
+}
+
+:global(html.light) .resizeHandle::after {
+  background: rgba(0, 0, 0, 0.28);
+}
+
+:global(html.light) .dashboardCalendarStandalone .calendarSurface {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+:global(html.light) .dashboardCalendarStandalone .calendarSurfaceLabel {
+  color: rgba(63, 63, 70, 0.62);
+}
+
+:global(html.light) .dashboardCalendarStandalone .calendarViewSelect {
+  background: rgba(255, 255, 255, 0.94);
+  border-color: rgba(0, 0, 0, 0.14);
+}
+
+:global(html.light) .dashboardCalendarStandalone .calendarWeekColumns,
+:global(html.light) .dashboardCalendarStandalone .calendarDayColumn {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+:global(html.light) .dashboardCalendarStandalone .calendarColumnScroller {
+  background-image: linear-gradient(to bottom,
+      rgba(0, 0, 0, 0.06) 1px,
+      transparent 1px);
+}
+
+:global(html.light) .dashboardCalendarStandalone .calendarTimesColumn {
+  color: rgba(71, 85, 105, 0.72);
+}
+
+:global(html.light) .dashboardCalendarStandalone .eventCard {
+  border-color: rgba(0, 0, 0, 0.12);
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.12);
+}
+
 :global(html.light) .calendarSidebar {
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid rgba(0, 0, 0, 0.08);
@@ -2562,6 +2971,17 @@
 :global(html.light) .calendarSidebarHeaderActions button {
   background: rgba(0, 0, 0, 0.04);
   color: rgba(20, 20, 20, 0.7);
+}
+
+:global(html.light) .calendarSidebarHeaderActions .calendarSidebarCreate {
+  background: rgba(20, 20, 20, 0.9);
+  color: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.22);
+}
+
+:global(html.light) .calendarSidebarHeaderActions .calendarSidebarCreate:hover {
+  background: rgba(10, 10, 10, 0.94);
+  border-color: rgba(0, 0, 0, 0.35);
 }
 
 :global(html.light) .calendarSidebarSwatch {
@@ -2609,6 +3029,10 @@
   border-color: rgba(0, 0, 0, 0.4);
 }
 
+:global(html.light) .miniMonthCell[data-holiday="true"][data-selected="false"] {
+  color: rgba(196, 20, 20, 0.92);
+}
+
 :global(html.light) .calendarSurfaceButton {
   background: rgba(0, 0, 0, 0.04);
   border-color: rgba(0, 0, 0, 0.15);
@@ -2644,6 +3068,36 @@
 :global(html.light) .calendarMobileViewToggleButton:hover:not([data-active="true"]),
 :global(html.light) .calendarMobileViewToggleButton:focus-visible:not([data-active="true"]) {
   color: rgba(20, 20, 20, 0.85);
+}
+
+:global(html.light) .calendarSidebarHolidayToggle {
+  color: rgba(20, 20, 20, 0.72);
+}
+
+:global(html.light) .calendarSidebarHolidaySelect {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: rgba(20, 20, 20, 0.82);
+}
+
+:global(html.light) .calendarSidebarHolidayStatus {
+  color: rgba(20, 20, 20, 0.5);
+}
+
+:global(html.light) .calendarAllDayEventItem {
+  border-color: rgba(0, 0, 0, 0.18);
+  background: rgba(0, 0, 0, 0.04);
+  color: rgba(20, 20, 20, 0.82);
+}
+
+:global(html.light) .calendarAllDayEventItem:hover {
+  background: rgba(0, 0, 0, 0.07);
+}
+
+:global(html.light) .calendarAllDayHolidayItem {
+  border-color: rgba(196, 20, 20, 0.32);
+  background: rgba(196, 20, 20, 0.12);
+  color: rgba(182, 18, 18, 0.9);
 }
 
 :global(html.light) .composerCard {

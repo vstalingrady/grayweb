@@ -134,9 +134,13 @@ export function GrayDashboardView({
   }, [currentPulse, hasPulseData, isCurrentPulseEditable, livePlans]);
 
   const planCalendarEvents = useMemo(() => mapPlansToCalendarEvents(displayPlans), [displayPlans]);
+  const nonPlanCalendarEvents = useMemo(
+    () => calendarEvents.filter((event) => !event.id.startsWith(PLAN_EVENT_ID_PREFIX)),
+    [calendarEvents]
+  );
 
   const mergedEvents = useMemo(() => {
-    const allEvents = [...calendarEvents, ...planCalendarEvents];
+    const allEvents = [...nonPlanCalendarEvents, ...planCalendarEvents];
     const seen = new Set<string>();
     return allEvents.filter((event) => {
       if (seen.has(event.id)) {
@@ -145,11 +149,14 @@ export function GrayDashboardView({
       seen.add(event.id);
       return true;
     });
-  }, [calendarEvents, planCalendarEvents]);
+  }, [nonPlanCalendarEvents, planCalendarEvents]);
 
   const handleCalendarEventDelete = useCallback(
     (event: CalendarEvent) => {
       if (!onDeletePlan) {
+        return;
+      }
+      if (!isCurrentPulseEditable) {
         return;
       }
 
@@ -164,7 +171,7 @@ export function GrayDashboardView({
       }
       console.warn(`[CALENDAR] Could not find plan for event: ${event.id}`);
     },
-    [displayPlans, onDeletePlan]
+    [displayPlans, isCurrentPulseEditable, onDeletePlan]
   );
 
   const {
@@ -192,6 +199,9 @@ export function GrayDashboardView({
   });
 
   const displayProactivity = useMemo(() => {
+    if (hasPulseData && !isCurrentPulseEditable) {
+      return currentPulse?.proactivity ?? proactivityFallback ?? null;
+    }
     if (isProactivityLoaded) {
       return proactivityFallback ?? null;
     }
@@ -595,6 +605,7 @@ export function GrayDashboardView({
       activeEvent={editingEvent ?? quickComposerSeedEvent}
       initialRange={composerRange}
       calendars={calendars}
+      showCalendarSelect={false}
       anchorRect={composerAnchorRect}
       onRequestClose={handleComposerClose}
       onSubmit={handleComposerSubmit}

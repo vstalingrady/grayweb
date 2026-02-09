@@ -17,6 +17,10 @@ const COLUMN_PADDING_PX = 4;
 
 type RGB = { r: number; g: number; b: number };
 
+const LINE_MARKER_MIN_LUMINANCE = 0.72;
+const LINE_MARKER_DARKEN_TARGET: RGB = { r: 15, g: 23, b: 42 };
+const LINE_MARKER_DARKEN_AMOUNT = 0.34;
+
 type TaskToggleAction = {
   checked?: boolean;
   disabled?: boolean;
@@ -98,6 +102,20 @@ const getRelativeLuminance = (rgb: RGB | null): number => {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 };
 
+const getContrastRatio = (luminanceA: number, luminanceB: number) => {
+  const lighter = Math.max(luminanceA, luminanceB);
+  const darker = Math.min(luminanceA, luminanceB);
+  return (lighter + 0.05) / (darker + 0.05);
+};
+
+const mixRgb = (source: RGB, target: RGB, amount: number): RGB => ({
+  r: clampChannel(source.r + (target.r - source.r) * amount),
+  g: clampChannel(source.g + (target.g - source.g) * amount),
+  b: clampChannel(source.b + (target.b - source.b) * amount),
+});
+
+const toCssRgb = (rgb: RGB) => `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+
 type EventCardProps = {
   event: PositionedEvent;
   isPreview?: boolean;
@@ -149,14 +167,21 @@ export const EventCard = memo(function EventCard({
   const detailText = event.description?.trim();
 
   const backgroundColor = event.color || DEFAULT_CARD_COLOR;
-  const luminance = getRelativeLuminance(parseColorString(backgroundColor));
-  const isLight = luminance > 0.6;
-  const textColor = isLight ? "#050505" : "rgba(247, 247, 247, 0.94)";
-  const timeColor = isLight ? "rgba(15, 15, 20, 0.65)" : "rgba(247, 247, 247, 0.78)";
-  const detailColor = isLight ? "rgba(18, 18, 24, 0.68)" : "rgba(240, 240, 244, 0.78)";
+  const parsedBackgroundColor = parseColorString(backgroundColor);
+  const luminance = getRelativeLuminance(parsedBackgroundColor);
+  const contrastWithDarkText = getContrastRatio(luminance, 0);
+  const contrastWithLightText = getContrastRatio(luminance, 1);
+  const prefersDarkText = contrastWithDarkText >= contrastWithLightText;
+  const textColor = prefersDarkText ? "rgba(10, 12, 18, 0.92)" : "rgba(247, 247, 247, 0.95)";
+  const timeColor = prefersDarkText ? "rgba(30, 41, 59, 0.72)" : "rgba(247, 247, 247, 0.82)";
+  const detailColor = prefersDarkText ? "rgba(51, 65, 85, 0.78)" : "rgba(240, 240, 244, 0.82)";
+  const lineColor = parsedBackgroundColor && luminance >= LINE_MARKER_MIN_LUMINANCE
+    ? toCssRgb(mixRgb(parsedBackgroundColor, LINE_MARKER_DARKEN_TARGET, LINE_MARKER_DARKEN_AMOUNT))
+    : backgroundColor;
   const columnCount = Math.max(event.columnCount ?? 1, 1);
   const columnIndex = event.column ?? 0;
   const isStacked = columnCount > 1;
+  const isCompactCard = event.displayHint !== "line" && event.height <= 34;
 
   const cardStyle: EventCardStyle = {
     top: `${event.top}px`,
@@ -168,7 +193,7 @@ export const EventCard = memo(function EventCard({
   };
 
   cardStyle["--event-card-color"] = backgroundColor;
-  cardStyle["--event-line-color"] = backgroundColor;
+  cardStyle["--event-line-color"] = lineColor;
   if (event.displayHint !== "line") {
     cardStyle.backgroundColor = backgroundColor;
   }
@@ -202,6 +227,7 @@ export const EventCard = memo(function EventCard({
       className={styles.eventCard}
       data-entry-type={event.entryType}
       data-display-hint={event.displayHint ?? undefined}
+      data-compact={isCompactCard ? "true" : "false"}
       data-stacked={isStacked ? "true" : undefined}
       data-preview={isPreview ? "true" : "false"}
       data-dragging={isDragging ? "true" : "false"}

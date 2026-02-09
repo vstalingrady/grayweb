@@ -123,6 +123,10 @@ export interface DashboardPulsePlanItem {
   label: string;
   completed: boolean;
   deadline?: string | null;
+  schedule_slot?: string | null;
+  description?: string | null;
+  reminder_at?: string | null;
+  color?: string | null;
 }
 
 export interface DashboardPulseHabitItem {
@@ -383,6 +387,7 @@ export interface ChatRequest {
   message: string;
   conversation_id?: string;
   user_id: number;
+  is_regeneration?: boolean;
   system_prompt?: string;
   context?: string;
   time_context?: string;

@@ -26,3 +26,30 @@ def test_mode_off_keeps_non_search_request_disabled() -> None:
 def test_legacy_payload_without_mode_honors_explicit_search_request() -> None:
     request = _build_request("can you google this meme?", mode=None, enabled=False)
     assert _resolve_web_search_enabled(request) is True
+
+
+def test_mode_auto_disables_cross_chat_memory_prompt_without_explicit_search() -> None:
+    request = _build_request(
+        "did i ask before in another chat about something else",
+        mode="auto",
+        enabled=False,
+    )
+    assert _resolve_web_search_enabled(request) is False
+
+
+def test_mode_auto_disables_different_chat_memory_prompt_without_explicit_search() -> None:
+    request = _build_request(
+        "did i ask before in a different chat about that",
+        mode="auto",
+        enabled=False,
+    )
+    assert _resolve_web_search_enabled(request) is False
+
+
+def test_mode_auto_keeps_explicit_search_when_memory_phrase_present() -> None:
+    request = _build_request(
+        "search another chat and find what i asked before",
+        mode="auto",
+        enabled=False,
+    )
+    assert _resolve_web_search_enabled(request) is True

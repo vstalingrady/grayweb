@@ -2,8 +2,13 @@
 
 import { useMemo } from "react";
 
-import { ensureDateZone, isSameDay, startOfDay } from "./dateUtils";
+import { ensureDateZone, startOfDay } from "./dateUtils";
 import { layoutDayEvents } from "./layoutDayEvents";
+import {
+  doesEventIntersectDay,
+  isAllDayCalendarEvent,
+  sortAllDayEvents,
+} from "./allDayUtils";
 import type { CalendarEvent, CalendarInfo, EventDraft, PositionedEvent } from "./types";
 
 type UseCalendarLayoutsOptions = {
@@ -25,10 +30,6 @@ export const useCalendarLayouts = ({
   activeDrafts,
   composerPreviewEvent,
 }: UseCalendarLayoutsOptions) => {
-  const dayKey = useMemo(() => {
-    return (value: Date) => `${value.getFullYear()}-${value.getMonth()}-${value.getDate()}`;
-  }, []);
-
   const calendarMap = useMemo(
     () => new Map(calendars.map((calendar) => [calendar.id, calendar])),
     [calendars]
@@ -56,102 +57,80 @@ export const useCalendarLayouts = ({
     return isPreviewVisible ? [...filtered, composerPreviewEvent] : filtered;
   }, [calendarMap, composerPreviewEvent, visibleEvents]);
 
-  const dayLayouts = useMemo<PositionedEvent[]>(() => {
-    const filtered = eventsForLayout.filter((event) => isSameDay(event.start, selectedDate));
-    let result = filtered;
-
-    if (activeDrafts) {
-      result = result.map((event) => {
-        const draft = activeDrafts[event.id];
-        if (draft) {
-          return {
-            ...event,
-            start: ensureDateZone(draft.start),
-            end: ensureDateZone(draft.end),
-          };
-        }
-        return event;
-      });
+  const eventsWithActiveDrafts = useMemo(() => {
+    if (!activeDrafts) {
+      return eventsForLayout;
     }
+    return eventsForLayout.map((event) => {
+      const draft = activeDrafts[event.id];
+      if (!draft) {
+        return event;
+      }
+      return {
+        ...event,
+        start: ensureDateZone(draft.start),
+        end: ensureDateZone(draft.end),
+      };
+    });
+  }, [activeDrafts, eventsForLayout]);
 
-    return layoutDayEvents(result, {
+  const timedEventsForLayout = useMemo(
+    () => eventsWithActiveDrafts.filter((event) => !isAllDayCalendarEvent(event)),
+    [eventsWithActiveDrafts]
+  );
+
+  const allDayEventsForLayout = useMemo(
+    () =>
+      sortAllDayEvents(
+        eventsWithActiveDrafts.filter((event) => isAllDayCalendarEvent(event))
+      ),
+    [eventsWithActiveDrafts]
+  );
+
+  const dayLayouts = useMemo<PositionedEvent[]>(() => {
+    const dayTimedEvents = timedEventsForLayout.filter((event) =>
+      doesEventIntersectDay(event, selectedDate)
+    );
+    return layoutDayEvents(dayTimedEvents, {
       hourHeight,
       minimumHeight: shortEventMinimumHeight,
       dayStart: startOfDay(selectedDate),
     });
-  }, [
-    activeDrafts,
-    eventsForLayout,
-    hourHeight,
-    selectedDate,
-    shortEventMinimumHeight,
-  ]);
+  }, [hourHeight, selectedDate, shortEventMinimumHeight, timedEventsForLayout]);
+
+  const dayAllDayEvents = useMemo(
+    () =>
+      allDayEventsForLayout.filter((event) =>
+        doesEventIntersectDay(event, selectedDate)
+      ),
+    [allDayEventsForLayout, selectedDate]
+  );
 
   const weekLayouts = useMemo(() => {
-    const movedDraftsByDayKey = (() => {
-      if (!activeDrafts) {
-        return null;
-      }
-      const visibleEventsById = new Map(visibleEvents.map((event) => [event.id, event]));
-      const movedByDay = new Map<string, CalendarEvent[]>();
-      for (const draft of Object.values(activeDrafts)) {
-        const originalEvent = visibleEventsById.get(draft.id);
-        if (!originalEvent) {
-          continue;
-        }
-        if (isSameDay(originalEvent.start, draft.start)) {
-          continue;
-        }
-        const key = dayKey(draft.start);
-        const next = movedByDay.get(key) ?? [];
-        next.push({
-          ...originalEvent,
-          start: ensureDateZone(draft.start),
-          end: ensureDateZone(draft.end),
-        });
-        movedByDay.set(key, next);
-      }
-      return movedByDay;
-    })();
-
     return weekDays.map((day) => {
-      const dayEventsForWeek = eventsForLayout.filter((event) => isSameDay(event.start, day));
-      const mappedEvents = activeDrafts
-        ? dayEventsForWeek.map((event) => {
-          const draft = activeDrafts[event.id];
-          if (draft) {
-            return {
-              ...event,
-              start: ensureDateZone(draft.start),
-              end: ensureDateZone(draft.end),
-            };
-          }
-          return event;
-        })
-        : dayEventsForWeek;
-
-      const eventsWithPreview = mappedEvents.filter((event) => isSameDay(event.start, day));
-
-      const movedDraftEvents = movedDraftsByDayKey?.get(dayKey(day));
-      if (movedDraftEvents) {
-        eventsWithPreview.push(...movedDraftEvents);
-      }
-
-      return layoutDayEvents(eventsWithPreview, {
+      const dayTimedEvents = timedEventsForLayout.filter((event) =>
+        doesEventIntersectDay(event, day)
+      );
+      return layoutDayEvents(dayTimedEvents, {
         hourHeight,
         minimumHeight: shortEventMinimumHeight,
         dayStart: startOfDay(day),
       });
     });
-  }, [
-    activeDrafts,
-    dayKey,
-    eventsForLayout,
-    hourHeight,
-    visibleEvents,
-    shortEventMinimumHeight,
-    weekDays,
-  ]);
+  }, [hourHeight, shortEventMinimumHeight, timedEventsForLayout, weekDays]);
 
-  return { dayLayouts, weekLayouts };
+  const weekAllDayEvents = useMemo(
+    () =>
+      weekDays.map((day) =>
+        allDayEventsForLayout.filter((event) => doesEventIntersectDay(event, day))
+      ),
+    [allDayEventsForLayout, weekDays]
+  );
+
+  return {
+    dayLayouts,
+    dayAllDayEvents,
+    weekLayouts,
+    weekAllDayEvents,
+  };
 };

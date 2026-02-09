@@ -737,7 +737,13 @@ async def _stream_openrouter_response_impl(
             "reminders": structured_reminders if structured_reminders else None
         })
     else:
-        if yielded_any_tokens and not final_text.strip():
-            final_text = "Done."
+        if not final_text.strip():
+            if executed_search_queries:
+                final_text = (
+                    "I couldn't find enough signal from that search. "
+                    "Try rephrasing with a bit more detail, or ask me to recall from memory."
+                )
+            else:
+                final_text = "I couldn't generate a complete reply just now. Please try again."
             yield ("delta", final_text)
         yield ("final", {"text": final_text, "grounding_metadata": grounding_metadata})

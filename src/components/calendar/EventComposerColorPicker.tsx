@@ -1,6 +1,6 @@
 import type { CSSProperties, Dispatch, MutableRefObject, SetStateAction } from "react";
 
-import { Plus } from "lucide-react";
+import { Pencil } from "lucide-react";
 
 import styles from "./GrayDashboardCalendar.module.css";
 import {
@@ -66,14 +66,19 @@ export function EventComposerColorPicker({
       </div>
       <button
         type="button"
-        className={styles.composerColorDot}
+        className={`${styles.composerColorDot} ${styles.composerColorCustomTrigger}`}
         data-active={isQuickSwatch ? "false" : "true"}
         onClick={() => setIsColorPickerOpen((previous) => !previous)}
         aria-label={t("Pick custom color")}
         aria-expanded={isColorPickerOpen ? "true" : "false"}
         ref={colorPickerTriggerRef}
       >
-        <Plus size={18} strokeWidth={1.75} aria-hidden="true" />
+        <Pencil size={14} strokeWidth={1.9} aria-hidden="true" />
+        <span
+          className={styles.composerColorCustomIndicator}
+          style={{ backgroundColor: isQuickSwatch ? "rgba(245, 245, 245, 0.28)" : color }}
+          aria-hidden="true"
+        />
       </button>
 
       {isColorPickerOpen ? (

@@ -284,3 +284,77 @@
     padding: 7px;
   }
 }
+
+/* Light mode: overlay surface, typography, and hover contrast */
+:global(html.light) .overlayBackdrop {
+  background: rgba(15, 23, 42, 0.22);
+}
+
+:global(html.light) .overlayContainer {
+  background: var(--gray-ui-surface-elevated, #ffffff);
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+  box-shadow:
+    0 24px 48px -12px rgba(15, 23, 42, 0.2),
+    0 0 0 1px rgba(255, 255, 255, 0.72);
+}
+
+:global(html.light) .searchHeader,
+:global(html.light) .footer {
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+}
+
+:global(html.light) .closeButton {
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.1));
+  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.92));
+}
+
+:global(html.light) .closeButton:hover {
+  background: var(--gray-ui-hover-strong, rgba(0, 0, 0, 0.1));
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.94));
+}
+
+:global(html.light) .closeButton:focus-visible {
+  outline-color: rgba(15, 23, 42, 0.45);
+}
+
+:global(html.light) .searchIcon,
+:global(html.light) .searchInput::placeholder,
+:global(html.light) .sectionTitle,
+:global(html.light) .sectionAction,
+:global(html.light) .itemIcon,
+:global(html.light) .itemMeta,
+:global(html.light) .footer,
+:global(html.light) .actionButton,
+:global(html.light) .key {
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.9));
+}
+
+:global(html.light) .searchInput,
+:global(html.light) .itemText {
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .searchInput:focus-visible {
+  outline-color: rgba(15, 23, 42, 0.35);
+}
+
+:global(html.light) .item:hover,
+:global(html.light) .item:focus-within,
+:global(html.light) .item[data-active="true"] {
+  background: linear-gradient(
+    to left,
+    rgba(15, 23, 42, 0.1),
+    rgba(15, 23, 42, 0.06) 55%,
+    rgba(15, 23, 42, 0) 100%
+  );
+}
+
+:global(html.light) .actionButton:hover {
+  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .key {
+  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+}

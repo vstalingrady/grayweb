@@ -1,7 +1,7 @@
 "use client";
 
-import type { ElementType } from "react";
-import { Moon, Sun } from "lucide-react";
+import { useEffect, useMemo, useState, type ElementType } from "react";
+import { Monitor, Moon, Smartphone, Sun } from "lucide-react";
 import styles from "../SettingsStyles.module.css";
 import type { Locale } from "@/lib/i18n";
 import type { ThemeMode } from "@/components/gray/settings/types";
@@ -29,7 +29,60 @@ export function PreferencesSection({
   responseLanguage,
   onResponseLanguageChange,
 }: PreferencesSectionProps) {
-  const themeIcon = theme === "light" ? Sun : Moon;
+  const [systemPrefersLight, setSystemPrefersLight] = useState(false);
+  const [preferMobileSystemIcon, setPreferMobileSystemIcon] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const colorSchemeQuery = window.matchMedia("(prefers-color-scheme: light)");
+    const coarsePointerQuery = window.matchMedia("(pointer: coarse)");
+    const narrowViewportQuery = window.matchMedia("(max-width: 768px)");
+
+    const syncSystemTheme = () => {
+      setSystemPrefersLight(colorSchemeQuery.matches);
+    };
+    const syncDeviceHint = () => {
+      setPreferMobileSystemIcon(coarsePointerQuery.matches || narrowViewportQuery.matches);
+    };
+    syncSystemTheme();
+    syncDeviceHint();
+
+    const attachMediaListener = (
+      query: MediaQueryList,
+      handler: () => void
+    ): (() => void) => {
+      if (typeof query.addEventListener === "function") {
+        query.addEventListener("change", handler);
+        return () => query.removeEventListener("change", handler);
+      }
+      if (typeof query.addListener === "function") {
+        query.addListener(handler);
+        return () => query.removeListener(handler);
+      }
+      return () => {};
+    };
+
+    const cleanups = [
+      attachMediaListener(colorSchemeQuery, syncSystemTheme),
+      attachMediaListener(coarsePointerQuery, syncDeviceHint),
+      attachMediaListener(narrowViewportQuery, syncDeviceHint),
+    ];
+
+    return () => {
+      cleanups.forEach((cleanup) => cleanup());
+    };
+  }, []);
+
+  const themeIcon = useMemo(() => {
+    if (theme === "system") {
+      return preferMobileSystemIcon ? Smartphone : Monitor;
+    }
+    return theme === "light" ? Sun : Moon;
+  }, [theme, preferMobileSystemIcon]);
+  const systemThemeLabel = systemPrefersLight ? t("System (Light)") : t("System (Dark)");
 
   return (
     <>
@@ -48,7 +101,7 @@ export function PreferencesSection({
             onChange={(val) => onThemeChange(val as ThemeMode)}
             icon={themeIcon}
             options={[
-              { value: "system", label: t("System (Dark)") },
+              { value: "system", label: systemThemeLabel },
               { value: "dark", label: t("Dark") },
               { value: "light", label: t("Light") },
             ]}

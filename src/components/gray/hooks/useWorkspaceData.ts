@@ -25,9 +25,29 @@ const hashStringToIndex = (value: string, modulo: number): number => {
   return hash;
 };
 
+const parseDateOnly = (value: string): Date | null => {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
+    return null;
+  }
+  const year = Number.parseInt(match[1], 10);
+  const month = Number.parseInt(match[2], 10);
+  const day = Number.parseInt(match[3], 10);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return null;
+  }
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
+};
+
 const resolveGoogleDate = (payload: ApiGoogleCalendarEvent["start"] | ApiGoogleCalendarEvent["end"] | null | undefined): Date | null => {
   if (!payload) {
     return null;
+  }
+  if (payload.date) {
+    const parsedDateOnly = parseDateOnly(payload.date);
+    if (parsedDateOnly) {
+      return parsedDateOnly;
+    }
   }
   const raw = payload.dateTime ?? payload.date;
   if (!raw) {
@@ -220,15 +240,16 @@ export function useWorkspaceData(
             const parsedStart = parseApiDateTime(event.start_time) ?? new Date(event.start_time);
             const parsedEnd = parseApiDateTime(event.end_time) ?? new Date(event.end_time);
             const parsedReminderAt = parseApiDateTime(event.reminder_at ?? null);
+            const resolvedEventColor = sanitizeEventColor(
+              event.color ?? calendarColorMap.get(associatedCalendarId) ?? fallbackEventColor
+            );
             return {
               id: event.id.toString(),
               calendarId: associatedCalendarId,
               title: event.title,
               start: parsedStart,
               end: parsedEnd,
-              color: sanitizeEventColor(
-                calendarColorMap.get(associatedCalendarId) ?? fallbackEventColor
-              ),
+              color: resolvedEventColor,
               entryType: (event.entry_type || "event") as CalendarEntryType,
               isCompleted: event.is_completed,
               recurrence: event.recurrence,

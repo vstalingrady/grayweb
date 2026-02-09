@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -29,6 +30,7 @@ import { useDashboardCalendarInteractions } from "./useDashboardCalendarInteract
 import { useDashboardCalendarSelection } from "./useDashboardCalendarSelection";
 import { useCalendarLayouts } from "./useCalendarLayouts";
 import { useCalendarNowIndicators } from "./useCalendarNowIndicators";
+import { usePublicHolidays } from "./usePublicHolidays";
 import { startOfWeek } from "./dateUtils";
 import {
   CalendarEvent,
@@ -42,6 +44,28 @@ import type { CalendarViewMode, ComposerAnchorRect } from "./dashboardCalendarTy
 const DEFAULT_HOUR_HEIGHT = 72;
 const SNAP_MINUTES = 15;
 const TIMELINE_WIDTH = 56;
+const RESPONSIVE_WEEK_WITH_SIDEBAR_BREAKPOINT = 1280;
+const RESPONSIVE_DAY_MODE_BREAKPOINT = 1024;
+const RESPONSIVE_DAY_WITH_SIDEBAR_MIN_WIDTH = 768;
+
+type ResponsiveLayoutStage =
+  | "week_with_sidebar"
+  | "week_without_sidebar"
+  | "day_with_sidebar"
+  | "day_without_sidebar";
+
+const resolveResponsiveLayoutStage = (viewportWidth: number): ResponsiveLayoutStage => {
+  if (viewportWidth > RESPONSIVE_WEEK_WITH_SIDEBAR_BREAKPOINT) {
+    return "week_with_sidebar";
+  }
+  if (viewportWidth > RESPONSIVE_DAY_MODE_BREAKPOINT) {
+    return "week_without_sidebar";
+  }
+  if (viewportWidth >= RESPONSIVE_DAY_WITH_SIDEBAR_MIN_WIDTH) {
+    return "day_with_sidebar";
+  }
+  return "day_without_sidebar";
+};
 
 const formatWeekRange = (reference: Date) => {
   const start = startOfWeek(reference);
@@ -126,6 +150,7 @@ export function GrayDashboardCalendar({
   forceSidebarOnNarrow = false,
   className,
   surfaceClassName,
+  showTodayButton = false,
   onIntegrationAction,
   dashboardTab = "calendar",
   onSelectDashboardTab,
@@ -143,6 +168,52 @@ export function GrayDashboardCalendar({
   const { t } = useI18n();
   const hourHeight = hourHeightProp ?? DEFAULT_HOUR_HEIGHT;
   const [viewMode, setViewMode] = useState<CalendarViewMode>(viewModeLocked ?? "week");
+  const [viewportWidth, setViewportWidth] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const syncViewportWidth = () => {
+      setViewportWidth(window.innerWidth);
+    };
+
+    syncViewportWidth();
+    window.addEventListener("resize", syncViewportWidth);
+
+    return () => {
+      window.removeEventListener("resize", syncViewportWidth);
+    };
+  }, []);
+
+  const responsiveLayoutStage = useMemo<ResponsiveLayoutStage | null>(() => {
+    if (viewportWidth === null) {
+      return null;
+    }
+    return resolveResponsiveLayoutStage(viewportWidth);
+  }, [viewportWidth]);
+
+  useEffect(() => {
+    if (viewModeLocked || !responsiveLayoutStage) {
+      return;
+    }
+
+    const nextMode: CalendarViewMode =
+      responsiveLayoutStage === "day_with_sidebar" ||
+      responsiveLayoutStage === "day_without_sidebar"
+        ? "day"
+        : "week";
+
+    setViewMode((previousMode) => (previousMode === nextMode ? previousMode : nextMode));
+  }, [responsiveLayoutStage, viewModeLocked]);
+
+  useEffect(() => {
+    if (!viewModeLocked) {
+      return;
+    }
+    setViewMode((previousMode) => (previousMode === viewModeLocked ? previousMode : viewModeLocked));
+  }, [viewModeLocked]);
 
   const {
     selectedDate,
@@ -167,11 +238,17 @@ export function GrayDashboardCalendar({
     if (!(target instanceof HTMLElement)) {
       return false;
     }
-    return Boolean(
-      target.closest(
-        "button, a, input, textarea, select, [role='button'], [data-no-calendar-swipe='true']"
-      )
-    );
+    if (target.closest("[data-no-calendar-swipe='true']")) {
+      return true;
+    }
+    if (target.closest("a, input, textarea, select, [role='button']")) {
+      return true;
+    }
+    const buttonTarget = target.closest("button");
+    if (!buttonTarget) {
+      return false;
+    }
+    return !buttonTarget.classList.contains(styles.calendarColumnSurfaceButton);
   };
 
   const { calendars, events, updateCalendars, updateEvents } = useControlledCalendarData({
@@ -274,7 +351,7 @@ export function GrayDashboardCalendar({
     hourHeight,
   });
 
-  const { dayLayouts, weekLayouts } = useCalendarLayouts({
+  const { dayLayouts, dayAllDayEvents, weekLayouts, weekAllDayEvents } = useCalendarLayouts({
     calendars,
     events,
     selectedDate,
@@ -282,6 +359,24 @@ export function GrayDashboardCalendar({
     hourHeight,
     activeDrafts,
     composerPreviewEvent,
+  });
+
+  const {
+    holidayEnabled,
+    holidayCountryCode,
+    availableCountries,
+    holidayDateKeys,
+    holidayNameByDateKey,
+    weekHolidayEntries,
+    dayHolidayEntries,
+    isHolidayCountryLoading,
+    isHolidayDataLoading,
+    setHolidayEnabled,
+    setHolidayCountryCode,
+  } = usePublicHolidays({
+    monthDate,
+    selectedDate,
+    weekDays,
   });
 
   useDashboardCalendarInitialScroll({
@@ -393,6 +488,17 @@ export function GrayDashboardCalendar({
     calendarStyle["--calendar-max-height"] = "100%";
   }
 
+  const responsiveSidebarVisible = responsiveLayoutStage
+    ? responsiveLayoutStage === "week_with_sidebar" ||
+      responsiveLayoutStage === "day_with_sidebar"
+    : showSidebar;
+
+  const effectiveShowSidebar =
+    showSidebar && (forceSidebarOnNarrow || responsiveSidebarVisible);
+  const effectiveForceSidebarOnNarrow =
+    effectiveShowSidebar &&
+    (forceSidebarOnNarrow || responsiveLayoutStage === "day_with_sidebar");
+
   const monthLabel = selectedDate.toLocaleDateString(undefined, {
     month: "long",
     year: "numeric",
@@ -403,7 +509,7 @@ export function GrayDashboardCalendar({
 
   const calendarSurfaceClassName = [
     styles.dashboardCalendar,
-    showSidebar ? styles.dashboardCalendarWithSidebar : styles.dashboardCalendarStandalone,
+    effectiveShowSidebar ? styles.dashboardCalendarWithSidebar : styles.dashboardCalendarStandalone,
     styles.calendarSurface,
     compactSurface ? styles.calendarSurfaceCompact : null,
     surfaceClassName,
@@ -412,8 +518,12 @@ export function GrayDashboardCalendar({
     .filter(Boolean)
     .join(" ");
 
-  const showViewSelect = showHeaderControls && !viewModeLocked;
-  const showTodayControl = false;
+  const showViewSelect =
+    showHeaderControls &&
+    !viewModeLocked &&
+    viewportWidth !== null &&
+    viewportWidth > RESPONSIVE_DAY_MODE_BREAKPOINT;
+  const showTodayControl = Boolean(showHeaderControls && showTodayButton);
   const showNavigationControls = showHeaderControls;
   const hasHeaderRight =
     showNavigationControls || showTodayControl || showViewSelect;
@@ -430,7 +540,7 @@ export function GrayDashboardCalendar({
     onNextMonth: () => handleMonthNavigate(1),
     onPrevRange: () => handleNavigateRange(-1),
     onNextRange: () => handleNavigateRange(1),
-    onGoToday: undefined,
+    onGoToday: showTodayControl ? handleGoToday : undefined,
     viewMode,
     onViewModeChange: showViewSelect ? updateViewMode : undefined,
     viewModeOptions: [
@@ -473,11 +583,11 @@ export function GrayDashboardCalendar({
   const bodyElement = (
     <div
       className={bodyClassName}
-      data-has-sidebar={showSidebar ? "true" : "false"}
-      data-force-narrow-sidebar={forceSidebarOnNarrow ? "true" : "false"}
+      data-has-sidebar={effectiveShowSidebar ? "true" : "false"}
+      data-force-narrow-sidebar={effectiveForceSidebarOnNarrow ? "true" : "false"}
       style={embedWithinParentSurface ? calendarStyle : undefined}
     >
-      {showSidebar && (
+      {effectiveShowSidebar && (
         <div className={styles.calendarSidebarPanel}>
           <CalendarSidebar
             monthDate={monthDate}
@@ -489,8 +599,19 @@ export function GrayDashboardCalendar({
             showHeader
             className={styles.calendarSidebarIntegrated}
             showMonthNavigation
+            showTodayButton={showTodayControl}
+            onGoToday={showTodayControl ? handleGoToday : undefined}
             showCalendarList={showCalendarList}
             onIntegrationAction={onIntegrationAction}
+            holidayEnabled={holidayEnabled}
+            holidayCountryCode={holidayCountryCode}
+            holidayCountries={availableCountries}
+            holidayDateKeys={holidayDateKeys}
+            holidayNameByDateKey={holidayNameByDateKey}
+            holidayCountryLoading={isHolidayCountryLoading}
+            holidayDataLoading={isHolidayDataLoading}
+            onHolidayEnabledChange={setHolidayEnabled}
+            onHolidayCountryChange={setHolidayCountryCode}
           />
         </div>
       )}
@@ -511,6 +632,8 @@ export function GrayDashboardCalendar({
             showHeaderDates={showHeaderDates}
             weekNowIndicator={weekNowIndicator}
             weekLayouts={weekLayouts}
+            weekAllDayEvents={weekAllDayEvents}
+            weekHolidayEntries={weekHolidayEntries}
             draggingEventIds={draggingEventIds}
             selectedEventIds={selectedEventIds}
             weekScrollRef={weekScrollRef}
@@ -536,6 +659,8 @@ export function GrayDashboardCalendar({
             showHeaderDates={showHeaderDates}
             dayIndicatorOffset={dayIndicatorOffset}
             dayLayouts={dayLayouts}
+            dayAllDayEvents={dayAllDayEvents}
+            dayHolidayEntries={dayHolidayEntries}
             draggingEventIds={draggingEventIds}
             selectedEventIds={selectedEventIds}
             dayColumnRef={dayColumnRef}

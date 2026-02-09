@@ -92,7 +92,8 @@ export const useDashboardCalendarInteractions = ({
       const offsetY = mouseEvent.clientY - bounds.top;
       const snappedMinutes =
         Math.round((offsetY / hourHeight) * (60 / snapMinutes)) * snapMinutes;
-      const totalMinutes = Math.max(0, Math.min(24 * 60 - 1, snappedMinutes));
+      const maxStartMinutes = Math.max(0, 24 * 60 - snapMinutes);
+      const totalMinutes = Math.max(0, Math.min(maxStartMinutes, snappedMinutes));
       const hours = Math.floor(totalMinutes / 60);
       const minutes = totalMinutes % 60;
       const start = new Date(day);

@@ -23,7 +23,6 @@ import {
   Archive,
   Bell,
   Brain,
-  CreditCard,
   LogOut,
 } from "lucide-react";
 import styles from "./SettingsStyles.module.css";
@@ -39,14 +38,14 @@ import { clearAuthCookies } from "@/lib/auth/cookies";
 import { clearSupabaseAuthStorage } from "@/lib/supabaseStorage";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { extractMemorySettingsFromUser } from "@/lib/memorySettings";
-import { AccountSection } from "./sections/AccountSection";
+import { AccountSection, buildRenewalLabel } from "./sections/AccountSection";
 import { DataControlsSection } from "./sections/DataControlsSection";
 import { MemorySection } from "./sections/MemorySection";
 import { ModelsSection } from "./sections/ModelsSection";
 import { NotificationsSection } from "./sections/NotificationsSection";
 import { PersonalizationSection } from "./sections/PersonalizationSection";
 import { PreferencesSection } from "./sections/PreferencesSection";
-import { derivePlanTierLabel, normalizePlanTier, PLAN_TIER_LEVELS } from "@/components/gray/utils/helperFunctions";
+import { normalizePlanTier, PLAN_TIER_LEVELS } from "@/components/gray/utils/helperFunctions";
 import {
   type SettingsModalProps,
   type SettingsSection,
@@ -166,7 +165,10 @@ export function SettingsModal({
     const normalized = normalizePlanTier(user);
     return PLAN_TIER_LEVELS[normalized] ?? 0;
   }, [user]);
-  const planLabel = useMemo(() => derivePlanTierLabel(user), [user]);
+  const currentPlanName = useMemo(
+    () => (tierLevel >= 3 ? "Pioneer" : tierLevel >= 2 ? "Voyager" : "Pathfinder"),
+    [tierLevel]
+  );
   const accountMemorySettings = useMemo(
     () => extractMemorySettingsFromUser(user),
     [user]
@@ -252,6 +254,7 @@ export function SettingsModal({
   const [avatarUploadError, setAvatarUploadError] = useState<string | null>(null);
   const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
   const mobileAvatarFileInputRef = useRef<HTMLInputElement | null>(null);
+  const mobileRootScrollRef = useRef<HTMLDivElement | null>(null);
 
   const resolvedDeviceTimeZone = useMemo(() => {
     try {
@@ -275,6 +278,41 @@ export function SettingsModal({
       return [];
     }
   }, []);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") {
+      return;
+    }
+    if (!isOpen || !isMobile || mobileView !== "root") {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      const mobileRoot = mobileRootScrollRef.current;
+      if (!mobileRoot) {
+        return;
+      }
+      const overflowY = window.getComputedStyle(mobileRoot).overflowY;
+      const hasScrollableOverflow =
+        overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay";
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      const hasConstrainedHeight =
+        mobileRoot.clientHeight > 0 && mobileRoot.clientHeight <= viewportHeight + 1;
+
+      if (!hasScrollableOverflow || !hasConstrainedHeight) {
+        console.warn("[SettingsModal] Mobile root scroll layout regression detected.", {
+          overflowY,
+          rootClientHeight: mobileRoot.clientHeight,
+          viewportHeight,
+          mobileView,
+        });
+      }
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [isMobile, isOpen, mobileView]);
 
   // Sync state with user profile and chat store
   useEffect(() => {
@@ -606,7 +644,10 @@ export function SettingsModal({
       <div className={styles.settingsContainer} data-mobile-view={mobileView}>
         {/* Mobile Root View */}
         {isMobile && mobileView === "root" && (
-          <div className={styles.mobileSettingsRoot}>
+          <div
+            ref={mobileRootScrollRef}
+            className={styles.mobileSettingsRoot}
+          >
             <header className={styles.mobileSettingsHeader}>
               <button
                 type="button"
@@ -628,13 +669,15 @@ export function SettingsModal({
                 onChange={handleAvatarFileChange}
                 style={{ display: "none" }}
               />
-              <div className={styles.mobileProfileAvatar}>
-                {user?.profile_picture_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={user.profile_picture_url} alt="" />
-                ) : (
-                  <UserCircle size={48} />
-                )}
+              <div className={styles.mobileProfileAvatarWrap}>
+                <div className={styles.mobileProfileAvatar}>
+                  {user?.profile_picture_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={user.profile_picture_url} alt="" />
+                  ) : (
+                    <UserCircle size={48} />
+                  )}
+                </div>
                 <button
                   type="button"
                   className={styles.mobileProfileAvatarEdit}
@@ -659,18 +702,31 @@ export function SettingsModal({
               {user?.email ? (
                 <span className={styles.mobileProfileEmail}>{user.email}</span>
               ) : null}
-              <button
-                type="button"
-                className={`${styles.mobileGroupItem} ${styles.mobileProfilePlanRow}`}
-                onClick={handleNavigateToPricing}
-              >
-                <CreditCard className={styles.mobileGroupItemIcon} size={20} />
-                <div className={styles.mobileGroupItemBody}>
-                  <span className={styles.mobileGroupItemLabel}>{t("Plan")}</span>
-                  <span className={styles.mobileGroupItemValue}>{planLabel}</span>
+              <div className={styles.mobileSubscriptionBlock}>
+                <span className={styles.mobileSubscriptionLabel}>{t("Your Subscription")}</span>
+                <div
+                  className={styles.settingsSubscriptionCard}
+                  data-variant={tierLevel >= 3 ? "primary" : "highlighted"}
+                >
+                  <div className={styles.settingsUpgradeText}>
+                    <h4>
+                      {t("Current Plan")}: {currentPlanName}
+                    </h4>
+                    <p>{buildRenewalLabel(user)}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className={`${styles.settingsSubscriptionButton} ${
+                      tierLevel >= 3
+                        ? styles.settingsSubscriptionButtonPrimary
+                        : styles.settingsSubscriptionButtonOutline
+                    }`}
+                    onClick={handleNavigateToPricing}
+                  >
+                    {t("View plan")}
+                  </button>
                 </div>
-                <ChevronRight className={styles.mobileGroupItemArrow} size={16} />
-              </button>
+              </div>
               {avatarUploadError ? (
                 <span className={styles.mobileProfileError}>{avatarUploadError}</span>
               ) : null}

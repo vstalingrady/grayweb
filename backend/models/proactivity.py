@@ -96,6 +96,10 @@ class DashboardPulsePlanItem(BaseModel):
     label: str
     completed: bool = False
     deadline: Optional[str] = None
+    schedule_slot: Optional[str] = None
+    description: Optional[str] = None
+    reminder_at: Optional[str] = None
+    color: Optional[str] = None
 
 
 class DashboardPulseHabitItem(BaseModel):

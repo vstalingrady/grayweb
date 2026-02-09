@@ -118,6 +118,15 @@ EXPLICIT_WEB_SEARCH_REQUEST_PATTERN = re.compile(
     r"\b(?:search|google|web\s*search|look\s*up|lookup|find\s+on\s+the\s+web)\b",
     re.IGNORECASE,
 )
+MEMORY_RECALL_REQUEST_PATTERN = re.compile(
+    r"\b(?:another|other|previous|earlier|last|different)\s+(?:chat|conversation|thread|session)s?\b"
+    r"|\b(?:from\s+chat\s+to\s+chat|cross[-\s]?chat|across\s+chats?)\b"
+    r"|\b(?:did\s+i\s+ask(?:\s+you)?(?:\s+before)?)\b"
+    r"|\b(?:have\s+i\s+asked(?:\s+you)?(?:\s+before)?)\b"
+    r"|\b(?:what\s+did\s+i\s+ask(?:\s+you)?(?:\s+before)?)\b"
+    r"|\b(?:remember\s+(?:what|when)\s+i\s+asked)\b",
+    re.IGNORECASE,
+)
 GPT_OSS_120B_MODEL_ID = "openai/gpt-oss-120b"
 GPT_OSS_120B_FAST_MODEL_ID = "openai/gpt-oss-120b:fast"
 GLM_47_MODEL_ID = "z-ai/glm-4.7"
@@ -141,6 +150,13 @@ def _is_explicit_web_search_request(text: Optional[str]) -> bool:
     if not normalized:
         return False
     return bool(EXPLICIT_WEB_SEARCH_REQUEST_PATTERN.search(normalized))
+
+
+def _is_cross_chat_memory_request(text: Optional[str]) -> bool:
+    normalized = (text or "").strip()
+    if not normalized:
+        return False
+    return bool(MEMORY_RECALL_REQUEST_PATTERN.search(normalized))
 
 
 def _has_web_grounding(metadata: Optional[Dict[str, Any]]) -> bool:
@@ -183,6 +199,35 @@ def _strip_incorrect_web_access_disclaimer(
 
     return text
 
+
+def _normalized_message_text(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _prune_history_for_regeneration(
+    conversation_history: Optional[List[Dict[str, Any]]],
+    target_message: str,
+) -> List[Dict[str, Any]]:
+    if not conversation_history:
+        return []
+
+    trimmed_history = list(conversation_history)
+    while trimmed_history:
+        tail_role = (_row_get(trimmed_history[-1], "role") or "").strip().lower()
+        if tail_role not in {"assistant", "model"}:
+            break
+        trimmed_history.pop()
+
+    if trimmed_history:
+        tail_role = (_row_get(trimmed_history[-1], "role") or "").strip().lower()
+        tail_text = _normalized_message_text(_row_get(trimmed_history[-1], "text"))
+        target_text = _normalized_message_text(target_message)
+        if tail_role == "user" and target_text and tail_text == target_text:
+            trimmed_history.pop()
+
+    return trimmed_history
+
+
 def _resolve_conversation_memory_enabled(
     user_record: Optional[Dict[str, Any]],
     request_value: Optional[bool],
@@ -200,18 +245,22 @@ def _resolve_web_search_enabled(
     conversation_history: Optional[List[Dict[str, Any]]] = None,
 ) -> bool:
     mode = getattr(chat_request, "web_search_mode", None)
+    explicit_search = _is_explicit_web_search_request(chat_request.message)
+    cross_chat_memory_request = _is_cross_chat_memory_request(chat_request.message)
     if mode == "on":
         return True
     if mode == "off":
-        return _is_explicit_web_search_request(chat_request.message)
+        return explicit_search
     if mode == "auto":
+        if cross_chat_memory_request and not explicit_search:
+            return False
         # In auto mode, allow either side to opt-in:
         # - frontend hint can proactively enable search
         # - backend heuristics can still enable it even when the frontend hint is false
         client_hint = bool(getattr(chat_request, "web_search_enabled", False))
         server_decision = should_enable_search(chat_request.message, conversation_history=conversation_history)
         return client_hint or server_decision
-    return bool(chat_request.web_search_enabled) or _is_explicit_web_search_request(chat_request.message)
+    return bool(chat_request.web_search_enabled) or explicit_search
 
 
 def _resolve_provider_routing(
@@ -571,7 +620,7 @@ async def chat_route(
         chat_request.conversation_memory_enabled,
     )
     supermemory_overrides = _parse_supermemory_overrides(chat_request, current_user)
-    force_supermemory = supermemory_force_enabled()
+    force_supermemory = supermemory_force_enabled() and conversation_memory_enabled
     if force_supermemory:
         supermemory_overrides = supermemory_force_overrides(supermemory_overrides)
 
@@ -643,6 +692,8 @@ async def chat_route(
         prior_last_message_at = await load_last_user_message_at(db, chat_request.user_id)
         if not effective_message.strip() and not conversation_history and not (chat_request.attachments or []):
             effective_message = "Let's get started."
+        if chat_request.is_regeneration:
+            conversation_history = _prune_history_for_regeneration(conversation_history, effective_message)
 
         # Save user message to local conversation store (after capturing prior history),
         # but avoid writing an identical message twice in a row (e.g., when a fallback
@@ -660,12 +711,15 @@ async def chat_route(
             "text": effective_message,
             "attachments": attachment_metadata or None,
         }
-        last_history_entry: Optional[Dict[str, Any]] = conversation_history[-1] if conversation_history else None
-        should_persist_user = not (
-            last_history_entry
-            and _row_get(last_history_entry, "role") in {"user", "assistant", "model"}
-            and (_row_get(last_history_entry, "text") or "") == effective_message
-        )
+        if chat_request.is_regeneration:
+            should_persist_user = False
+        else:
+            last_history_entry: Optional[Dict[str, Any]] = conversation_history[-1] if conversation_history else None
+            should_persist_user = not (
+                last_history_entry
+                and _row_get(last_history_entry, "role") in {"user", "assistant", "model"}
+                and (_row_get(last_history_entry, "text") or "") == effective_message
+            )
         if is_general_conversation:
              # General chat messages are not handled by save_conversation_message
              # We must manually insert them using the general chat persistence logic
@@ -725,8 +779,8 @@ async def chat_route(
             _row_get(current_user, "role"),
             _row_get(current_user, "subscription_expires_at")
         )
-        memory_enabled = conversation_memory_enabled or force_supermemory
-        memory_plan_tier = supermemory_force_plan_tier(normalized_tier)
+        memory_enabled = conversation_memory_enabled
+        memory_plan_tier = supermemory_force_plan_tier(normalized_tier) if force_supermemory else normalized_tier
 
         # If user requested reasoning but is not eligible, disable it silently (or we could raise 403)
         effective_reasoning_mode = chat_request.reasoning_mode
@@ -849,7 +903,7 @@ async def chat_route(
              # Regular thread persistence
              assistant_message_id = await save_conversation_message(conversation_id, assistant_message_payload, user_id=authenticated_user_id)
 
-        if memory_enabled and SUPERMEMORY_SERVICE.available:
+        if memory_enabled and SUPERMEMORY_SERVICE.available and not chat_request.is_regeneration:
             create_logged_task(
                 SUPERMEMORY_SERVICE.capture_turn(
                     user_id=authenticated_user_id,
@@ -982,7 +1036,7 @@ async def chat_stream_route(
             chat_request.conversation_memory_enabled,
         )
         supermemory_overrides = _parse_supermemory_overrides(chat_request, user_record)
-        force_supermemory = supermemory_force_enabled()
+        force_supermemory = supermemory_force_enabled() and conversation_memory_enabled
         if force_supermemory:
             supermemory_overrides = supermemory_force_overrides(supermemory_overrides)
         
@@ -1088,6 +1142,8 @@ async def chat_stream_route(
         # Avoid sending an empty payload to the AI provider
         if not (effective_message or "").strip() and not conversation_history and not (chat_request.attachments or []):
             effective_message = "Let's get started."
+        if chat_request.is_regeneration:
+            conversation_history = _prune_history_for_regeneration(conversation_history, effective_message)
 
         attachment_metadata: Optional[List[Dict[str, Any]]] = None
         if chat_request.attachments:
@@ -1103,12 +1159,15 @@ async def chat_stream_route(
             "attachments": attachment_metadata or None,
         }
 
-        last_history_entry: Optional[Dict[str, Any]] = conversation_history[-1] if conversation_history else None
-        should_persist_user = not (
-            last_history_entry
-            and _row_get(last_history_entry, "role") in {"user", "assistant", "model"}
-            and (_row_get(last_history_entry, "text") or "") == effective_message
-        )
+        if chat_request.is_regeneration:
+            should_persist_user = False
+        else:
+            last_history_entry: Optional[Dict[str, Any]] = conversation_history[-1] if conversation_history else None
+            should_persist_user = not (
+                last_history_entry
+                and _row_get(last_history_entry, "role") in {"user", "assistant", "model"}
+                and (_row_get(last_history_entry, "text") or "") == effective_message
+            )
         if should_persist_user:
             # IMPORTANT: Await user message persistence to avoid race conditions.
             # If this runs asynchronously, the next request might load history before
@@ -1176,8 +1235,8 @@ async def chat_stream_route(
             _row_get(user_record, "role"),
             _row_get(user_record, "subscription_expires_at")
         )
-        memory_enabled = conversation_memory_enabled or force_supermemory
-        memory_plan_tier = supermemory_force_plan_tier(normalized_tier)
+        memory_enabled = conversation_memory_enabled
+        memory_plan_tier = supermemory_force_plan_tier(normalized_tier) if force_supermemory else normalized_tier
 
         effective_model, model_coerced = coerce_model_for_tier(chat_request.model, normalized_tier)
         effective_reasoning_mode = chat_request.reasoning_mode
@@ -1336,7 +1395,7 @@ async def chat_stream_route(
                         },
                     )
 
-                if memory_enabled and SUPERMEMORY_SERVICE.available:
+                if memory_enabled and SUPERMEMORY_SERVICE.available and not chat_request.is_regeneration:
                     create_logged_task(
                         SUPERMEMORY_SERVICE.capture_turn(
                             user_id=chat_request.user_id,

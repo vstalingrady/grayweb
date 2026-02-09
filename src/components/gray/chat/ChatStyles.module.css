@@ -250,44 +250,6 @@
   align-items: flex-end;
 }
 
-@keyframes chatStreamingTokenFadeIn {
-  from {
-    opacity: 0.08;
-    transform: translateY(1px);
-    filter: blur(1px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
-  }
-}
-
-@keyframes chatStreamingTextFadeIn {
-  from {
-    opacity: 0.18;
-    filter: blur(0.8px);
-  }
-
-  to {
-    opacity: 1;
-    filter: blur(0);
-  }
-}
-
-@keyframes chatStreamingCaretBlink {
-
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.28;
-  }
-}
-
 .chatBubble {
   position: relative;
   max-width: 100%;
@@ -1075,94 +1037,49 @@
 
 .chatMarkdownStreaming {
   position: relative;
-  display: block;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: inherit;
-  letter-spacing: 0.01em;
-  line-height: 1.6;
+  animation: none;
+  --stream-fade-start: 70%;
+  --stream-fade-mid: 88%;
+  --stream-fade-end: 100%;
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 1) var(--stream-fade-start),
+    rgba(0, 0, 0, 0.65) var(--stream-fade-mid),
+    rgba(0, 0, 0, 0) var(--stream-fade-end)
+  );
+  mask-image: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 1) var(--stream-fade-start),
+    rgba(0, 0, 0, 0.65) var(--stream-fade-mid),
+    rgba(0, 0, 0, 0) var(--stream-fade-end)
+  );
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
 }
 
 .chatMarkdownStreaming::after {
   content: none;
+  display: none;
 }
 
-.chatMarkdownStreaming :global(p:last-child),
-.chatMarkdownStreaming :global(li:last-child),
-.chatMarkdownStreaming :global(h1:last-child),
-.chatMarkdownStreaming :global(h2:last-child),
-.chatMarkdownStreaming :global(h3:last-child),
-.chatMarkdownStreaming :global(h4:last-child),
-.chatMarkdownStreaming :global(h5:last-child),
-.chatMarkdownStreaming :global(h6:last-child) {
-  animation: none;
-}
-
-/* Prevent full-block flash while streaming: ReactMarkdown updates can remount
-   trailing nodes, so we keep only caret/tail motion and no paragraph fade. */
 .chatMarkdownStreaming > * {
   animation: none !important;
-}
-
-.chatMarkdownStreaming :global(p:last-child)::after,
-.chatMarkdownStreaming :global(li:last-child)::after,
-.chatMarkdownStreaming :global(h1:last-child)::after,
-.chatMarkdownStreaming :global(h2:last-child)::after,
-.chatMarkdownStreaming :global(h3:last-child)::after,
-.chatMarkdownStreaming :global(h4:last-child)::after,
-.chatMarkdownStreaming :global(h5:last-child)::after,
-.chatMarkdownStreaming :global(h6:last-child)::after {
-  content: "";
-  display: inline-block;
-  width: 2px;
-  height: 1em;
-  margin-left: 2px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.28));
-  animation: chatStreamingCaretBlink 0.8s ease-in-out infinite;
-  vertical-align: text-bottom;
 }
 
 .chatStreamingToken {
   display: inline;
   white-space: pre-wrap;
-  animation: chatStreamingTokenFadeIn 0.22s ease-out both !important;
+  animation: none !important;
 }
 
 .chatStreamingStableText {
   white-space: pre-wrap;
 }
 
-.chatStreamingCaret {
-  display: inline-block;
-  width: 2px;
-  height: 1em;
-  margin-left: 2px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.28));
-  animation: chatStreamingCaretBlink 0.8s ease-in-out infinite !important;
-  vertical-align: text-bottom;
-}
-
-
-@keyframes messageFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.chatMarkdown>*:not(:first-child) {
-  animation: messageFadeIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-}
-
-/* Ensure the first element also fades in if it's new */
-.chatMarkdown>*:first-child {
-  animation: messageFadeIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-}
 
 .chatMarkdown :global(h1),
 .chatMarkdown :global(h2),
@@ -1176,9 +1093,8 @@
   letter-spacing: 0.04em;
 }
 
-/* Fade in assistant messages when they appear (non-streaming). */
 .chatMessage[data-role="assistant"] .chatAssistantBlock {
-  animation: messageFadeIn 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  animation: none;
 }
 
 .chatMessage[data-role="assistant"][data-streaming="true"] .chatAssistantBlock {
@@ -1190,8 +1106,13 @@
     animation: none;
   }
 
-  .chatStreamingToken,
-  .chatStreamingCaret {
+  .chatMarkdownStreaming {
+    animation: none !important;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  .chatStreamingToken {
     animation: none !important;
   }
 
@@ -1199,23 +1120,8 @@
     animation: none;
   }
 
-  .chatMarkdownStreaming :global(p:last-child),
-  .chatMarkdownStreaming :global(li:last-child),
-  .chatMarkdownStreaming :global(h1:last-child),
-  .chatMarkdownStreaming :global(h2:last-child),
-  .chatMarkdownStreaming :global(h3:last-child),
-  .chatMarkdownStreaming :global(h4:last-child),
-  .chatMarkdownStreaming :global(h5:last-child),
-  .chatMarkdownStreaming :global(h6:last-child),
-  .chatMarkdownStreaming :global(p:last-child)::after,
-  .chatMarkdownStreaming :global(li:last-child)::after,
-  .chatMarkdownStreaming :global(h1:last-child)::after,
-  .chatMarkdownStreaming :global(h2:last-child)::after,
-  .chatMarkdownStreaming :global(h3:last-child)::after,
-  .chatMarkdownStreaming :global(h4:last-child)::after,
-  .chatMarkdownStreaming :global(h5:last-child)::after,
-  .chatMarkdownStreaming :global(h6:last-child)::after {
-    animation: none;
+  .chatMarkdownStreaming > * {
+    animation: none !important;
   }
 }
 
@@ -1598,6 +1504,37 @@
 
 .chatActionIconRow button[data-variant="danger"]:hover {
   color: rgba(255, 134, 134, 1);
+}
+
+@media (max-width: 768px) {
+  .chatMessageFooterRight {
+    gap: 4px;
+  }
+
+  .chatActionIconRow {
+    gap: 2px;
+  }
+
+  .chatActionIconRow button {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    min-height: 24px;
+    border-radius: 6px;
+  }
+}
+
+@media (max-width: 420px) {
+  .chatActionIconRow {
+    gap: 1px;
+  }
+
+  .chatActionIconRow button {
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+    min-height: 22px;
+  }
 }
 
 .chatMessageAttachments {
@@ -2219,4 +2156,158 @@
 :global(html.light) .chatEditCancelButton:hover {
   background: rgba(0, 0, 0, 0.06);
   color: rgba(20, 20, 22, 0.96);
+}
+
+:global(html.light) .chatMarkdown :global(code) {
+  background: rgba(15, 23, 42, 0.08);
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.94));
+}
+
+:global(html.light) .chatMarkdown :global(th),
+:global(html.light) .chatMarkdown :global(td) {
+  border-color: var(--gray-ui-border, rgba(0, 0, 0, 0.14));
+}
+
+:global(html.light) .chatMarkdown :global(th) {
+  background: rgba(15, 23, 42, 0.06);
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.95));
+}
+
+:global(html.light) .chatMarkdown :global(td) {
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .chatMessageTimestamp,
+:global(html.light) .chatMessageVariantControls {
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.9));
+}
+
+:global(html.light) .chatSourcesFooter {
+  color: rgba(82, 82, 91, 0.88);
+}
+
+:global(html.light) .chatSourcesFooterBadge {
+  background: rgba(15, 23, 42, 0.1);
+  color: rgba(15, 23, 42, 0.94);
+}
+
+:global(html.light) .chatActionRow button {
+  color: rgba(82, 82, 91, 0.94);
+}
+
+:global(html.light) .chatActionRow button:hover {
+  color: rgba(37, 99, 235, 0.98);
+}
+
+:global(html.light) .chatActionRow button[data-variant="danger"] {
+  color: rgba(220, 38, 38, 0.92);
+}
+
+:global(html.light) .chatActionRow button[data-variant="danger"]:hover {
+  color: rgba(185, 28, 28, 0.98);
+}
+
+:global(html.light) .chatQuickReplies button {
+  border-color: var(--gray-ui-border, rgba(0, 0, 0, 0.14));
+  background: rgba(255, 255, 255, 0.86);
+  color: rgba(82, 82, 91, 0.9);
+}
+
+:global(html.light) .chatQuickReplies button:hover {
+  background: rgba(15, 23, 42, 0.08);
+  border-color: rgba(15, 23, 42, 0.25);
+  color: rgba(15, 23, 42, 0.94);
+}
+
+:global(html.light) .chatActionIconRow button {
+  color: rgba(82, 82, 91, 0.94);
+}
+
+:global(html.light) .chatActionIconRow button:hover {
+  color: rgba(15, 23, 42, 0.96);
+}
+
+:global(html.light) .chatActionIconRow button[data-variant="danger"] {
+  color: rgba(220, 38, 38, 0.9);
+}
+
+:global(html.light) .chatActionIconRow button[data-variant="danger"]:hover {
+  color: rgba(185, 28, 28, 0.98);
+}
+
+:global(html.light) .reminderModeSwitch {
+  border-color: var(--gray-ui-border, rgba(0, 0, 0, 0.14));
+  background: rgba(255, 255, 255, 0.86);
+}
+
+:global(html.light) .reminderModeSwitch button {
+  color: rgba(82, 82, 91, 0.9);
+}
+
+:global(html.light) .reminderModeSwitch button[data-active="true"] {
+  background: rgba(15, 23, 42, 0.12);
+  color: rgba(15, 23, 42, 0.96);
+}
+
+:global(html.light) .chatReminderCard {
+  border-color: var(--gray-ui-border, rgba(0, 0, 0, 0.14));
+  background: rgba(255, 255, 255, 0.94);
+}
+
+:global(html.light) .chatReminderCard[data-entity="plan"],
+:global(html.light) .chatReminderCard[data-entity="habit"] {
+  border-color: rgba(15, 23, 42, 0.2);
+}
+
+:global(html.light) .chatReminderBadge {
+  border-color: rgba(15, 23, 42, 0.2);
+  color: rgba(51, 65, 85, 0.9);
+  background: rgba(15, 23, 42, 0.05);
+}
+
+:global(html.light) .chatReminderStatus {
+  color: rgba(82, 82, 91, 0.88);
+}
+
+:global(html.light) .chatReminderTitle {
+  color: rgba(63, 63, 70, 0.7);
+  border-bottom-color: rgba(15, 23, 42, 0.14);
+}
+
+:global(html.light) .chatReminderLabel {
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.95));
+}
+
+:global(html.light) .chatReminderTime {
+  color: rgba(82, 82, 91, 0.86);
+}
+
+:global(html.light) .chatReminderTime strong {
+  color: rgba(15, 23, 42, 0.96);
+}
+
+:global(html.light) .chatReminderMetaRow {
+  color: rgba(82, 82, 91, 0.74);
+}
+
+:global(html.light) .reminderBadge {
+  color: rgba(82, 82, 91, 0.84);
+  border-color: rgba(15, 23, 42, 0.16);
+  background: rgba(15, 23, 42, 0.05);
+}
+
+:global(html.light) .reminderModeToggle button {
+  border-color: var(--gray-ui-border, rgba(0, 0, 0, 0.14));
+  color: rgba(63, 63, 70, 0.86);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+:global(html.light) .reminderModeToggle button small {
+  color: rgba(82, 82, 91, 0.76);
+}
+
+:global(html.light) .reminderModeToggle button[data-active="true"] {
+  border-color: rgba(15, 23, 42, 0.3);
+  background: rgba(15, 23, 42, 0.1);
+  color: rgba(15, 23, 42, 0.96);
 }

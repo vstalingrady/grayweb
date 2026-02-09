@@ -36,13 +36,12 @@ type DragState = {
   pointerId: number;
   initialClientY: number;
   initialClientX: number;
-  anchor: Date; // Day start (00:00)
   // Column index (e.g. week-day index) where the drag started
   primaryColumnIndex: number;
   activeDrafts: Record<string, EventDraft>;
   draggingEvents: Record<
     string,
-    { originalStart: Date; durationMinutes: number; column: number }
+    { originalStart: Date; durationMinutes: number; column: number; anchor: Date }
   >;
 };
 
@@ -87,9 +86,6 @@ export const useEventDrag = ({
         pointerEvent.preventDefault();
         pointerEvent.stopPropagation();
 
-        const eventAnchor = new Date(primaryEvent.start);
-        eventAnchor.setHours(0, 0, 0, 0);
-
         // Identify all events to drag
         const eventsToDrag = new Map<string, CalendarEvent>();
         // Always include the primary event (the one clicked)
@@ -108,11 +104,14 @@ export const useEventDrag = ({
         const initialDrafts: Record<string, EventDraft> = {};
 
         eventsToDrag.forEach((ev) => {
+          const eventAnchor = new Date(ev.start);
+          eventAnchor.setHours(0, 0, 0, 0);
           const startMinutes = minutesBetween(eventAnchor, ev.start);
           const endMinutes = minutesBetween(eventAnchor, ev.end);
           draggingEvents[ev.id] = {
             originalStart: ev.start,
             durationMinutes: Math.max(endMinutes - startMinutes, snapMinutes),
+            anchor: eventAnchor,
             column:
               typeof (ev as CalendarEvent & { column?: number }).column === "number"
                 ? (ev as CalendarEvent & { column?: number }).column ?? 0
@@ -143,7 +142,6 @@ export const useEventDrag = ({
           pointerId: pointerEvent.pointerId,
           initialClientY: pointerEvent.clientY,
           initialClientX: pointerEvent.clientX,
-          anchor: eventAnchor,
           primaryColumnIndex,
           draggingEvents,
           activeDrafts: initialDrafts,
@@ -204,9 +202,9 @@ export const useEventDrag = ({
               : 0;
 
           Object.entries(newDragState.draggingEvents).forEach(
-            ([id, { originalStart, durationMinutes }]) => {
+            ([id, { originalStart, durationMinutes, anchor }]) => {
               // 1. Calculate original start in minutes from anchor
-              const originalStartMinutes = minutesBetween(newDragState.anchor, originalStart);
+              const originalStartMinutes = minutesBetween(anchor, originalStart);
 
               // 2. Apply delta
               const newStartMinutes = originalStartMinutes + rawDeltaMinutes;
@@ -221,7 +219,7 @@ export const useEventDrag = ({
                 MINUTES_IN_DAY - durationMinutes
               );
 
-              const nextStart = addMinutes(newDragState.anchor, clampedStart);
+              const nextStart = addMinutes(anchor, clampedStart);
               const nextEnd = addMinutes(nextStart, durationMinutes);
 
               nextDrafts[id] = {

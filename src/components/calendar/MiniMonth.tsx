@@ -1,13 +1,15 @@
 import { useMemo } from "react";
 
 import styles from "./GrayDashboardCalendar.module.css";
-import { isSameDay, startOfMonth } from "./dateUtils";
+import { isSameDay, startOfMonth, toDateKey } from "./dateUtils";
 import { useI18n } from "@/contexts/I18nContext";
 
 type MiniMonthProps = {
   referenceDate: Date;
   selectedDate: Date;
   onSelectDate: (nextDate: Date) => void;
+  holidayDateKeys?: ReadonlySet<string>;
+  holidayNameByDateKey?: ReadonlyMap<string, string>;
 };
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -19,7 +21,13 @@ const startOfGrid = (value: Date) => {
   return result;
 };
 
-export function MiniMonth({ referenceDate, selectedDate, onSelectDate }: MiniMonthProps) {
+export function MiniMonth({
+  referenceDate,
+  selectedDate,
+  onSelectDate,
+  holidayDateKeys,
+  holidayNameByDateKey,
+}: MiniMonthProps) {
   const { t } = useI18n();
   const grid = useMemo(() => {
     const firstVisible = startOfGrid(referenceDate);
@@ -75,6 +83,9 @@ export function MiniMonth({ referenceDate, selectedDate, onSelectDate }: MiniMon
                 const inMonth = date.getMonth() === currentMonth;
                 const isSelected = isSameDay(date, selectedDate);
                 const isToday = isSameDay(date, today);
+                const dateKey = toDateKey(date);
+                const isHoliday = holidayDateKeys?.has(dateKey) ?? false;
+                const holidayLabel = holidayNameByDateKey?.get(dateKey);
 
                 return (
                   <button
@@ -84,6 +95,8 @@ export function MiniMonth({ referenceDate, selectedDate, onSelectDate }: MiniMon
                     data-active={inMonth ? "true" : "false"}
                     data-selected={isSelected ? "true" : "false"}
                     data-today={isToday ? "true" : "false"}
+                    data-holiday={isHoliday ? "true" : "false"}
+                    title={holidayLabel ? `${date.toDateString()} • ${holidayLabel}` : undefined}
                     onClick={() => onSelectDate(date)}
                   >
                     {date.getDate()}

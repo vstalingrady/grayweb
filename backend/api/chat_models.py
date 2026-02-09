@@ -28,6 +28,7 @@ class ChatRequest(BaseModel):
     message: str
     conversation_id: Optional[str] = None
     user_id: int
+    is_regeneration: bool = False
     context: Optional[str] = None
     time_context: Optional[str] = None
     system_prompt: Optional[str] = None

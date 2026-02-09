@@ -10,6 +10,7 @@ import type { CalendarEvent, PositionedEvent } from "./types";
 import { isSameDay } from "./dateUtils";
 import { ViewModeSelect } from "@/components/gray/ViewModeSelect";
 import { useI18n } from "@/contexts/I18nContext";
+import type { CalendarHoliday } from "./holidayTypes";
 
 import type { CalendarViewMode, WeekNowIndicator } from "./dashboardCalendarTypes";
 
@@ -25,6 +26,8 @@ type WeekViewProps = {
   showHeaderDates: boolean;
   weekNowIndicator: WeekNowIndicator | null;
   weekLayouts: PositionedEvent[][];
+  weekAllDayEvents: CalendarEvent[][];
+  weekHolidayEntries: CalendarHoliday[][];
   draggingEventIds: Set<string> | null;
   selectedEventIds: Set<string>;
   weekScrollRef: MutableRefObject<HTMLDivElement | null>;
@@ -33,7 +36,7 @@ type WeekViewProps = {
   onUpdateViewMode: (mode: CalendarViewMode) => void;
   onColumnClick: (event: MouseEvent<HTMLDivElement>, day: Date) => void;
   onEventClick: (
-    event: PositionedEvent,
+    event: CalendarEvent,
     anchorRect: DOMRect,
     mouseEvent: MouseEvent
   ) => void;
@@ -56,6 +59,8 @@ export function GrayDashboardCalendarWeekView({
   showHeaderDates,
   weekNowIndicator,
   weekLayouts,
+  weekAllDayEvents,
+  weekHolidayEntries,
   draggingEventIds,
   selectedEventIds,
   weekScrollRef,
@@ -113,28 +118,6 @@ export function GrayDashboardCalendarWeekView({
                   </div>
                 )}
                 <div className={styles.calendarMonthControls}>
-                  {showViewSelect && (
-                    <div className={styles.calendarMobileViewToggle} role="group" aria-label={t("View mode")}>
-                      <button
-                        type="button"
-                        className={styles.calendarMobileViewToggleButton}
-                        data-active="true"
-                        aria-pressed="true"
-                        onClick={() => onUpdateViewMode("week")}
-                      >
-                        {t("Week")}
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.calendarMobileViewToggleButton}
-                        data-active="false"
-                        aria-pressed="false"
-                        onClick={() => onUpdateViewMode("day")}
-                      >
-                        {t("Day")}
-                      </button>
-                    </div>
-                  )}
                   <div className={`${styles.calendarSurfaceNavArrows} ${styles.calendarMonthNavArrows}`}>
                     <button
                       type="button"
@@ -180,9 +163,34 @@ export function GrayDashboardCalendarWeekView({
               <div className={styles.calendarAllDayLabel}>
                 <span>{t("All day")}</span>
               </div>
-              {weekDays.map((day) => (
+              {weekDays.map((day, dayIndex) => (
                 <div key={day.toISOString()} className={styles.calendarAllDayCell}>
-                  {/* All-day events will go here later */}
+                  <div className={styles.calendarAllDayItems}>
+                    {(weekHolidayEntries[dayIndex] ?? []).map((holiday) => (
+                      <span
+                        key={holiday.id}
+                        className={`${styles.calendarAllDayItem} ${styles.calendarAllDayHolidayItem}`}
+                        title={holiday.localName || holiday.name}
+                      >
+                        {holiday.localName || holiday.name}
+                      </span>
+                    ))}
+                    {(weekAllDayEvents[dayIndex] ?? []).map((allDayEvent) => (
+                      <button
+                        key={allDayEvent.id}
+                        type="button"
+                        className={`${styles.calendarAllDayItem} ${styles.calendarAllDayEventItem}`}
+                        style={{ "--all-day-item-color": allDayEvent.color } as CSSProperties}
+                        title={allDayEvent.title}
+                        onClick={(mouseEvent) => {
+                          const anchorRect = mouseEvent.currentTarget.getBoundingClientRect();
+                          onEventClick(allDayEvent, anchorRect, mouseEvent as unknown as MouseEvent);
+                        }}
+                      >
+                        {allDayEvent.title}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>

@@ -62,6 +62,8 @@ export const useChatMessageActions = ({
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const copyResetTimeoutRef = useRef<number | null>(null);
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
+  const regenerateInFlightRef = useRef(false);
+  const retryInFlightRef = useRef(false);
   const pendingHistorySyncRef = useRef(false);
   const historySyncTimerRef = useRef<number | null>(null);
   const historyHydrationRef = useRef(false);
@@ -260,6 +262,9 @@ export const useChatMessageActions = ({
       if (!session) {
         return;
       }
+      if (session.isResponding || activeStreamingMessageId || retryInFlightRef.current) {
+        return;
+      }
       const messageIndex = messages.findIndex((message) => message.id === messageId);
       if (messageIndex === -1) {
         return;
@@ -277,9 +282,12 @@ export const useChatMessageActions = ({
       const existingAssistantId = nextMessage?.role === "assistant" ? nextMessage.id : undefined;
 
       requestHistorySync();
-      void streamAssistantReply(session.id, content, session.conversationId ?? null, existingAssistantId);
+      retryInFlightRef.current = true;
+      void streamAssistantReply(session.id, content, session.conversationId ?? null, existingAssistantId).finally(() => {
+        retryInFlightRef.current = false;
+      });
     },
-    [messages, requestHistorySync, session, streamAssistantReply]
+    [activeStreamingMessageId, messages, requestHistorySync, session, streamAssistantReply]
   );
 
   const handleRegenerate = useCallback(
@@ -288,7 +296,7 @@ export const useChatMessageActions = ({
         return;
       }
 
-      if (session.isResponding || activeStreamingMessageId) {
+      if (session.isResponding || activeStreamingMessageId || regenerateInFlightRef.current) {
         return;
       }
 
@@ -313,11 +321,13 @@ export const useChatMessageActions = ({
 
       const userMessage = messages[userIndex];
 
+      regenerateInFlightRef.current = true;
       setRegeneratingMessageId(assistantMessage.id);
       void (async () => {
         try {
           await streamAssistantReply(session.id, userMessage.content, session.conversationId ?? null, assistantMessage.id);
         } finally {
+          regenerateInFlightRef.current = false;
           setRegeneratingMessageId(null);
           requestHistorySync();
         }

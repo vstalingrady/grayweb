@@ -224,3 +224,55 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* Light mode: panel and copy contrast for diagnostics section */
+:global(html.light) .introText h2,
+:global(html.light) .panelTitle,
+:global(html.light) .solutionText {
+    color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .introText p,
+:global(html.light) .problemList li {
+    color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.9));
+}
+
+:global(html.light) .panel,
+:global(html.light) .solutionPanel {
+    background: var(--gray-ui-surface-elevated, #ffffff);
+    border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+    color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .visBox {
+    background: var(--gray-ui-surface, #ffffff);
+    border-bottom-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+}
+
+:global(html.light) .iconRed,
+:global(html.light) .iconGreen {
+    color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.88));
+}
+
+:global(html.light) .bullet {
+    background: rgba(82, 82, 91, 0.52);
+}
+
+:global(html.light) .chaosContainer {
+    border-color: rgba(82, 82, 91, 0.4);
+    animation: pulseContainerLight 4s infinite ease-in-out;
+}
+
+:global(html.light) .particle {
+    background: rgba(82, 82, 91, 0.7);
+    box-shadow: 0 0 6px rgba(15, 23, 42, 0.16);
+}
+
+:global(html.light) .streamLine {
+    background: linear-gradient(90deg, rgba(15, 23, 42, 0) 0%, rgba(15, 23, 42, 0.48) 50%, rgba(15, 23, 42, 0) 100%);
+}
+
+@keyframes pulseContainerLight {
+    0%, 100% { border-color: rgba(82, 82, 91, 0.38); transform: scale(1); }
+    50% { border-color: rgba(82, 82, 91, 0.62); transform: scale(1.05); }
+}

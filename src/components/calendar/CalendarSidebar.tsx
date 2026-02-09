@@ -7,6 +7,7 @@ import { CalendarInfo } from "./types";
 import styles from "./GrayDashboardCalendar.module.css";
 import { MiniMonth } from "./MiniMonth";
 import { useI18n } from "@/contexts/I18nContext";
+import type { CalendarHolidayCountry } from "./holidayTypes";
 
 type CalendarSidebarProps = {
   monthDate: Date;
@@ -26,6 +27,15 @@ type CalendarSidebarProps = {
   onIntegrationAction?: () => void;
   className?: string;
   showCalendarList?: boolean;
+  holidayEnabled?: boolean;
+  holidayCountryCode?: string;
+  holidayCountries?: CalendarHolidayCountry[];
+  holidayDateKeys?: ReadonlySet<string>;
+  holidayNameByDateKey?: ReadonlyMap<string, string>;
+  holidayCountryLoading?: boolean;
+  holidayDataLoading?: boolean;
+  onHolidayEnabledChange?: (enabled: boolean) => void;
+  onHolidayCountryChange?: (countryCode: string) => void;
   children?: ReactNode;
 };
 
@@ -53,6 +63,15 @@ export function CalendarSidebar({
   onIntegrationAction,
   className,
   showCalendarList = true,
+  holidayEnabled = false,
+  holidayCountryCode = "US",
+  holidayCountries = [],
+  holidayDateKeys,
+  holidayNameByDateKey,
+  holidayCountryLoading = false,
+  holidayDataLoading = false,
+  onHolidayEnabledChange,
+  onHolidayCountryChange,
   children,
 }: CalendarSidebarProps) {
   const { t } = useI18n();
@@ -125,7 +144,40 @@ export function CalendarSidebar({
           referenceDate={monthDate}
           selectedDate={selectedDate}
           onSelectDate={onSelectDate}
+          holidayDateKeys={holidayDateKeys}
+          holidayNameByDateKey={holidayNameByDateKey}
         />
+
+        <section className={styles.calendarSidebarHolidayPanel}>
+          <label className={styles.calendarSidebarHolidayToggle}>
+            <input
+              type="checkbox"
+              checked={holidayEnabled}
+              onChange={(event) => onHolidayEnabledChange?.(event.target.checked)}
+            />
+            <span>{t("Public holidays")}</span>
+          </label>
+          <select
+            className={styles.calendarSidebarHolidaySelect}
+            value={holidayCountryCode}
+            onChange={(event) => onHolidayCountryChange?.(event.target.value)}
+            disabled={!holidayEnabled || holidayCountryLoading || holidayCountries.length === 0}
+            aria-label={t("Holiday country")}
+          >
+            {holidayCountries.length === 0 ? (
+              <option value={holidayCountryCode}>{t("Loading countries...")}</option>
+            ) : (
+              holidayCountries.map((country) => (
+                <option key={country.code} value={country.code}>
+                  {country.name}
+                </option>
+              ))
+            )}
+          </select>
+          {holidayEnabled && holidayDataLoading ? (
+            <span className={styles.calendarSidebarHolidayStatus}>{t("Loading holidays...")}</span>
+          ) : null}
+        </section>
 
         {onIntegrationAction ? (
           <div className={styles.calendarSidebarIntegration}>

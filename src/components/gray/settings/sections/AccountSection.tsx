@@ -34,7 +34,7 @@ const parseExpiryDate = (value?: string | null): Date | null => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
-const buildRenewalLabel = (currentUser: User | null): string => {
+export const buildRenewalLabel = (currentUser: User | null): string => {
   const expiresAt = parseExpiryDate(currentUser?.subscription_expires_at);
   if (!expiresAt) {
     return "Next payment date unavailable.";
@@ -155,7 +155,7 @@ export function AccountSection({
         </div>
       )}
       {avatarUploadError ? (
-        <p className={styles.settingsItemDescription} style={{ color: "#fca5a5", marginTop: 10 }}>
+        <p className={`${styles.settingsItemDescription} ${styles.settingsErrorText}`}>
           {avatarUploadError}
         </p>
       ) : null}

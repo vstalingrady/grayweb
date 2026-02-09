@@ -17,6 +17,7 @@ import {
   createClientUuid,
   computeProfileHash,
   normalizeAssistantContent,
+  stripMcpToolBlocks,
   resolveConversationMemoryEnabled,
   resolveClientTimezone,
   shouldRequestAutoTitleForSession,
@@ -299,7 +300,7 @@ export const useSendGeneralMessage = ({
                 shouldClearToolStatusOnNextToken = false;
               }
               accumulated = accumulated && delta.startsWith(accumulated) ? delta : accumulated + delta;
-              const extraction = extractGrayRemindersFromText(accumulated);
+              const extraction = extractGrayRemindersFromText(stripMcpToolBlocks(accumulated));
               if (assistantMessageId) {
                 const updates: Partial<ChatMessage> = { content: extraction.cleanText };
                 if (!didReceiveToken && reasoningStartTimeRef.current) {
@@ -323,7 +324,15 @@ export const useSendGeneralMessage = ({
             if (event.type === "end") {
               streamedConversationId =
                 coerceConversationIdForRequest(event.conversationId) ?? streamedConversationId;
-              const finalResponse = normalizeAssistantContent(event.response ?? accumulated, trimmed);
+              const streamedText = accumulated;
+              const endResponseText = typeof event.response === "string" ? event.response : "";
+              const normalizeWhitespace = (value: string) => value.trim().replace(/\s+/g, " ");
+              const preferEndPayload =
+                streamedText.trim().length === 0 ||
+                (endResponseText.trim().length > 0 &&
+                  normalizeWhitespace(endResponseText) === normalizeWhitespace(streamedText));
+              const responseSource = preferEndPayload ? endResponseText || streamedText : streamedText;
+              const finalResponse = normalizeAssistantContent(responseSource, trimmed);
               const metadata = event.groundingMetadata ?? undefined;
               const timingUpdate = event.timing ? { backendTimings: event.timing } : undefined;
 

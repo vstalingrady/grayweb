@@ -23,6 +23,13 @@ export const useCalendarComposer = ({
   onCreateHabit,
   onClearSelection,
 }: UseCalendarComposerOptions) => {
+  const createEventId = () => {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return `evt-${crypto.randomUUID()}`;
+    }
+    return `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  };
+
   const [composerOpen, setComposerOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [composerRange, setComposerRange] = useState<{ start: Date; end: Date } | null>(null);
@@ -74,7 +81,7 @@ export const useCalendarComposer = ({
       const existingEvent = id ? events.find((event) => event.id === id) ?? null : null;
 
       if (payload.entryType === "plan" && onCreatePlan) {
-        onCreatePlan({ ...payload });
+        onCreatePlan({ id, ...payload });
         // Converting a persisted calendar event into a task should remove the
         // original calendar event to avoid leaving duplicates.
         if (
@@ -114,7 +121,7 @@ export const useCalendarComposer = ({
         }
 
         const newEvent: CalendarEvent = {
-          id: `evt-${Date.now()}`,
+          id: createEventId(),
           ...payload,
         };
         return [...previous, newEvent];

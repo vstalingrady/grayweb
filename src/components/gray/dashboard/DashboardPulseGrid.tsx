@@ -15,6 +15,7 @@ import {
   getProactivityTimes,
 } from "@/components/gray/proactivityUtils";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
+import { toDateKey } from "@/app/gray/utils";
 import type { PlanItem, ProactivityItem } from "@/components/gray/types";
 import type { CalendarEvent } from "@/components/calendar/types";
 
@@ -35,13 +36,6 @@ type DashboardPulseGridProps = {
   onConfigureProactivity: () => void;
   onAddEvent?: (date: Date) => void;
   onTogglePlan?: (id: string) => void;
-};
-
-const toDateKey = (date: Date) => {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
 };
 
 export function DashboardPulseGrid({
@@ -140,6 +134,7 @@ export function DashboardPulseGrid({
       .filter((event) => toDateKey(event.start) === targetKey)
       .sort((a, b) => a.start.getTime() - b.start.getTime());
   }, [currentDate, events, selectedDate]);
+  const isViewingToday = toDateKey(selectedDate ?? currentDate) === toDateKey(currentDate);
 
   const visibleTasks = useMemo(
     () =>
@@ -195,7 +190,9 @@ export function DashboardPulseGrid({
                   </div>
                 ))
               ) : (
-                <div className={styles.dashboardListEmpty}>{t("No events for today")}</div>
+                <div className={styles.dashboardListEmpty}>
+                  {isViewingToday ? t("No events for today") : t("No events for selected day")}
+                </div>
               )}
             </div>
           </div>

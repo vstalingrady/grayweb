@@ -45,6 +45,7 @@ export const useChatViewScroll = ({
   const [composerHeight, setComposerHeight] = useState(0);
   const prevMessageCountRef = useRef(0);
   const prevSessionKeyRef = useRef<string | null>(null);
+  const prevTailMessageIdRef = useRef<string | null>(null);
   const initialScrollDoneRef = useRef(false);
   const initialSyncTimersRef = useRef<number[]>([]);
 
@@ -99,20 +100,31 @@ export const useChatViewScroll = ({
 
   useEffect(() => {
     const isSessionChange = prevSessionKeyRef.current !== sessionKey;
+    const currentTailMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+    const didAppendAtTail =
+      messages.length > prevMessageCountRef.current &&
+      prevTailMessageIdRef.current !== (currentTailMessage?.id ?? null);
+    const shouldForceScrollForUserSend = !isSessionChange && didAppendAtTail && currentTailMessage?.role === "user";
     const shouldScroll =
       prevSessionKeyRef.current !== sessionKey || prevMessageCountRef.current !== messages.length;
     if (!hasHydrated || !scrollAnchorRef.current) {
       prevMessageCountRef.current = messages.length;
       prevSessionKeyRef.current = sessionKey;
+      prevTailMessageIdRef.current = currentTailMessage?.id ?? null;
       return;
     }
     if (suppressAutoScroll && !isSessionChange) {
       prevMessageCountRef.current = messages.length;
       prevSessionKeyRef.current = sessionKey;
+      prevTailMessageIdRef.current = currentTailMessage?.id ?? null;
       return;
     }
     if (shouldScroll) {
-      if (isSessionChange && !initialScrollDoneRef.current) {
+      if (shouldForceScrollForUserSend) {
+        userScrolledAwayRef.current = false;
+        isAtBottomRef.current = true;
+        scrollToBottom();
+      } else if (isSessionChange && !initialScrollDoneRef.current) {
         userScrolledAwayRef.current = false;
         scrollToBottom();
         clearInitialSyncTimers();
@@ -142,7 +154,8 @@ export const useChatViewScroll = ({
     }
     prevMessageCountRef.current = messages.length;
     prevSessionKeyRef.current = sessionKey;
-  }, [clearInitialSyncTimers, hasHydrated, messages.length, scrollToBottom, sessionKey, suppressAutoScroll]);
+    prevTailMessageIdRef.current = currentTailMessage?.id ?? null;
+  }, [clearInitialSyncTimers, hasHydrated, messages, scrollToBottom, sessionKey, suppressAutoScroll]);
 
   useEffect(() => () => clearInitialSyncTimers(), [clearInitialSyncTimers]);
 
@@ -200,29 +213,24 @@ export const useChatViewScroll = ({
   useEffect(() => {
     // Detect when streaming just started
     if (streamingTargetId && !prevStreamingIdRef.current) {
-      const viewport = chatViewportRef.current;
-      const threshold = 120;
-      const isNearBottom =
-        !viewport || viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= threshold;
-      isAtBottomRef.current = isNearBottom;
-      if (isNearBottom && !userScrolledAwayRef.current && scrollAnchorRef.current) {
-        scrollAnchorRef.current.scrollIntoView({ behavior: "instant" });
+      if (!userScrolledAwayRef.current) {
+        isAtBottomRef.current = true;
+        scrollToBottom();
       }
     }
     prevStreamingIdRef.current = streamingTargetId;
-  }, [streamingTargetId]);
+  }, [scrollToBottom, streamingTargetId]);
 
   useEffect(() => {
     if (
       !streamingContentSignature ||
-      !scrollAnchorRef.current ||
       !isAtBottomRef.current ||
       userScrolledAwayRef.current
     ) {
       return;
     }
-    scrollAnchorRef.current.scrollIntoView({ behavior: "instant" });
-  }, [streamingContentSignature]);
+    scrollToBottom();
+  }, [scrollToBottom, streamingContentSignature]);
 
   useEffect(() => {
     if (!hasHydrated || suppressAutoScroll) {

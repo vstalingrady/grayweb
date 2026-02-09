@@ -60,3 +60,23 @@
   white-space: nowrap;
 }
 
+/* Light mode: banner card readability */
+:global(html.light) .usageLimitContent {
+  background: var(--gray-ui-surface-elevated, #ffffff);
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
+}
+
+:global(html.light) .usageLimitMessage {
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.9));
+}
+
+:global(html.light) .usageLimitTier {
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.94));
+}
+
+:global(html.light) .usageLimitTimer {
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.88));
+  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+  border: 1px solid var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+}

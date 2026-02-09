@@ -206,3 +206,52 @@
 .mobileToggleOption[data-active="true"] .mobileToggleIcon {
   opacity: 1;
 }
+
+/* Light mode: mobile header chrome and segmented control contrast */
+:global(html.light) .mobileHeader {
+  background: var(--gray-ui-surface, #ffffff);
+  border-bottom: 1px solid var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+}
+
+:global(html.light) .mobileHeader::after {
+  background: rgba(15, 23, 42, 0.2);
+}
+
+:global(html.light) .mobileMenuButton,
+:global(html.light) .mobileNewChatButton {
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .mobileNewChatButton:hover {
+  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+  opacity: 1;
+}
+
+:global(html.light) .mobileStreakBadge {
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.14));
+  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .mobileStreakIcon {
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.9));
+}
+
+:global(html.light) .mobileToggle {
+  background: var(--gray-ui-surface-elevated, #ffffff);
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+}
+
+:global(html.light) .mobileToggleOption {
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.9));
+}
+
+:global(html.light) .mobileToggleOption[data-active="true"] {
+  background: var(--gray-ui-hover-strong, rgba(0, 0, 0, 0.1));
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.94));
+}
+
+:global(html.light) .mobileToggleOption:hover:not([data-active="true"]) {
+  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.88));
+}

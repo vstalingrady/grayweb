@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, Moon, Sun, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, Monitor, Moon, Smartphone, Sun, Trash2 } from "lucide-react";
 import styles from "../SettingsStyles.module.css";
 import { SettingsToggle } from "@/components/gray/settings/components/SettingsToggle";
 import { SettingsSelect } from "@/components/gray/settings/components/SettingsSelect";
@@ -70,6 +71,55 @@ export function PersonalizationSection({
   onSaveCustomInstructions,
 }: PersonalizationSectionProps) {
   const showAppearance = Boolean(showAppearanceControls && theme && onThemeChange);
+  const [systemPrefersLight, setSystemPrefersLight] = useState(false);
+  const [preferMobileSystemIcon, setPreferMobileSystemIcon] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const colorSchemeQuery = window.matchMedia("(prefers-color-scheme: light)");
+    const coarsePointerQuery = window.matchMedia("(pointer: coarse)");
+    const narrowViewportQuery = window.matchMedia("(max-width: 768px)");
+
+    const syncSystemTheme = () => {
+      setSystemPrefersLight(colorSchemeQuery.matches);
+    };
+    const syncDeviceHint = () => {
+      setPreferMobileSystemIcon(coarsePointerQuery.matches || narrowViewportQuery.matches);
+    };
+    syncSystemTheme();
+    syncDeviceHint();
+
+    const attachMediaListener = (
+      query: MediaQueryList,
+      handler: () => void
+    ): (() => void) => {
+      if (typeof query.addEventListener === "function") {
+        query.addEventListener("change", handler);
+        return () => query.removeEventListener("change", handler);
+      }
+      if (typeof query.addListener === "function") {
+        query.addListener(handler);
+        return () => query.removeListener(handler);
+      }
+      return () => {};
+    };
+
+    const cleanups = [
+      attachMediaListener(colorSchemeQuery, syncSystemTheme),
+      attachMediaListener(coarsePointerQuery, syncDeviceHint),
+      attachMediaListener(narrowViewportQuery, syncDeviceHint),
+    ];
+
+    return () => {
+      cleanups.forEach((cleanup) => cleanup());
+    };
+  }, []);
+
+  const SystemDeviceIcon = preferMobileSystemIcon ? Smartphone : Monitor;
+  const SystemModeIcon = systemPrefersLight ? Sun : Moon;
 
   return (
     <>
@@ -87,10 +137,16 @@ export function PersonalizationSection({
               data-active={theme === "system"}
               onClick={() => onThemeChange?.("system")}
             >
-              <div className={styles.mobileThemePreview}>
-                <div style={{ width: "50%", height: "50%", background: "#444", borderRadius: "50%" }} />
+              <div
+                className={`${styles.mobileThemePreview} ${styles.mobileThemePreviewSystem}`}
+                data-system-light={systemPrefersLight ? "true" : "false"}
+              >
+                <SystemDeviceIcon size={16} className={styles.mobileThemeSystemDeviceIcon} />
+                <span className={styles.mobileThemeSystemModeBadge}>
+                  <SystemModeIcon size={11} />
+                </span>
               </div>
-              <span style={{ fontSize: "0.8rem" }}>{t("System")}</span>
+              <span className={styles.mobileThemeOptionLabel}>{t("System")}</span>
             </button>
             <button
               type="button"
@@ -98,10 +154,10 @@ export function PersonalizationSection({
               data-active={theme === "dark"}
               onClick={() => onThemeChange?.("dark")}
             >
-              <div className={styles.mobileThemePreview} style={{ background: "#000" }}>
-                <Moon size={16} color="#fff" />
+              <div className={`${styles.mobileThemePreview} ${styles.mobileThemePreviewDark}`}>
+                <Moon size={16} className={styles.mobileThemeIcon} />
               </div>
-              <span style={{ fontSize: "0.8rem" }}>{t("Dark")}</span>
+              <span className={styles.mobileThemeOptionLabel}>{t("Dark")}</span>
             </button>
             <button
               type="button"
@@ -109,10 +165,10 @@ export function PersonalizationSection({
               data-active={theme === "light"}
               onClick={() => onThemeChange?.("light")}
             >
-              <div className={styles.mobileThemePreview} style={{ background: "#eee" }}>
-                <Sun size={16} color="#000" />
+              <div className={`${styles.mobileThemePreview} ${styles.mobileThemePreviewLight}`}>
+                <Sun size={16} className={styles.mobileThemeIcon} />
               </div>
-              <span style={{ fontSize: "0.8rem" }}>{t("Light")}</span>
+              <span className={styles.mobileThemeOptionLabel}>{t("Light")}</span>
             </button>
           </div>
         </div>

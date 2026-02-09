@@ -288,6 +288,73 @@ const buildMessageContentSignature = (message: Pick<ChatMessage, "role" | "conte
   return JSON.stringify([message.role, normalizedContent.slice(0, 512)]);
 };
 
+const pullFirstMessage = (map: Map<string, ChatMessage[]>, key: string): ChatMessage | null => {
+  const queue = map.get(key);
+  if (!queue || queue.length === 0) {
+    return null;
+  }
+  const next = queue.shift() ?? null;
+  if (queue.length === 0) {
+    map.delete(key);
+  }
+  return next;
+};
+
+const buildLocalMessageLookup = (messages: ChatMessage[]) => {
+  const bySignature = new Map<string, ChatMessage[]>();
+  const byContent = new Map<string, ChatMessage[]>();
+  for (const message of messages) {
+    const signature = buildMessageSignature(message);
+    const signatureQueue = bySignature.get(signature);
+    if (signatureQueue) {
+      signatureQueue.push(message);
+    } else {
+      bySignature.set(signature, [message]);
+    }
+
+    const contentSignature = buildMessageContentSignature(message);
+    if (!contentSignature) {
+      continue;
+    }
+    const contentQueue = byContent.get(contentSignature);
+    if (contentQueue) {
+      contentQueue.push(message);
+    } else {
+      byContent.set(contentSignature, [message]);
+    }
+  }
+  return { bySignature, byContent };
+};
+
+const reuseLocalMessageIds = (localMessages: ChatMessage[], mappedMessages: ChatMessage[]): ChatMessage[] => {
+  if (localMessages.length === 0 || mappedMessages.length === 0) {
+    return mappedMessages;
+  }
+  const lookup = buildLocalMessageLookup(localMessages);
+  return mappedMessages.map((message) => {
+    const signature = buildMessageSignature(message);
+    const signatureMatch = pullFirstMessage(lookup.bySignature, signature);
+    if (signatureMatch) {
+      return {
+        ...message,
+        id: signatureMatch.id,
+      };
+    }
+    const contentSignature = buildMessageContentSignature(message);
+    if (!contentSignature) {
+      return message;
+    }
+    const contentMatch = pullFirstMessage(lookup.byContent, contentSignature);
+    if (!contentMatch) {
+      return message;
+    }
+    return {
+      ...message,
+      id: contentMatch.id,
+    };
+  });
+};
+
 const MAX_REASONING_MAP_ENTRIES = 500;
 
 const normalizeReasoningSecondsValue = (value: unknown): number | null => {
@@ -412,10 +479,11 @@ export function mergeConversationHistoryIntoSession(
   }
   const localMessages = session.messages ?? [];
   const existingReasoningMap = normalizeReasoningSecondsMap(session.localReasoningByMessage);
-  const mapped =
+  const mappedFromHistory =
     history.length > 0
       ? applyReasoningSecondsMap(mapApiMessagesToChatMessages(history, conversationId, Date.now()), existingReasoningMap)
       : [];
+  const mapped = reuseLocalMessageIds(localMessages, mappedFromHistory);
   const mode = options?.mode ?? "replace";
   let nextMessages = localMessages;
   let didChangeMessages = false;
@@ -432,9 +500,10 @@ export function mergeConversationHistoryIntoSession(
   } else {
     const force = Boolean(options?.force);
     const shouldReplace =
-      force && mapped.length > 0
-        ? true
-        : localMessages.length === 0 || mapped.length > localMessages.length;
+      mapped.length > 0 &&
+      (localMessages.length === 0 ||
+        mapped.length > localMessages.length ||
+        (force && mapped.length >= localMessages.length));
     if (shouldReplace && mapped.length > 0 && !areChatMessagesEquivalent(localMessages, mapped)) {
       nextMessages = mapped;
       didChangeMessages = true;

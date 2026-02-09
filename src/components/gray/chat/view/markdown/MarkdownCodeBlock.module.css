@@ -201,3 +201,84 @@
   color: #ffb29b;
 }
 
+/* Light mode: code blocks and token palette */
+:global(html.light) .codeBlock {
+  border-color: rgba(15, 23, 42, 0.16);
+  background: rgba(255, 255, 255, 0.97);
+}
+
+:global(html.light) .codeHeader {
+  border-bottom-color: rgba(15, 23, 42, 0.12);
+  color: rgba(71, 85, 105, 0.84);
+  background: rgba(246, 248, 252, 0.96);
+}
+
+:global(html.light) .codeLanguage {
+  color: rgba(51, 65, 85, 0.8);
+}
+
+:global(html.light) .codeCopyButton {
+  color: rgba(71, 85, 105, 0.76);
+}
+
+:global(html.light) .codeCopyButton[data-copied="true"] {
+  color: #047857;
+}
+
+:global(html.light) .codeCopyButton:hover {
+  color: rgba(15, 23, 42, 0.92);
+}
+
+:global(html.light) .codeSurface {
+  background: rgba(255, 255, 255, 0.98);
+}
+
+:global(html.light) .codeSurfaceCompact {
+  background: rgba(248, 250, 252, 0.92);
+}
+
+:global(html.light) .codeSurfaceMini {
+  background: transparent;
+}
+
+:global(html.light) .codeBlockCompact {
+  background: rgba(255, 255, 255, 0.98);
+}
+
+:global(html.light) .inlineCodeToken {
+  border-color: rgba(15, 23, 42, 0.14);
+  background: rgba(15, 23, 42, 0.06);
+  color: rgba(15, 23, 42, 0.95);
+}
+
+:global(html.light) .codeLineNumber {
+  color: rgba(100, 116, 139, 0.74);
+}
+
+:global(html.light) .codeTokenPlain {
+  color: rgba(15, 23, 42, 0.94);
+}
+
+:global(html.light) .codeTokenKeyword {
+  color: #1d4ed8;
+}
+
+:global(html.light) .codeTokenString {
+  color: #b45309;
+}
+
+:global(html.light) .codeTokenComment {
+  color: rgba(100, 116, 139, 0.82);
+}
+
+:global(html.light) .codeTokenNumber {
+  color: #9333ea;
+}
+
+:global(html.light) .codeTokenBuiltin {
+  color: #047857;
+}
+
+:global(html.light) .codeTokenLiteral {
+  color: #c2410c;
+}

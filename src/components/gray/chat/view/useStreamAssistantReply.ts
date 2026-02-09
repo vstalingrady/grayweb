@@ -95,6 +95,13 @@ export const useStreamAssistantReply = ({
       let streamingMessageId: string | null = assistantMessageId ?? null;
       let previousVariants: string[] = [];
       let isRegeneration = false;
+      const isRegenerationRequest = Boolean(
+        existingAssistantId &&
+          (session?.scope === "general" ||
+            conversationId ||
+            session?.conversationId ||
+            streamedConversationIdRef.current)
+      );
 
       if (existingAssistantId && session && session.id === targetSessionId) {
         const existingAssistant = session.messages.find(
@@ -229,28 +236,30 @@ export const useStreamAssistantReply = ({
             query?: string;
           }
         | undefined;
+      let localThinkingStartTime: number | null = null;
+      let didSetReasoningSeconds = false;
+      let shouldClearToolStatusOnNextToken = false;
+      let latestSearchQuery: string | null = null;
+      let latestSearchToolName: string | null = null;
+
+      const finalizeReasoningSeconds = (elapsed: number) => {
+        if (didSetReasoningSeconds) {
+          return;
+        }
+        didSetReasoningSeconds = true;
+        setReasoningSeconds(elapsed);
+        setIsActivelyThinking(false);
+        if (assistantMessageId) {
+          updateMessage(targetSessionId, assistantMessageId, { reasoningSeconds: elapsed });
+        }
+      };
+
+      const isSearchToolName = (toolName: string): boolean => {
+        const normalized = toolName.trim().toLowerCase();
+        return normalized.includes("search") || normalized.includes("web");
+      };
 
       try {
-        let localThinkingStartTime: number | null = null;
-        let didSetReasoningSeconds = false;
-        let shouldClearToolStatusOnNextToken = false;
-        let latestSearchQuery: string | null = null;
-        let latestSearchToolName: string | null = null;
-        const isSearchToolName = (toolName: string): boolean => {
-          const normalized = toolName.trim().toLowerCase();
-          return normalized.includes("search") || normalized.includes("web");
-        };
-        const finalizeReasoningSeconds = (elapsed: number) => {
-          if (didSetReasoningSeconds) {
-            return;
-          }
-          didSetReasoningSeconds = true;
-          setReasoningSeconds(elapsed);
-          setIsActivelyThinking(false);
-          if (assistantMessageId) {
-            updateMessage(targetSessionId, assistantMessageId, { reasoningSeconds: elapsed });
-          }
-        };
         for await (const event of chatService.sendMessageStream(
           {
             message: prompt,
@@ -259,6 +268,7 @@ export const useStreamAssistantReply = ({
               : streamedConversationId ?? undefined,
             system_prompt: personalizedSystemPrompt,
             user_id: streamingUserId,
+            is_regeneration: isRegenerationRequest,
             context: contextPayload,
             time_context: timeContext,
             timezone: effectiveTimeZone,
@@ -383,7 +393,15 @@ export const useStreamAssistantReply = ({
                 }
               }
             }
-            const normalizedResponse = normalizeAssistantContent(event.response ?? accumulated, prompt);
+            const streamedText = accumulated;
+            const endResponseText = typeof event.response === "string" ? event.response : "";
+            const normalizeWhitespace = (value: string) => value.trim().replace(/\s+/g, " ");
+            const preferEndPayload =
+              streamedText.trim().length === 0 ||
+              (endResponseText.trim().length > 0 &&
+                normalizeWhitespace(endResponseText) === normalizeWhitespace(streamedText));
+            const responseSource = preferEndPayload ? endResponseText || streamedText : streamedText;
+            const normalizedResponse = normalizeAssistantContent(responseSource, prompt);
             accumulated = normalizedResponse;
             if (event.title) {
               applyAutoTitle(targetSessionId, event.title, { sync: false });
@@ -472,6 +490,7 @@ export const useStreamAssistantReply = ({
               : streamedConversationId ?? undefined,
             system_prompt: personalizedSystemPrompt,
             user_id: streamingUserId,
+            is_regeneration: isRegenerationRequest,
             context: contextPayload,
             time_context: timeContext,
             timezone: effectiveTimeZone,

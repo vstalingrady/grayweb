@@ -10,6 +10,7 @@ import {
 } from "react";
 import type { MouseEvent } from "react";
 import type { CSSProperties } from "react";
+import { createPortal } from "react-dom";
 
 import styles from "./GrayDashboardCalendar.module.css";
 import { EventComposerColorPicker } from "./EventComposerColorPicker";
@@ -64,6 +65,7 @@ type EventComposerProps = {
   onDelete?: (eventId: string) => void;
   anchorRect?: AnchorRect | null;
   onStateChange?: (state: ComposerState) => void;
+  showCalendarSelect?: boolean;
 };
 
 export function EventComposer({
@@ -77,6 +79,7 @@ export function EventComposer({
   onStateChange,
   onDelete,
   anchorRect = null,
+  showCalendarSelect = true,
 }: EventComposerProps) {
   const { t } = useI18n();
   const calendarFallbackId = useMemo(
@@ -635,7 +638,7 @@ export function EventComposer({
     }
   };
 
-  return (
+  const dialog = (
     <div
       className={overlayClassName}
       role="dialog"
@@ -709,22 +712,24 @@ export function EventComposer({
               aria-label={t("Title")}
             />
           </div>
-          <label className={styles.composerField}>
-            <span>{t("Calendar")}</span>
-            <select
-              value={state.calendarId}
-              onChange={(event) =>
-                dispatch({ type: "update", payload: { calendarId: event.target.value } })
-              }
-              aria-label={t("Calendar")}
-            >
-              {calendarOptions.map((calendar) => (
-                <option key={calendar.id} value={calendar.id}>
-                  {calendar.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          {showCalendarSelect ? (
+            <label className={styles.composerField}>
+              <span>{t("Calendar")}</span>
+              <select
+                value={state.calendarId}
+                onChange={(event) =>
+                  dispatch({ type: "update", payload: { calendarId: event.target.value } })
+                }
+                aria-label={t("Calendar")}
+              >
+                {calendarOptions.map((calendar) => (
+                  <option key={calendar.id} value={calendar.id}>
+                    {calendar.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           {!isHabit ? (
             <>
               <div className={styles.composerTimeSection}>
@@ -844,4 +849,10 @@ export function EventComposer({
       </div>
     </div>
   );
+
+  if (typeof document === "undefined") {
+    return dialog;
+  }
+
+  return createPortal(dialog, document.body);
 }

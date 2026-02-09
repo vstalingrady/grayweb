@@ -34,12 +34,12 @@ def test_normalize_search_results_preserves_memory_ids() -> None:
     assert "id" not in results[3]
 
 
-def test_supermemory_force_is_enabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_supermemory_force_is_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("GRAY_SUPERMEMORY_FORCE", raising=False)
-    assert supermemory_force_enabled() is True
-
-    monkeypatch.setenv("GRAY_SUPERMEMORY_FORCE", "0")
     assert supermemory_force_enabled() is False
+
+    monkeypatch.setenv("GRAY_SUPERMEMORY_FORCE", "1")
+    assert supermemory_force_enabled() is True
 
 
 def test_scout_policy_is_disabled_pathfinder_enabled(monkeypatch: pytest.MonkeyPatch) -> None:

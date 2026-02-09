@@ -21,10 +21,14 @@ const mapDashboardPulseToEntry = (pulse: DashboardPulse): PulseEntry => ({
   dateKey: pulse.date_key,
   timestamp: pulse.timestamp,
   plans: pulse.plans.map((plan) => ({
-    id: plan.id,
+    id: String(plan.id),
     label: plan.label,
     completed: plan.completed,
     deadline: plan.deadline ?? null,
+    scheduleSlot: plan.schedule_slot ?? null,
+    details: plan.description ?? null,
+    reminderAt: plan.reminder_at ?? null,
+    color: plan.color ?? null,
   })),
   habits: pulse.habits.map((habit) => ({
     id: habit.id,
@@ -281,6 +285,10 @@ export function usePulse(
         label: plan.label,
         completed: Boolean(plan.completed),
         deadline: plan.deadline ?? null,
+        schedule_slot: plan.scheduleSlot ?? null,
+        description: plan.details ?? null,
+        reminder_at: plan.reminderAt ?? null,
+        color: plan.color ?? null,
       })),
       habits: cloneHabits(currentHabits).map((habit) => ({
         id: String(habit.id),

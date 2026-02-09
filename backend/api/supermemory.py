@@ -54,11 +54,11 @@ def _normalized_tier(user: Dict[str, Any]) -> str:
 def _require_supermemory_access(user: Dict[str, Any]) -> str:
     if not SUPERMEMORY_SERVICE.available:
         raise HTTPException(status_code=503, detail="Long-term memory is not configured.")
-    force_enabled = supermemory_force_enabled()
-    if not force_enabled and _row_get(user, "conversation_memory_enabled") is False:
+    if _row_get(user, "conversation_memory_enabled") is False:
         raise HTTPException(status_code=403, detail="Conversation memory is disabled.")
+    force_enabled = supermemory_force_enabled()
     requested_tier = _normalized_tier(user)
-    plan_tier = supermemory_force_plan_tier(requested_tier)
+    plan_tier = supermemory_force_plan_tier(requested_tier) if force_enabled else requested_tier
     policy = SUPERMEMORY_SERVICE.policy_for_tier(plan_tier)
     if not policy.enabled:
         raise HTTPException(

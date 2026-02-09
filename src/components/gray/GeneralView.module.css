@@ -434,3 +434,95 @@
   padding: 24px 0;
 }
 
+/* Light mode: dashboard cards and task/proactivity list contrast */
+:global(html.light) .dashboardCard {
+  background: var(--gray-ui-surface-soft, rgba(255, 255, 255, 0.94));
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+  box-shadow:
+    0 22px 34px rgba(15, 23, 42, 0.08),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+}
+
+:global(html.light) .dashboardCardHeader {
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.9));
+}
+
+:global(html.light) .dashboardCardTitle {
+  color: rgba(63, 63, 70, 0.78);
+}
+
+:global(html.light) .planList {
+  scrollbar-color: rgba(15, 23, 42, 0.28) transparent;
+}
+
+:global(html.light) .planList::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.24);
+}
+
+:global(html.light) .planListItem {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+:global(html.light) .planItemButton {
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .planItemButton:hover {
+  color: rgba(12, 12, 12, 0.98);
+}
+
+:global(html.light) .planItemButton[data-completed="true"] {
+  color: rgba(82, 82, 91, 0.58);
+}
+
+:global(html.light) .planItemButton[data-completed="true"] .planLabel,
+:global(html.light) .planItemButton[data-completed="true"] .planDetails {
+  color: rgba(82, 82, 91, 0.56);
+}
+
+:global(html.light) .planItemButton[data-completed="true"] .planDetails {
+  color: rgba(113, 113, 122, 0.54);
+}
+
+:global(html.light) .planCheckboxButton:hover,
+:global(html.light) .planCheckboxButton:focus-visible {
+  background: rgba(15, 23, 42, 0.08);
+  color: rgba(15, 23, 42, 0.94);
+}
+
+:global(html.light) .planCheckbox {
+  color: rgba(51, 65, 85, 0.76);
+}
+
+:global(html.light) .planLabel {
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .planDetails {
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.85));
+}
+
+:global(html.light) .listItemActionButton {
+  color: rgba(82, 82, 91, 0.92);
+}
+
+:global(html.light) .listItemActionButton:hover {
+  color: rgba(15, 23, 42, 0.95);
+}
+
+:global(html.light) .listEmptyMessage {
+  background: rgba(255, 255, 255, 0.84);
+  color: rgba(82, 82, 91, 0.82);
+}
+
+:global(html.light) .proactivityChecklistIcon {
+  color: rgba(82, 82, 91, 0.75);
+}
+
+:global(html.light) .proactivityChecklistLabel {
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .proactivityEmptyState {
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.88));
+}

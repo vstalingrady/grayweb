@@ -350,9 +350,9 @@ async def stream_ai_response(
     
     conversation_history = deps["normalize_conversation_history"](conversation_history)
     memory_history = conversation_history
-    force_supermemory = supermemory_force_enabled()
-    memory_enabled = conversation_memory_enabled or force_supermemory
-    memory_plan_tier = supermemory_force_plan_tier(plan_tier)
+    memory_enabled = conversation_memory_enabled
+    force_supermemory = supermemory_force_enabled() and memory_enabled
+    memory_plan_tier = supermemory_force_plan_tier(plan_tier) if force_supermemory else plan_tier
     memory_overrides = (
         supermemory_force_overrides(supermemory_overrides)
         if force_supermemory
@@ -603,9 +603,9 @@ async def generate_ai_response(
     # But often non-streaming is used for specific tasks like title generation.
     conversation_history = deps["normalize_conversation_history"](conversation_history)
     memory_history = conversation_history
-    force_supermemory = supermemory_force_enabled()
-    memory_enabled = conversation_memory_enabled or force_supermemory
-    memory_plan_tier = supermemory_force_plan_tier(plan_tier)
+    memory_enabled = conversation_memory_enabled
+    force_supermemory = supermemory_force_enabled() and memory_enabled
+    memory_plan_tier = supermemory_force_plan_tier(plan_tier) if force_supermemory else plan_tier
     memory_overrides = (
         supermemory_force_overrides(supermemory_overrides)
         if force_supermemory

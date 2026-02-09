@@ -12,26 +12,38 @@ logger = logging.getLogger("backend.token_utils")
 
 @lru_cache(maxsize=1)
 def _tiktoken_encoding():
-    return tiktoken.get_encoding("cl100k_base")
+    try:
+        return tiktoken.get_encoding("cl100k_base")
+    except Exception as exc:
+        logger.warning(
+            "tiktoken encoding load failed; using heuristic token estimation",
+            extra={
+                "event_type": "fallback_activation",
+                "fallback": "tiktoken_encoding_load_error",
+                "error": str(exc),
+            },
+        )
+        return None
 
 
 def estimate_tokens(text: str) -> int:
     if not text:
         return 0
     encoding = _tiktoken_encoding()
-    try:
-        return len(encoding.encode(text))
-    except Exception as exc:
-        logger.warning(
-            "tiktoken encode failed; falling back to heuristic token estimation",
-            extra={
-                "event_type": "fallback_activation",
-                "fallback": "tiktoken_encode_error",
-                "error": str(exc),
-            },
-        )
-        # Heuristic fallback: average English token ~= 3.8 chars (empirically closer than 4).
-        return max(1, int(len(text) / 3.8))
+    if encoding is not None:
+        try:
+            return len(encoding.encode(text))
+        except Exception as exc:
+            logger.warning(
+                "tiktoken encode failed; falling back to heuristic token estimation",
+                extra={
+                    "event_type": "fallback_activation",
+                    "fallback": "tiktoken_encode_error",
+                    "error": str(exc),
+                },
+            )
+    # Heuristic fallback: average English token ~= 3.8 chars (empirically closer than 4).
+    return max(1, int(len(text) / 3.8))
 
 
 def _entry_text(entry: Mapping[str, Any]) -> str:

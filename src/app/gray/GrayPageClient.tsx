@@ -63,6 +63,7 @@ import { useCalendarSyncHandlers } from "./hooks/useCalendarSyncHandlers";
 import { usePlanHabitActions } from "./hooks/usePlanHabitActions";
 import { useGrayLayoutState } from "./hooks/useGrayLayoutState";
 import { MobileWelcomeScreen } from "@/components/gray/chat/view/MobileWelcomeScreen";
+import { PLAN_EVENT_ID_PREFIX } from "@/components/gray/planCalendarUtils";
 
 // Lazy load all heavy components for better code splitting
 const GrayEnhancedSidebar = dynamic(
@@ -119,6 +120,20 @@ type SpeechRecognitionResultListLike = ArrayLike<SpeechRecognitionResultLike>;
 type SpeechRecognitionEventLike = {
   resultIndex: number;
   results: SpeechRecognitionResultListLike;
+};
+
+const parsePlanIdFromComposerEventId = (eventId?: string): number | null => {
+  if (typeof eventId !== "string" || eventId.trim() === "") {
+    return null;
+  }
+  const normalizedId = eventId.startsWith(PLAN_EVENT_ID_PREFIX)
+    ? eventId.slice(PLAN_EVENT_ID_PREFIX.length)
+    : eventId;
+  const numericId = Number(normalizedId);
+  if (!Number.isFinite(numericId)) {
+    return null;
+  }
+  return numericId;
 };
 
 type SpeechRecognitionErrorEventLike = {
@@ -452,14 +467,22 @@ function GrayPageClientInner({
     const startStr = formatTime(payload.start);
     const endStr = formatTime(payload.end);
     const scheduleSlot = `${startStr}-${endStr}`;
-
-    await workspaceService.createPlan(user.id, {
+    const planPayload = {
       label: payload.title,
-      completed: false,
-      deadline: null,
+      deadline: toDateKey(payload.start),
       scheduleSlot: scheduleSlot,
       description: payload.description || null,
-    });
+    };
+    const existingPlanId = parsePlanIdFromComposerEventId(payload.id);
+
+    if (existingPlanId !== null) {
+      await workspaceService.updatePlan(user.id, existingPlanId, planPayload);
+    } else {
+      await workspaceService.createPlan(user.id, {
+        ...planPayload,
+        completed: false,
+      });
+    }
 
     await refreshPlansAndHabits();
   }, [user?.id, refreshPlansAndHabits]);
@@ -1346,6 +1369,7 @@ function GrayPageClientInner({
   const { handleCalendarsChange, handleEventsChange } = useCalendarSyncHandlers({
     userId,
     plans,
+    setPlans,
     calendars: calendarCalendars,
     setCalendars: setCalendarCalendars,
     events: calendarEvents,

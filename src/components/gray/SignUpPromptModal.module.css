@@ -100,3 +100,52 @@
   color: #fff;
 }
 
+/* Light mode: prompt shell and button readability */
+:global(html.light) .signUpPromptOverlay {
+  background: rgba(15, 23, 42, 0.22);
+}
+
+:global(html.light) .signUpPromptContainer {
+  background: var(--gray-ui-surface-elevated, #ffffff);
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+  box-shadow:
+    0 24px 44px rgba(15, 23, 42, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.72);
+}
+
+:global(html.light) .signUpPromptClose {
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.9));
+}
+
+:global(html.light) .signUpPromptClose:hover {
+  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.94));
+}
+
+:global(html.light) .signUpPromptTitle {
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.94));
+}
+
+:global(html.light) .signUpPromptDescription {
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.92));
+}
+
+:global(html.light) .signUpPromptPrimaryButton {
+  background: var(--gray-ui-text, rgba(24, 24, 27, 0.94));
+  color: var(--gray-ui-surface, #ffffff);
+}
+
+:global(html.light) .signUpPromptPrimaryButton:hover {
+  background: rgba(12, 12, 12, 0.92);
+}
+
+:global(html.light) .signUpPromptSecondaryButton {
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.16));
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.9));
+}
+
+:global(html.light) .signUpPromptSecondaryButton:hover {
+  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.24));
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.94));
+}

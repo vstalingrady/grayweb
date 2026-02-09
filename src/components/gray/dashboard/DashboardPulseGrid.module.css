@@ -451,3 +451,92 @@
     min-height: 210px;
   }
 }
+
+/* Light mode: dashboard card surfaces and control contrast */
+:global(html.light) .dashboardHeaderArea,
+:global(html.light) .dashboardCard {
+  background: var(--gray-ui-surface-elevated, #ffffff);
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+}
+
+:global(html.light) .dashboardGreeting,
+:global(html.light) .dashboardEventTitle,
+:global(html.light) .dashboardTaskLabel,
+:global(html.light) .proactivityChecklistLabel {
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .dashboardDate,
+:global(html.light) .dashboardEventTime,
+:global(html.light) .dashboardEventDetails,
+:global(html.light) .dashboardCardTitle,
+:global(html.light) .dashboardSectionTitle,
+:global(html.light) .dashboardListEmpty,
+:global(html.light) .dashboardTaskLabel[data-completed="true"],
+:global(html.light) .proactivityChecklistIcon,
+:global(html.light) .proactivityEmptyState {
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.88));
+}
+
+:global(html.light) .dashboardCardIcon {
+  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.9));
+}
+
+:global(html.light) .dashboardCardAction {
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.9));
+}
+
+:global(html.light) .dashboardCardAction:hover,
+:global(html.light) .dashboardCardAction:focus-visible {
+  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.94));
+}
+
+:global(html.light) .dashboardSection + .dashboardSection {
+  border-top-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+}
+
+:global(html.light) .dashboardButtonNeutral {
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.16));
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .dashboardButtonNeutral:hover {
+  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.24));
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.96));
+}
+
+:global(html.light) .dashboardButtonNeutral:disabled,
+:global(html.light) .dashboardButtonNeutral[data-disabled="true"] {
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.12));
+}
+
+:global(html.light) .planCheckboxButton:hover,
+:global(html.light) .planCheckboxButton:focus-visible {
+  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.94));
+}
+
+:global(html.light) .proactivityNotificationBanner {
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.14));
+  background: var(--gray-ui-surface, #ffffff);
+  color: var(--gray-ui-text-muted, rgba(82, 82, 91, 0.9));
+}
+
+:global(html.light) .proactivityNotificationButton {
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.2));
+  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+  color: var(--gray-ui-text, rgba(24, 24, 27, 0.92));
+}
+
+:global(html.light) .proactivityNotificationButton:hover {
+  background: var(--gray-ui-hover-strong, rgba(0, 0, 0, 0.1));
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.28));
+}
+
+:global(html.light) .proactivityNotificationButton:disabled,
+:global(html.light) .proactivityNotificationButton[data-disabled="true"] {
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.14));
+}

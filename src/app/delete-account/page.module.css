@@ -6,8 +6,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #020202;
-    color: #f5f5f5;
+    background: var(--bg-base, #020202);
+    color: var(--fg-primary, #f5f5f5);
     padding: 24px;
     z-index: 50;
     overflow-y: auto;
@@ -25,8 +25,8 @@
 }
 
 .delete-account__card {
-    background: rgba(12, 12, 12, 0.9);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: var(--panel, rgba(12, 12, 12, 0.9));
+    border: 1px solid var(--gray-border, rgba(255, 255, 255, 0.08));
     border-radius: 24px;
     padding: 32px;
     max-width: 420px;
@@ -48,15 +48,15 @@
 .delete-account__description {
     margin: 0;
     line-height: 1.6;
-    color: rgba(245, 245, 245, 0.85);
+    color: var(--fg-muted, rgba(245, 245, 245, 0.85));
 }
 
 .delete-account__input {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--panel-strong, rgba(16, 16, 16, 0.94));
+    border: 1px solid var(--gray-border, rgba(255, 255, 255, 0.1));
     border-radius: 12px;
     padding: 12px 16px;
-    color: #fff;
+    color: var(--fg-primary, #fff);
     font-size: 1rem;
     width: 100%;
     outline: none;
@@ -64,12 +64,12 @@
 }
 
 .delete-account__input:focus {
-    border-color: rgba(255, 255, 255, 0.3);
+    border-color: var(--gray-border-strong, rgba(255, 255, 255, 0.3));
 }
 
 .delete-account__error {
     margin: 0;
-    color: #ff9a9a;
+    color: var(--danger, #ff9a9a);
     font-size: 0.9rem;
 }
 
@@ -85,7 +85,7 @@
     border-radius: 999px;
     padding: 12px 16px;
     background: rgba(255, 71, 87, 0.2);
-    color: #fff;
+    color: var(--fg-primary, #fff);
     font-size: 0.85rem;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -101,13 +101,14 @@
 .delete-account__button:disabled {
     opacity: 0.4;
     cursor: not-allowed;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--accent-soft, rgba(255, 255, 255, 0.05));
+    color: var(--fg-muted, rgba(245, 245, 245, 0.7));
 }
 
 .delete-account__cancel {
     border: none;
     background: transparent;
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--fg-muted, rgba(255, 255, 255, 0.6));
     padding: 12px 16px;
     font-size: 0.85rem;
     cursor: pointer;
@@ -115,11 +116,40 @@
 }
 
 .delete-account__cancel:hover {
-    color: #fff;
+    color: var(--fg-primary, #fff);
 }
 
 .delete-account__spinner {
     animation: delete-spin 1s linear infinite;
+}
+
+:global(html.light) .delete-account__card {
+    background: rgba(255, 255, 255, 0.94);
+    border-color: rgba(15, 23, 42, 0.12);
+    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.14);
+}
+
+:global(html.light) .delete-account__input {
+    background: rgba(255, 255, 255, 0.92);
+    border-color: rgba(15, 23, 42, 0.16);
+}
+
+:global(html.light) .delete-account__input:focus {
+    border-color: rgba(15, 23, 42, 0.3);
+}
+
+:global(html.light) .delete-account__button {
+    background: rgba(220, 38, 38, 0.12);
+    color: #991b1b;
+}
+
+:global(html.light) .delete-account__button:hover:not(:disabled) {
+    background: rgba(220, 38, 38, 0.18);
+}
+
+:global(html.light) .delete-account__button:disabled {
+    background: rgba(15, 23, 42, 0.08);
+    color: rgba(15, 23, 42, 0.45);
 }
 
 @media (max-width: 768px) {
