@@ -77,10 +77,15 @@ api_logger = create_logger("api.chat")
 router = APIRouter(tags=["chat"])
 
 CUSTOM_INSTRUCTIONS_HEADER = "CUSTOM INSTRUCTIONS FROM USER (SOURCE OF TRUTH)"
-FOLLOW_UP_PRONOUN_PATTERN = re.compile(r"\b(him|her|them|that|this|it)\b", re.IGNORECASE)
+FOLLOW_UP_PRONOUN_PATTERN = re.compile(
+    r"\b(he|she|they|him|her|them|his|hers|their|that|this|it)\b",
+    re.IGNORECASE,
+)
 FOLLOW_UP_REFERENTIAL_PATTERN = re.compile(
     r"\b("
-    r"him|her|them|that|this|it|those|these|"
+    r"he|she|they|him|her|them|his|hers|their|that|this|it|those|these|"
+    r"(?:what|who|when|where|why|how)\s+(?:did|does|do|is|are|was|were|has|have|had|can|could|should|would|will)\s+"
+    r"(?:he|she|they|it|this|that|him|her|them)|"
     r"other\s+half|the\s+other\s+half|other\s+part|the\s+rest|rest\s+of\s+(?:it|that|them)|"
     r"other\s+side|remaining\s+(?:half|part|pieces?|details?)|what\s+about\s+(?:that|it|him|her|them|the\s+rest|the\s+other)"
     r")\b",
@@ -275,6 +280,8 @@ def _build_effective_web_search_prompt(
         "before searching. Rewrite follow-up queries with the resolved entity/topic explicitly included. "
         "Never run standalone generic queries such as 'other half', 'the rest', or 'what about him'. "
         "Keep the user domain intact; do not reinterpret ambiguous words into unrelated domains. "
+        "Never derive search terms from runtime scaffolding like timezone metadata, UTC offsets, ISO timestamps, "
+        "or reminder formatting instructions. "
         "For factual claims or rumor/verification style questions, if confidence is not high, run one targeted web search before concluding. "
         "If the referent is still ambiguous, ask one clarifying question instead of broad generic searches. "
         "Do not claim you cannot browse or that your knowledge is cutoff when web search is enabled."
@@ -282,17 +289,31 @@ def _build_effective_web_search_prompt(
     if not conversation_history:
         return f"{base_prompt}\n\n{guidance}" if base_prompt else guidance
 
+    def _compact_context_snippet(value: str, limit: int = 220) -> str:
+        compact = " ".join((value or "").split())
+        if len(compact) <= limit:
+            return compact
+        return compact[: limit - 3].rstrip() + "..."
+
     recent_user_context: Optional[str] = None
     fallback_user_context: Optional[str] = None
+    recent_assistant_context: Optional[str] = None
+    fallback_assistant_context: Optional[str] = None
     recent_candidates: List[str] = []
-    for entry in reversed(conversation_history[-10:]):
+    recent_assistant_candidates: List[str] = []
+    for entry in reversed(conversation_history[-12:]):
         if not isinstance(entry, dict):
             continue
-        if (entry.get("role") or "").strip().lower() != "user":
-            continue
+        role = (entry.get("role") or "").strip().lower()
         text = (entry.get("text") or "").strip()
-        if text and text != (chat_request.message or "").strip():
-            recent_candidates.append(text)
+        if not text:
+            continue
+        if role == "user":
+            if text != (chat_request.message or "").strip():
+                recent_candidates.append(text)
+            continue
+        if role in {"assistant", "model"}:
+            recent_assistant_candidates.append(text)
 
     for candidate in recent_candidates:
         if _is_low_information_search_turn(candidate):
@@ -310,16 +331,40 @@ def _build_effective_web_search_prompt(
     if recent_user_context is None:
         recent_user_context = fallback_user_context
 
+    for candidate in recent_assistant_candidates:
+        if _is_low_information_search_turn(candidate):
+            continue
+        if fallback_assistant_context is None:
+            fallback_assistant_context = candidate
+        lowered_candidate = candidate.lower()
+        if any(keyword in lowered_candidate for keyword in FOLLOW_UP_CONTEXT_KEYWORDS):
+            recent_assistant_context = candidate
+            break
+        if len(lowered_candidate.split()) >= 8:
+            recent_assistant_context = candidate
+            break
+
+    if recent_assistant_context is None:
+        recent_assistant_context = fallback_assistant_context
+
     prompt_parts: List[str] = []
     if base_prompt:
         prompt_parts.append(base_prompt)
     prompt_parts.append(guidance)
     follow_up_message = chat_request.message or ""
-    if recent_user_context and (
+    follow_up_like = bool(
         FOLLOW_UP_PRONOUN_PATTERN.search(follow_up_message)
         or FOLLOW_UP_REFERENTIAL_PATTERN.search(follow_up_message)
-    ):
-        prompt_parts.append(f"Recent user context to anchor follow-up search: {recent_user_context[:220]}")
+    )
+    if follow_up_like and recent_user_context:
+        prompt_parts.append(
+            f"Recent user context to anchor follow-up search: {_compact_context_snippet(recent_user_context)}"
+        )
+    if follow_up_like and recent_assistant_context:
+        prompt_parts.append(
+            "Recent assistant context to anchor follow-up search: "
+            f"{_compact_context_snippet(recent_assistant_context)}"
+        )
     return "\n\n".join(prompt_parts)
 
 def _append_custom_instructions(

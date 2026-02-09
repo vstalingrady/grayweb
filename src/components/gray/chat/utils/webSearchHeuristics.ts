@@ -136,8 +136,9 @@ const FOLLOW_UP_PATTERNS = [
   /\b(?:and|also)\s+(?:him|her|them|that|this|it)\b/i,
   /\b(?:about|regarding)\s+(?:him|her|them|that|this|it)\b/i,
   /\b(?:same|related|more\s+on\s+that)\b/i,
+  /\b(?:what|who|when|where|why|how)\s+(?:did|does|do|is|are|was|were|has|have|had|can|could|should|would|will)\s+(?:he|she|they|it|this|that|him|her|them)\b/i,
 ];
-const FOLLOW_UP_PRONOUN_PATTERN = /\b(him|her|them|that|this|it)\b/i;
+const FOLLOW_UP_PRONOUN_PATTERN = /\b(he|she|they|him|her|them|his|hers|their|that|this|it)\b/i;
 
 const FOLLOW_UP_CONTEXT_KEYWORDS = [
   "news",
@@ -243,12 +244,12 @@ export const shouldEnableWebSearch = (message: string, recentUserMessages?: stri
     return false;
   }
 
-  if (VERIFICATION_PATTERNS.some((pattern) => pattern.test(normalized))) {
-    return true;
-  }
-
   if (isAmbiguousFollowUp(normalized)) {
     return false;
+  }
+
+  if (VERIFICATION_PATTERNS.some((pattern) => pattern.test(normalized))) {
+    return true;
   }
 
   if (wordCount <= 2 && !isQuestionLike(normalized)) {
