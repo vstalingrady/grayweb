@@ -296,7 +296,18 @@ async def get_conversation(
             api_logger.debug(f"Cache write failed for {conversation_id}: {e}")
 
         return history
-    except Exception as e:
+    except HTTPException:
+        raise
+    except Exception as error:
+        api_logger.error(
+            "Error fetching conversation",
+            extra={
+                "event_type": "conversation_fetch_failed",
+                "conversation_id": conversation_id,
+                "user_id": current_user.get("id"),
+                "error": str(error),
+            },
+        )
         raise HTTPException(status_code=500, detail="Error fetching conversation.")
 
 

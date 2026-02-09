@@ -124,6 +124,76 @@ const normalizeSearchEntryHost = (value?: string | null): string | null => {
   return normalized ? normalized.toLowerCase() : null;
 };
 
+const classifyGroundingHref = (href?: string, siteLabel?: string): string => {
+  const normalizedSite = normalizeSearchEntryHost(siteLabel) ?? "";
+  if (!href) {
+    if (normalizedSite.includes("wikipedia.org") || normalizedSite.includes("archlinux.org")) {
+      return "Wiki article";
+    }
+    if (normalizedSite.includes("wiktionary.org")) {
+      return "Dictionary entry";
+    }
+    if (normalizedSite.includes("w3.org")) {
+      return "Standards reference";
+    }
+    return "Web reference";
+  }
+
+  try {
+    const url = new URL(href);
+    const host = normalizeSearchEntryHost(url.hostname) ?? normalizedSite;
+    const path = url.pathname.toLowerCase();
+    if (host.includes("wiktionary.org")) {
+      return "Dictionary entry";
+    }
+    if (host.includes("wikipedia.org")) {
+      return "Encyclopedia article";
+    }
+    if (path.includes("/wiki/")) {
+      return "Wiki article";
+    }
+    if (host.includes("github.com")) {
+      return "Repository page";
+    }
+    if (host.includes("stackoverflow.com")) {
+      return "Q&A thread";
+    }
+    if (host.includes("arxiv.org")) {
+      return "Research paper";
+    }
+    if (host.includes("youtube.com") || host.includes("youtu.be")) {
+      return "Video page";
+    }
+    if (path.endsWith(".pdf")) {
+      return "PDF document";
+    }
+    if (path.includes("/docs") || path.includes("/documentation")) {
+      return "Documentation page";
+    }
+    if (path.includes("/blog")) {
+      return "Blog post";
+    }
+    if (path.includes("/news")) {
+      return "News article";
+    }
+    if (host.includes("w3.org")) {
+      return "Standards reference";
+    }
+    return "Web reference";
+  } catch {
+    return "Web reference";
+  }
+};
+
+const buildGroundingCardDetail = (href?: string, siteLabel?: string, fallbackSnippet?: string): string | undefined => {
+  const classification = classifyGroundingHref(href, siteLabel);
+  if (classification) {
+    return classification;
+  }
+  const fallback = extractSourceSnippet(fallbackSnippet);
+  return fallback;
+};
+
 const collapseWhitespace = (value: string): string => value.replace(/\s+/g, " ").trim();
 
 const truncatePreviewText = (value: string, maxLength = 220): string =>
@@ -577,7 +647,7 @@ export function ChatMessageGroundingPanel({ metadata, t }: ChatMessageGroundingP
       title: result.title,
       href: result.href,
       siteLabel: result.siteLabel,
-      snippet: result.snippet,
+      snippet: buildGroundingCardDetail(result.href, result.siteLabel, result.snippet),
       faviconUrl,
       previewImageUrl: thumbnailResolution.primary,
       previewFallbackQueue: thumbnailResolution.fallbacks.join("|"),
@@ -594,7 +664,7 @@ export function ChatMessageGroundingPanel({ metadata, t }: ChatMessageGroundingP
       title: source.title ?? t("Referenced source"),
       href: source.href,
       siteLabel: source.siteLabel,
-      snippet: extractSourceSnippet(source.excerpt),
+      snippet: buildGroundingCardDetail(source.href, source.siteLabel, source.excerpt),
       faviconUrl,
       previewImageUrl: thumbnailResolution.primary,
       previewFallbackQueue: thumbnailResolution.fallbacks.join("|"),

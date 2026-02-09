@@ -97,6 +97,31 @@ async def test_get_conversation_unpacking_accepts_tier_token_limit(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_get_conversation_preserves_http_exception(monkeypatch):
+    from backend.api import conversations as conv_module
+    from backend.core.rate_limit import limiter
+
+    monkeypatch.setattr(limiter, "enabled", False, raising=False)
+    monkeypatch.setattr(
+        conv_module,
+        "_get_conversation_helpers",
+        lambda: _make_helpers(
+            require_owner_raises=False,
+            require_owner_exception=HTTPException(status_code=404, detail="not found"),
+        ),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await conv_module.get_conversation(
+            request=_make_request(),
+            conversation_id="missing",
+            current_user={"id": 1},
+        )
+
+    assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_get_conversation_usage_uses_tier_token_limit(monkeypatch):
     from backend.api import conversations as conv_module
     from backend.core.rate_limit import limiter

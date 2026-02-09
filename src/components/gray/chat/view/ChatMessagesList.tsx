@@ -36,12 +36,17 @@ type StreamingTokenPiece = {
   value: string;
 };
 
+const STREAMING_MARKDOWN_PATTERN =
+  /(?:\*\*|__|~~|`{1,3}|(?:^|\n)\s{0,3}#{1,6}\s|(?:^|\n)\s*[-*+]\s|(?:^|\n)\s*\d+\.\s|\[[^\]]+\]\([^)]+\))/m;
+
 const splitStreamingChunk = (chunk: string): string[] => {
   if (!chunk) {
     return [];
   }
   return chunk.split(/(\s+)/).filter((piece) => piece.length > 0);
 };
+
+const shouldPreferMarkdownStreamingRender = (text: string): boolean => STREAMING_MARKDOWN_PATTERN.test(text);
 
 const StreamingTokenText = memo(({ text, ariaLive }: { text: string; ariaLive?: "polite" }) => {
   const [pieces, setPieces] = useState<StreamingTokenPiece[]>([]);
@@ -400,6 +405,7 @@ export const ChatMessagesList = memo(
           const hasTextContent = Boolean(visibleAssistantText.trim());
           const assistantReminders = isAssistant && Array.isArray(message.reminders) ? message.reminders : [];
           const showAssistantMarkdown = isAssistant && hasTextContent;
+          const shouldUseStreamingMarkdown = isStreamingMessage && shouldPreferMarkdownStreamingRender(visibleAssistantText);
           const hasVisibleContent = hasThinkingContent || showAssistantMarkdown || assistantReminders.length > 0;
           const isStreamingAssistantMessage = isAssistant && isStreamingMessage;
           const isAwaitingStreamContent = isStreamingAssistantMessage && !hasVisibleContent;
@@ -522,7 +528,7 @@ export const ChatMessagesList = memo(
                         data-streaming={isStreamingMessage ? "true" : undefined}
                         aria-live={isStreamingMessage ? "polite" : undefined}
                       >
-                        {isStreamingMessage ? (
+                        {isStreamingMessage && !shouldUseStreamingMarkdown ? (
                           <StreamingTokenText text={visibleAssistantText} ariaLive="polite" />
                         ) : (
                           <ReactMarkdown
