@@ -1,13 +1,15 @@
 """Supermemory integration for long-term memory."""
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import hmac
+import json
 import math
-import time
 import os
 import re
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -15,11 +17,15 @@ from typing import Any, Dict, List, Optional, Tuple
 import httpx
 
 from backend.logging_config import create_logger
+from backend.openrouter_client import OpenRouterService
 from backend.tier_utils import normalize_plan_tier
 
 
 _INTEGRITY_VERSION = 1
-_INTEGRITY_SECRET = "7f2a9c4b8e1d6f3a5c0b9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a"
+_INTEGRITY_SECRET_ENV_KEYS = (
+    "SUPERMEMORY_INTEGRITY_SECRET",
+    "GRAY_SUPERMEMORY_INTEGRITY_SECRET",
+)
 
 _CONTROL_CHAR_PATTERNS = (
     re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]"),
@@ -31,29 +37,47 @@ _SUPERMEMORY_CONTEXT_RE = re.compile(
     re.IGNORECASE,
 )
 _METADATA_KEY_RE = re.compile(r"^[\w.-]+$")
-_ATOMIC_SENTENCE_SPLIT_RE = re.compile(r"[.!?\n;]+")
 _ATOMIC_LIST_PREFIX_RE = re.compile(r"^\s*(?:[-*]\s+|\d+[.)]\s+)")
+_ATOMIC_LIST_LINE_RE = re.compile(r"^\s*(?:[-*]|\d+[.)])\s+(.+)$", re.MULTILINE)
 _ATOMIC_SPACE_RE = re.compile(r"\s+")
-_ATOMIC_FIRST_PERSON_RE = re.compile(
-    r"\b(i|i am|i'm|i have|i've|i will|i'll|my|me|mine|we|our)\b",
-    re.IGNORECASE,
+_ATOMIC_MEMORY_CATEGORIES = ("preference", "fact", "decision", "entity")
+_ATOMIC_MEMORY_EXTRACTION_PROMPT = (
+    "Extract durable user memories from USER_MESSAGE. This must work for any language.\n"
+    "Return JSON only with this shape:\n"
+    '{"memories":[{"content":"string","category":"preference|fact|decision|entity"}]}\n'
+    "Rules:\n"
+    "- Include only stable personal details explicitly stated by the user.\n"
+    "- Exclude questions, requests, temporary tasks, and assistant text.\n"
+    "- Keep each memory concise and in the original language.\n"
+    "- If none qualify, return {\"memories\":[]}."
 )
-_ATOMIC_PREFERENCE_RE = re.compile(
-    r"\b(i (?:prefer|like|love|hate|dislike|enjoy|want)|my favorite|i am into|i'm into)\b",
-    re.IGNORECASE,
-)
-_ATOMIC_DECISION_RE = re.compile(
-    r"\b(i (?:decided|choose|chose|picked|pick|will|am going to|going with)|i'll|we will|we're going to|let's)\b",
-    re.IGNORECASE,
-)
-_ATOMIC_FACT_RE = re.compile(
-    r"\b(i am|i'm|i have|i've|i use|i work|i live|my [a-z0-9_ ]{1,32} is|my [a-z0-9_ ]{1,32} are)\b",
-    re.IGNORECASE,
-)
-_ATOMIC_NON_MEMORY_PREFIX_RE = re.compile(
-    r"^(can|could|would|please|help|tell|show|what|why|how|when|where)\b",
-    re.IGNORECASE,
-)
+_ATOMIC_MEMORY_RESPONSE_FORMAT: Dict[str, Any] = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "atomic_user_memories",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "memories": {
+                    "type": "array",
+                    "maxItems": 10,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "content": {"type": "string"},
+                            "category": {"type": "string", "enum": list(_ATOMIC_MEMORY_CATEGORIES)},
+                        },
+                        "required": ["content", "category"],
+                    },
+                }
+            },
+            "required": ["memories"],
+        },
+    },
+}
 
 MEMORY_CATEGORIES = ("preference", "fact", "decision", "entity", "other")
 
@@ -211,10 +235,27 @@ def _base64url(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).decode("ascii").rstrip("=")
 
 
+def _resolve_integrity_secret() -> Optional[str]:
+    for env_name in _INTEGRITY_SECRET_ENV_KEYS:
+        value = _trim(os.getenv(env_name))
+        if value:
+            return value
+    return None
+
+
 def _request_integrity_headers(api_key: str, container_tag: str) -> Dict[str, str]:
+    integrity_secret = _resolve_integrity_secret()
+    if not integrity_secret:
+        return {}
     content_hash = _sha256_hex(container_tag)
     signature_payload = f"{_sha256_hex(api_key)}:{content_hash}:{_INTEGRITY_VERSION}"
-    signature = _base64url(hmac.new(_INTEGRITY_SECRET.encode("utf-8"), signature_payload.encode("utf-8"), hashlib.sha256).digest())
+    signature = _base64url(
+        hmac.new(
+            integrity_secret.encode("utf-8"),
+            signature_payload.encode("utf-8"),
+            hashlib.sha256,
+        ).digest()
+    )
     return {
         "X-Content-Hash": content_hash,
         "X-Request-Integrity": f"v{_INTEGRITY_VERSION}.{signature}",
@@ -316,56 +357,76 @@ def _normalize_atomic_memory_text(text: str, *, max_len: int = 240) -> str:
     return cleaned
 
 
-def _classify_atomic_user_memory(text: str) -> Optional[str]:
-    if not text or len(text) < 8:
+def _parse_json_object(text: str) -> Optional[Dict[str, Any]]:
+    if not isinstance(text, str):
         return None
-    lower = text.lower()
-    if lower.endswith("?"):
+    candidate = text.strip()
+    if not candidate:
         return None
-    if _ATOMIC_NON_MEMORY_PREFIX_RE.match(lower):
+    try:
+        parsed = json.loads(candidate)
+        return parsed if isinstance(parsed, dict) else None
+    except (TypeError, ValueError):
+        pass
+    start = candidate.find("{")
+    end = candidate.rfind("}")
+    if start < 0 or end <= start:
         return None
-    if "as an ai" in lower:
+    try:
+        parsed = json.loads(candidate[start : end + 1])
+    except (TypeError, ValueError):
         return None
-    if not _ATOMIC_FIRST_PERSON_RE.search(lower):
-        return None
-    if _ATOMIC_PREFERENCE_RE.search(lower):
-        return "preference"
-    if _ATOMIC_DECISION_RE.search(lower):
-        return "decision"
-    if _ATOMIC_FACT_RE.search(lower):
-        return "fact"
-    detected = detect_memory_category(text)
-    if detected in {"preference", "fact", "decision", "entity"}:
-        return detected
-    return None
+    return parsed if isinstance(parsed, dict) else None
 
 
-def _extract_atomic_user_memories(user_text: str, *, max_items: int = 6) -> List[Tuple[str, str]]:
-    if not user_text:
-        return []
-    cleaned = sanitize_content(
-        _SUPERMEMORY_CONTEXT_RE.sub("", user_text),
-        max_len=10_000,
-    )
-    if not cleaned:
+def _normalize_atomic_memory_items(raw_items: Any, *, max_items: int = 6) -> List[Tuple[str, str]]:
+    if not isinstance(raw_items, list):
         return []
     memories: List[Tuple[str, str]] = []
     seen = set()
-    for part in _ATOMIC_SENTENCE_SPLIT_RE.split(cleaned):
-        normalized = _normalize_atomic_memory_text(part)
-        if not normalized:
+    capped = max(1, min(max_items, 10))
+    for item in raw_items:
+        if not isinstance(item, dict):
             continue
-        category = _classify_atomic_user_memory(normalized)
-        if not category:
+        normalized = _normalize_atomic_memory_text(str(item.get("content") or ""))
+        if len(normalized) < 8 or "?" in normalized:
             continue
+        category = str(item.get("category") or "").strip().lower()
+        if category not in _ATOMIC_MEMORY_CATEGORIES:
+            category = "fact"
         dedup_key = normalized.lower()
         if dedup_key in seen:
             continue
         seen.add(dedup_key)
         memories.append((normalized, category))
-        if len(memories) >= max_items:
+        if len(memories) >= capped:
             break
     return memories
+
+
+def _extract_atomic_user_memories_from_llm_output(
+    llm_output: str,
+    *,
+    max_items: int = 6,
+) -> List[Tuple[str, str]]:
+    payload = _parse_json_object(llm_output)
+    if not isinstance(payload, dict):
+        return []
+    return _normalize_atomic_memory_items(payload.get("memories"), max_items=max_items)
+
+
+def _extract_atomic_user_memories(user_text: str, *, max_items: int = 6) -> List[Tuple[str, str]]:
+    """Conservative fallback when LLM extraction is unavailable."""
+    if not user_text:
+        return []
+    cleaned = sanitize_content(
+        _SUPERMEMORY_CONTEXT_RE.sub("", user_text),
+        max_len=10_000,
+    ).strip()
+    if not cleaned:
+        return []
+    fallback_items = [{"content": line, "category": "fact"} for line in _ATOMIC_LIST_LINE_RE.findall(cleaned)]
+    return _normalize_atomic_memory_items(fallback_items, max_items=max_items)
 
 
 def _build_capture_metadata(
@@ -584,6 +645,14 @@ class SupermemoryService:
         self._timeout = _float_env("SUPERMEMORY_TIMEOUT_SECONDS", 10.0)
         self._container_prefix = (os.getenv("SUPERMEMORY_CONTAINER_PREFIX") or "gray_user_").strip()
         self._debug = _bool_env("SUPERMEMORY_DEBUG", False)
+        self._atomic_extract_model = (
+            os.getenv("SUPERMEMORY_ATOMIC_EXTRACT_MODEL") or "google/gemini-3-flash-preview"
+        ).strip()
+        self._atomic_extract_timeout = max(
+            1.0,
+            _float_env("SUPERMEMORY_ATOMIC_EXTRACT_TIMEOUT_SECONDS", 6.0),
+        )
+        self._atomic_extractor = OpenRouterService()
         self._client: Optional[httpx.AsyncClient] = None
         self._logger = create_logger("backend.supermemory")
         self._tier_thresholds = {
@@ -702,6 +771,70 @@ class SupermemoryService:
             return overrides.capture_mode
         return self._capture_mode
 
+    async def _extract_atomic_user_memories_with_llm(
+        self,
+        *,
+        user_id: int,
+        user_text: str,
+        max_items: int = 6,
+    ) -> List[Tuple[str, str]]:
+        if not self._atomic_extractor.available:
+            return []
+        prompt = (
+            f"MAX_ITEMS: {max(1, min(max_items, 10))}\n"
+            "USER_MESSAGE:\n"
+            f"{user_text}"
+        )
+        try:
+            raw_output = await asyncio.wait_for(
+                self._atomic_extractor.generate(
+                    message=prompt,
+                    conversation_history=None,
+                    workspace_context=None,
+                    system_prompt=_ATOMIC_MEMORY_EXTRACTION_PROMPT,
+                    time_context=None,
+                    model=self._atomic_extract_model,
+                    include_usage=False,
+                    response_format=_ATOMIC_MEMORY_RESPONSE_FORMAT,
+                    tools=None,
+                    tool_choice=None,
+                    user=f"gray-user:{user_id}",
+                ),
+                timeout=self._atomic_extract_timeout,
+            )
+        except Exception as exc:
+            if self._debug:
+                self._logger.info("Supermemory atomic extraction LLM failed: %s", exc)
+            return []
+        if not isinstance(raw_output, str) or not raw_output.strip():
+            return []
+        return _extract_atomic_user_memories_from_llm_output(
+            raw_output,
+            max_items=max_items,
+        )
+
+    async def _extract_atomic_user_memories_llm_first(
+        self,
+        *,
+        user_id: int,
+        user_text: str,
+        max_items: int = 6,
+    ) -> List[Tuple[str, str]]:
+        cleaned = sanitize_content(
+            _SUPERMEMORY_CONTEXT_RE.sub("", user_text),
+            max_len=10_000,
+        ).strip()
+        if not cleaned:
+            return []
+        llm_memories = await self._extract_atomic_user_memories_with_llm(
+            user_id=user_id,
+            user_text=cleaned,
+            max_items=max_items,
+        )
+        if llm_memories:
+            return llm_memories
+        return _extract_atomic_user_memories(cleaned, max_items=max_items)
+
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(timeout=self._timeout)
@@ -711,6 +844,8 @@ class SupermemoryService:
         if self._client is not None and not self._client.is_closed:
             await self._client.aclose()
             self._client = None
+        if self._atomic_extractor is not None:
+            await self._atomic_extractor.close()
 
     def _headers(self, container_tag: Optional[str] = None) -> Dict[str, str]:
         headers = {
@@ -879,7 +1014,10 @@ class SupermemoryService:
 
         turn_timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         container_tag = self._container_tag(user_id)
-        atomic_memories = _extract_atomic_user_memories(user_text)
+        atomic_memories = await self._extract_atomic_user_memories_llm_first(
+            user_id=user_id,
+            user_text=user_text,
+        )
         stored_atomic_count = 0
         for memory_text, category in atomic_memories:
             content = sanitize_content(memory_text, max_len=512)

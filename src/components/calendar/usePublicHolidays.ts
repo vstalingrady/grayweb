@@ -2,19 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import type { CalendarHoliday, CalendarHolidayCountry } from "./holidayTypes";
+import type { CalendarHoliday } from "./holidayTypes";
 import { startOfMonth, toDateKey } from "./dateUtils";
 
 const HOLIDAYS_ENABLED_STORAGE_KEY = "gray.calendar.holidays.enabled";
-const HOLIDAY_COUNTRY_STORAGE_KEY = "gray.calendar.holidays.country";
 const DEFAULT_COUNTRY_CODE = "US";
 const HOLIDAY_RED = "#ff4c4c";
 const HOLIDAY_API_BASE = "https://date.nager.at/api/v3";
-
-type AvailableCountryResponse = {
-  countryCode?: string;
-  name?: string;
-};
 
 type HolidayResponse = {
   date?: string;
@@ -31,21 +25,14 @@ type UsePublicHolidaysOptions = {
 
 type UsePublicHolidaysResult = {
   holidayEnabled: boolean;
-  holidayCountryCode: string;
-  availableCountries: CalendarHolidayCountry[];
   holidayDateKeys: Set<string>;
   holidayNameByDateKey: Map<string, string>;
   weekHolidayEntries: CalendarHoliday[][];
   dayHolidayEntries: CalendarHoliday[];
-  isHolidayCountryLoading: boolean;
   isHolidayDataLoading: boolean;
   setHolidayEnabled: (enabled: boolean) => void;
-  setHolidayCountryCode: (countryCode: string) => void;
   holidayColor: string;
 };
-
-const isValidCountryCode = (value: string | null | undefined): value is string =>
-  typeof value === "string" && /^[A-Za-z]{2}$/.test(value);
 
 const parseDateOnly = (value: string | undefined): Date | null => {
   if (!value) {
@@ -100,9 +87,7 @@ export const usePublicHolidays = ({
 }: UsePublicHolidaysOptions): UsePublicHolidaysResult => {
   const [holidayEnabled, setHolidayEnabled] = useState(false);
   const [holidayCountryCode, setHolidayCountryCode] = useState(DEFAULT_COUNTRY_CODE);
-  const [availableCountries, setAvailableCountries] = useState<CalendarHolidayCountry[]>([]);
   const [holidayCache, setHolidayCache] = useState<Record<string, CalendarHoliday[]>>({});
-  const [isHolidayCountryLoading, setIsHolidayCountryLoading] = useState(false);
   const [isHolidayDataLoading, setIsHolidayDataLoading] = useState(false);
 
   useEffect(() => {
@@ -110,17 +95,12 @@ export const usePublicHolidays = ({
       return;
     }
     const storedEnabled = window.localStorage.getItem(HOLIDAYS_ENABLED_STORAGE_KEY);
-    const storedCountry = window.localStorage.getItem(HOLIDAY_COUNTRY_STORAGE_KEY);
 
     if (storedEnabled === "true" || storedEnabled === "false") {
       setHolidayEnabled(storedEnabled === "true");
     }
 
-    if (isValidCountryCode(storedCountry)) {
-      setHolidayCountryCode(storedCountry.toUpperCase());
-    } else {
-      setHolidayCountryCode(resolveLocaleCountryCode());
-    }
+    setHolidayCountryCode(resolveLocaleCountryCode());
   }, []);
 
   useEffect(() => {
@@ -129,73 +109,6 @@ export const usePublicHolidays = ({
     }
     window.localStorage.setItem(HOLIDAYS_ENABLED_STORAGE_KEY, holidayEnabled ? "true" : "false");
   }, [holidayEnabled]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    window.localStorage.setItem(HOLIDAY_COUNTRY_STORAGE_KEY, holidayCountryCode);
-  }, [holidayCountryCode]);
-
-  useEffect(() => {
-    let isActive = true;
-    const controller = new AbortController();
-
-    const loadCountries = async () => {
-      setIsHolidayCountryLoading(true);
-      try {
-        const response = await fetch(`${HOLIDAY_API_BASE}/AvailableCountries`, {
-          signal: controller.signal,
-        });
-        if (!response.ok) {
-          throw new Error(`Failed to load countries: ${response.status}`);
-        }
-
-        const payload = (await response.json()) as AvailableCountryResponse[];
-        if (!Array.isArray(payload)) {
-          return;
-        }
-
-        const countries = payload
-          .filter((item) => isValidCountryCode(item.countryCode) && typeof item.name === "string")
-          .map((item) => ({
-            code: item.countryCode!.toUpperCase(),
-            name: item.name!.trim() || item.countryCode!.toUpperCase(),
-          }))
-          .sort((left, right) => left.name.localeCompare(right.name));
-
-        if (!isActive) {
-          return;
-        }
-
-        setAvailableCountries(countries);
-
-        if (countries.length > 0) {
-          const exists = countries.some((country) => country.code === holidayCountryCode);
-          if (!exists) {
-            const fallback =
-              countries.find((country) => country.code === DEFAULT_COUNTRY_CODE) ?? countries[0];
-            setHolidayCountryCode(fallback.code);
-          }
-        }
-      } catch (error) {
-        if (!controller.signal.aborted) {
-          console.warn("Unable to load available holiday countries:", error);
-        }
-      } finally {
-        if (isActive) {
-          setIsHolidayCountryLoading(false);
-        }
-      }
-    };
-
-    void loadCountries();
-
-    return () => {
-      isActive = false;
-      controller.abort();
-    };
-  }, [holidayCountryCode]);
 
   const relevantYears = useMemo(() => {
     const years = new Set<number>();
@@ -362,16 +275,12 @@ export const usePublicHolidays = ({
 
   return {
     holidayEnabled,
-    holidayCountryCode,
-    availableCountries,
     holidayDateKeys,
     holidayNameByDateKey,
     weekHolidayEntries,
     dayHolidayEntries,
-    isHolidayCountryLoading,
     isHolidayDataLoading,
     setHolidayEnabled,
-    setHolidayCountryCode,
     holidayColor: HOLIDAY_RED,
   };
 };

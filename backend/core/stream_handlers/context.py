@@ -1,19 +1,12 @@
 """
 Stream Context for AI Response Generation
 
-Contains the StreamContext dataclass and helper functions for preparing
-all the state needed for streaming AI responses from OpenRouter.
-
-This consolidates ~260 lines of duplicated setup logic that was shared
-between stream_ai_response and generate_ai_response.
+Contains shared helpers for AI response generation context/routing.
 """
-import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 from backend.core.ai_config import OPENROUTER_LITE_MODEL
-
-api_logger = logging.getLogger("backend.api")
 
 # Tier aliases for model routing
 TIER_ALIASES = {"lite", "gray-lite", "pro", "gray-pro"}
@@ -134,55 +127,3 @@ def determine_provider_and_model(
     _ = (needs_structured_tools, is_onboarding_tool)
 
     return provider, result_model, explicit_model_is_tier_alias
-
-
-def build_workspace_with_cache(
-    workspace_context: Optional[str],
-    cache_text: Optional[str],
-    calendar_context: Optional[str],
-) -> str:
-    """Combine workspace, cache, and calendar context into a single string."""
-    parts = [workspace_context]
-    
-    if cache_text and cache_text.strip():
-        parts.append(f"Context cache:\n{cache_text.strip()}")
-    
-    if calendar_context:
-        parts.append(calendar_context)
-    
-    return "\n\n".join(filter(None, parts))
-
-
-def build_effective_system_prompt(
-    base_prompt: Optional[str],
-    reminders_enabled: bool,
-    needs_structured_tools: bool = False,
-    tool_list: Optional[List[Any]] = None,
-    search_enabled: bool = True,
-) -> str:
-    """
-    Build the final system prompt with capability notes.
-    
-    Adds conditional sections for:
-    - Reminders disabled note
-    - Tool usage instructions
-    - Search capability note
-    """
-    prompt = base_prompt or ""
-    
-    # Add reminders capability note if disabled
-    if not reminders_enabled:
-        prompt += "\n\n" + (
-            "CAPABILITY NOTE:\n"
-            "- Reminders & plans are disabled for this session unless explicitly enabled.\n"
-            "- Do not claim that you scheduled/set reminders or created plans/habits.\n"
-            "- If the user wants reminders/plans, ask them to enable the Reminders & Plans toggle."
-        )
-    
-    # No longer adding tool instructions to system prompt - tools work better without explicit instructions
-    
-    # Add search capability note
-    if search_enabled:
-        prompt += "\n\nYou have access to web search. You must use it for current events, news, or factual queries where your knowledge might be outdated."
-    
-    return prompt

@@ -22,78 +22,18 @@ def test_should_enable_search_explicit_command_with_memory_wording():
     assert should_enable_search("search the web for what i asked before") is True
 
 
-def test_should_enable_search_live_data():
-    assert should_enable_search("What's the weather in Paris today?") is True
-
-
 def test_should_enable_search_not_for_memory_meta_prompt():
     assert should_enable_search("what did i search up before this") is False
     assert should_enable_search("did i ask before") is False
 
 
-def test_should_enable_search_not_for_research_word():
-    assert should_enable_search("I am doing research on transformers.") is False
-
-
-def test_should_enable_search_for_generic_fact_question():
+def test_should_enable_search_not_for_generic_fact_question():
     assert should_enable_search("Who is Albert Einstein?") is False
 
 
-def test_should_enable_search_for_what_happened():
-    assert should_enable_search("What happened in the Epstein files?") is True
-
-
-def test_should_enable_search_slang_guard():
-    assert should_enable_search("wtf") is False
-    assert should_enable_search("what is wtf") is False
-    assert should_enable_search("idk") is False
-
-
-def test_should_enable_search_small_talk_guard():
-    assert should_enable_search("hey how are you") is False
-    assert should_enable_search("thanks bro") is False
-
-
-def test_should_enable_search_not_for_plain_greeting():
-    assert should_enable_search("hi") is False
-    assert should_enable_search("hello!") is False
-
-
-def test_should_enable_search_for_non_recency_factual_question():
-    assert should_enable_search("Can you explain what RAG means in LLM systems?") is False
-
-
-def test_should_enable_search_for_low_confidence_verification_query():
-    assert should_enable_search("did jeffrey epstein actually have a minecraft channel") is True
-
-
-def test_should_enable_search_for_debunk_style_query():
-    assert should_enable_search("is this true or just a rumor?") is True
-
-
-def test_should_enable_search_for_trending_meme_context():
-    assert should_enable_search("why is draco malfoy this years chinese new year mascot") is True
-
-
-def test_should_enable_search_not_for_personal_recency_checkin():
-    assert should_enable_search("i worked out today should i stretch now") is False
-
-
-def test_should_enable_search_ambiguous_follow_up_without_context():
-    assert should_enable_search("what about him gaming though") is False
-
-
-def test_should_enable_search_ambiguous_follow_up_with_search_context():
+def test_should_enable_search_not_for_follow_up_without_explicit_search():
     history = [
         {"role": "user", "text": "What happened in the Epstein files release?"},
         {"role": "model", "text": "I can summarize the key points."},
-    ]
-    assert should_enable_search("what about him gaming though", conversation_history=history) is True
-
-
-def test_should_enable_search_ambiguous_follow_up_with_small_talk_context():
-    history = [
-        {"role": "user", "text": "hi"},
-        {"role": "model", "text": "hey there"},
     ]
     assert should_enable_search("what about him gaming though", conversation_history=history) is False

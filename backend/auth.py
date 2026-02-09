@@ -67,6 +67,16 @@ if _ALLOW_INSECURE_JWT_FALLBACK_FLAG and not _IS_EXPLICIT_LOCAL_ENV:
         extra={"event_type": "auth_insecure_fallback_disabled"},
     )
 
+_AUTH_COOKIE_SECRET_ENV_KEYS: tuple[str, ...] = (
+    "AUTH_COOKIE_SECRET",
+    "COOKIE_SECRET",
+    "NEXTAUTH_SECRET",
+)
+_AUTH_COOKIE_LOCAL_FALLBACK_ENV_KEYS: tuple[str, ...] = (
+    "AUTH_COOKIE_LOCAL_SECRET",
+    "AUTH_COOKIE_DEV_SECRET",
+)
+
 def _normalize_email(value: Optional[str]) -> Optional[str]:
     if not value or not isinstance(value, str):
         return None
@@ -362,6 +372,23 @@ def _base64url_decode(payload: str) -> bytes:
     # base64url uses '-' instead of '+' and '_' instead of '/'
     return base64.urlsafe_b64decode(payload)
 
+
+def _resolve_auth_cookie_secret(*, is_local_env: Optional[bool] = None) -> Optional[str]:
+    for env_name in _AUTH_COOKIE_SECRET_ENV_KEYS:
+        value = (os.getenv(env_name) or "").strip()
+        if value:
+            return value
+
+    local_env = _IS_EXPLICIT_LOCAL_ENV if is_local_env is None else is_local_env
+    if not local_env:
+        return None
+
+    for env_name in _AUTH_COOKIE_LOCAL_FALLBACK_ENV_KEYS:
+        value = (os.getenv(env_name) or "").strip()
+        if value:
+            return value
+    return None
+
 def _verify_session_cookie(cookie_value: str) -> Optional[Dict[str, Any]]:
     """Decode and verify HMAC-signed session cookie (gray-auth-session)."""
     if not cookie_value or "." not in cookie_value:
@@ -374,20 +401,17 @@ def _verify_session_cookie(cookie_value: str) -> Optional[Dict[str, Any]]:
     body_b64, signature_b64 = parts
     
     # Resolve secret
-    secret = (
-        os.getenv("AUTH_COOKIE_SECRET") or 
-        os.getenv("COOKIE_SECRET") or 
-        os.getenv("NEXTAUTH_SECRET") or 
-        ""
-    )
+    secret = _resolve_auth_cookie_secret()
     if not secret:
-        if not _IS_EXPLICIT_LOCAL_ENV:
-            logger.error(
-                "Missing AUTH_COOKIE_SECRET outside explicit local dev/test; cookie auth disabled.",
-                extra={"event_type": "auth_cookie_secret_missing"},
-            )
-            return None
-        secret = "development-gray-session-secret"
+        log = logger.warning if _IS_EXPLICIT_LOCAL_ENV else logger.error
+        log(
+            "Missing auth cookie secret; cookie auth disabled.",
+            extra={
+                "event_type": "auth_cookie_secret_missing",
+                "local_env": _IS_EXPLICIT_LOCAL_ENV,
+            },
+        )
+        return None
         
     # Verify signature
     try:

@@ -181,7 +181,9 @@ export const EventCard = memo(function EventCard({
   const columnCount = Math.max(event.columnCount ?? 1, 1);
   const columnIndex = event.column ?? 0;
   const isStacked = columnCount > 1;
-  const isCompactCard = event.displayHint !== "line" && event.height <= 34;
+  const isCompactCard = event.displayHint !== "line" && event.height <= 46;
+  const showTimeLabel = !isCompactCard && event.height > 52;
+  const showDetails = Boolean(detailText) && event.height >= 70;
 
   const cardStyle: EventCardStyle = {
     top: `${event.top}px`,
@@ -257,8 +259,8 @@ export const EventCard = memo(function EventCard({
           >
             {event.title}
           </strong>
-          <span className={styles.eventCardTime}>{timeLabel}</span>
-          {detailText ? (
+          {showTimeLabel ? <span className={styles.eventCardTime}>{timeLabel}</span> : null}
+          {showDetails ? (
             <span className={styles.eventCardDetails}>{detailText}</span>
           ) : null}
         </div>

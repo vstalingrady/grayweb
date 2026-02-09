@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 
 from backend.core import supermemory_handlers
 from backend.supermemory import (
     SupermemoryService,
     _extract_atomic_user_memories,
+    _extract_atomic_user_memories_from_llm_output,
     _normalize_search_results,
+    _request_integrity_headers,
     supermemory_force_enabled,
 )
 
@@ -41,6 +45,24 @@ def test_supermemory_force_is_disabled_by_default(monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.setenv("GRAY_SUPERMEMORY_FORCE", "1")
     assert supermemory_force_enabled() is True
+
+
+def test_request_integrity_headers_skip_when_secret_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SUPERMEMORY_INTEGRITY_SECRET", raising=False)
+    monkeypatch.delenv("GRAY_SUPERMEMORY_INTEGRITY_SECRET", raising=False)
+
+    headers = _request_integrity_headers("sm_12345678901234567890", "gray_user_7")
+
+    assert headers == {}
+
+
+def test_request_integrity_headers_use_env_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SUPERMEMORY_INTEGRITY_SECRET", "integrity-secret-for-tests")
+
+    headers = _request_integrity_headers("sm_12345678901234567890", "gray_user_7")
+
+    assert headers["X-Content-Hash"] == hashlib.sha256("gray_user_7".encode("utf-8")).hexdigest()
+    assert headers["X-Request-Integrity"].startswith("v1.")
 
 
 def test_scout_policy_is_disabled_pathfinder_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -248,15 +270,39 @@ async def test_delete_conversation_memories_filters_by_metadata(monkeypatch: pyt
     assert captured_batches == [["doc_a", "doc_c", "doc_d", "doc_e"]]
 
 
-def test_extract_atomic_user_memories_captures_preferences_facts_and_decisions() -> None:
+def test_extract_atomic_user_memories_fallback_reads_bulleted_statements() -> None:
     memories = _extract_atomic_user_memories(
-        "I prefer short bullet answers. I work as a product manager. I decided to use Python.",
+        "- Mi bebida favorita es el te.\n"
+        "- Vivo en Seattle.\n"
+        "- Can you debug this traceback?",
     )
 
     assert memories == [
-        ("I prefer short bullet answers", "preference"),
-        ("I work as a product manager", "fact"),
-        ("I decided to use Python", "decision"),
+        ("Mi bebida favorita es el te", "fact"),
+        ("Vivo en Seattle", "fact"),
+    ]
+
+
+def test_extract_atomic_user_memories_from_llm_output_normalizes_and_limits() -> None:
+    memories = _extract_atomic_user_memories_from_llm_output(
+        """
+        {
+          "memories": [
+            {"content": "  User likes tea.  ", "category": "preference"},
+            {"content": "User likes tea.", "category": "preference"},
+            {"content": "Vivo en Seattle", "category": "fact"},
+            {"content": "What should I do?", "category": "fact"},
+            {"content": "Uses VS Code", "category": "unknown"}
+          ]
+        }
+        """,
+        max_items=3,
+    )
+
+    assert memories == [
+        ("User likes tea", "preference"),
+        ("Vivo en Seattle", "fact"),
+        ("Uses VS Code", "fact"),
     ]
 
 
@@ -269,6 +315,7 @@ async def test_capture_turn_stores_atomic_user_memories_with_metadata(
 
     service = SupermemoryService()
     captured_payloads: list[dict] = []
+    llm_inputs: list[str] = []
 
     async def fake_post(path: str, payload, *, container_tag=None):
         assert path == "/v3/documents"
@@ -276,20 +323,31 @@ async def test_capture_turn_stores_atomic_user_memories_with_metadata(
         captured_payloads.append(payload)
         return {"ok": True}
 
+    async def fake_extract_with_llm(*, user_id: int, user_text: str, max_items: int = 6):
+        assert user_id == 11
+        assert max_items == 6
+        llm_inputs.append(user_text)
+        return [
+            ("Je prefere le the", "preference"),
+            ("Vivo en Seattle", "fact"),
+        ]
+
     monkeypatch.setattr(service, "_post", fake_post)
+    monkeypatch.setattr(service, "_extract_atomic_user_memories_with_llm", fake_extract_with_llm)
 
     await service.capture_turn(
         user_id=11,
-        user_message="I prefer tea. I live in Seattle.",
+        user_message="Je prefere le the. Vivo en Seattle.",
         assistant_message="Great, I'll keep that in mind.",
         conversation_id="thread_abc",
         plan_tier="pioneer",
     )
 
+    assert llm_inputs == ["Je prefere le the. Vivo en Seattle."]
     assert len(captured_payloads) == 2
     assert [payload["content"] for payload in captured_payloads] == [
-        "I prefer tea",
-        "I live in Seattle",
+        "Je prefere le the",
+        "Vivo en Seattle",
     ]
     for payload in captured_payloads:
         metadata = payload.get("metadata") or {}

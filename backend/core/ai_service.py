@@ -35,9 +35,7 @@ from backend.core.ai_utils import (
 from backend.core.cache import load_context_cache as _load_context_cache, context_cache_contents as _context_cache_contents
 from backend.core.chat_history import normalize_conversation_history
 from backend.core.message_detection import (
-    needs_structured_tools as _needs_structured_tools,
-    should_request_structured_reminders as _should_request_structured_reminders,
-    should_enable_search as _should_enable_search,
+    should_expose_structured_tools as _should_expose_structured_tools,
     extract_urls_from_message as _extract_urls_from_message,
 )
 from backend.core.media_attachments import (
@@ -67,6 +65,11 @@ SEARCH_TOOL = None
 DEFAULT_HISTORY_TAIL_TURNS = 8
 DEFAULT_RECALL_EVERY_N = 1
 DEFAULT_RECALL_MIN_PROMPT_CHARS = 0
+WEB_SEARCH_RUNTIME_NOTE = (
+    "You have access to web search. Use it for current events, news, and factual queries where your knowledge may be outdated. "
+    "Keep search queries concise and user-facing. Never expose chain-of-thought or <thinking> tags in the final answer. "
+    "Do not claim that you cannot browse or that your knowledge is cutoff when web search is available."
+)
 
 
 def _get_history_tail_turns() -> int:
@@ -274,6 +277,16 @@ def _build_web_search_options(search_context_size: Optional[str]) -> Optional[Di
         return None
     return {"search_context_size": normalized}
 
+
+def _with_web_search_runtime_note(
+    time_context: Optional[str],
+    *,
+    search_enabled: bool,
+) -> Optional[str]:
+    if not search_enabled:
+        return time_context
+    return "\n\n".join(filter(None, [time_context, WEB_SEARCH_RUNTIME_NOTE]))
+
 def _get_deps():
     tier_conversation_token_limit = lambda plan_tier, model_id=None: _tier_conversation_token_limit(  # noqa: E731
         plan_tier,
@@ -297,9 +310,7 @@ def _get_deps():
         "SEARCH_TOOL": SEARCH_TOOL,
         "PLAN_TOOLS": PLAN_TOOLS,
         "CALENDAR_TOOLS": CALENDAR_TOOLS,
-        "_needs_structured_tools": _needs_structured_tools,
-        "_should_request_structured_reminders": _should_request_structured_reminders,
-        "_should_enable_search": _should_enable_search,
+        "_should_expose_structured_tools": _should_expose_structured_tools,
         "_extract_urls_from_message": _extract_urls_from_message,
         "_resolve_media_attachments": _resolve_media_attachments,
         "_generate_image_descriptions": _generate_image_descriptions,
@@ -373,13 +384,13 @@ async def stream_ai_response(
     # Determine whether this turn is part of a reminder/plan/habit flow.
     intent_window_text = deps["build_intent_window_text"](message, conversation_history)
 
-    request_structured_reminders = deps["_should_request_structured_reminders"](intent_window_text)
-    intent_requires_tools = request_structured_reminders or deps["_needs_structured_tools"](intent_window_text)
-    needs_structured_tools = intent_requires_tools and reminders_enabled
-
     # Respect explicit search toggle from the client.
-
     is_onboarding_tool = deps["_has_onboarding_tool"](tools)
+    needs_structured_tools = deps["_should_expose_structured_tools"](
+        intent_window_text,
+        reminders_enabled=reminders_enabled,
+        is_onboarding_tool=is_onboarding_tool,
+    )
 
     # Provider/model determination
     provider, model, _ = deps["determine_provider_and_model"](
@@ -446,11 +457,7 @@ async def stream_ai_response(
     if provider == "openrouter" and isinstance(time_context, str) and time_context.strip():
         runtime_context_parts.append(time_context.strip())
     if provider == "openrouter" and search_enabled:
-        runtime_context_parts.append(
-            "You have access to web search. Use it for current events, news, and factual queries where your knowledge may be outdated. "
-            "Keep search queries concise and user-facing. Never expose chain-of-thought or <thinking> tags in the final answer. "
-            "Do not claim that you cannot browse or that your knowledge is cutoff when web search is available."
-        )
+        runtime_context_parts.append(WEB_SEARCH_RUNTIME_NOTE)
 
     workspace_with_cache = workspace_context
     cache_record = None
@@ -506,7 +513,7 @@ async def stream_ai_response(
     memory_policy = SUPERMEMORY_SERVICE.policy_for_tier(memory_plan_tier)
     if memory_enabled and SUPERMEMORY_SERVICE.available and memory_policy.enabled:
         tool_list = [*tool_list, *deps["SUPERMEMORY_TOOLS"]]
-    if needs_structured_tools and not is_onboarding_tool:
+    if needs_structured_tools:
         tool_list = [*tool_list, *deps["PLAN_TOOLS"]]
         if has_calendar_access:
             tool_list = [*tool_list, *deps["CALENDAR_TOOLS"]]
@@ -622,11 +629,13 @@ async def generate_ai_response(
         )
 
     intent_window_text = deps["build_intent_window_text"](message, conversation_history)
-    request_structured_reminders = deps["_should_request_structured_reminders"](intent_window_text)
-    intent_requires_tools = request_structured_reminders or deps["_needs_structured_tools"](intent_window_text)
     reminders_enabled = bool(kwargs.get("reminders_enabled", True))
-    needs_structured_tools = intent_requires_tools and reminders_enabled
     is_onboarding_tool = deps["_has_onboarding_tool"](tools)
+    needs_structured_tools = deps["_should_expose_structured_tools"](
+        intent_window_text,
+        reminders_enabled=reminders_enabled,
+        is_onboarding_tool=is_onboarding_tool,
+    )
 
     provider, model, _ = deps["determine_provider_and_model"](
         model=model,
@@ -692,16 +701,10 @@ async def generate_ai_response(
     if provider == "openrouter":
         if (os.getenv("AI_PROVIDER") or "openrouter").strip().lower() == "moltbot":
             conversation_history = []
-        if search_enabled:
-            time_context = "\n\n".join(
-                filter(
-                    None,
-                    [
-                        time_context,
-                        "You have access to web search. Use it for current events, news, and factual queries where your knowledge may be outdated. Keep search queries concise and user-facing. Never expose chain-of-thought or <thinking> tags in the final answer. Do not claim that you cannot browse or that your knowledge is cutoff when web search is available.",
-                    ],
-                )
-            )
+        time_context = _with_web_search_runtime_note(
+            time_context,
+            search_enabled=search_enabled,
+        )
         web_search_plugin = _build_web_search_plugin(
             search_enabled,
             web_search_engine,

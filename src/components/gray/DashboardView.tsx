@@ -8,6 +8,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import { CalendarPlus2, ListTodo, Plus, X } from "lucide-react";
 import styles from "./DashboardView.module.css";
 import composerStyles from "@/components/gray/chat/ChatComposerStyles.module.css";
 import { GrayDashboardCalendar } from "@/components/calendar/GrayDashboardCalendar";
@@ -424,7 +425,7 @@ export function GrayDashboardView({
     [handleComposerDeleteInternal, resetQuickComposerSeed]
   );
 
-  const isMobileDashboardView = isCompactLayout && (activeTab === "calendar" || activeTab === "pulse");
+  const isMobileDashboardView = isCompactLayout && activeTab === "calendar";
 
   useEffect(() => {
     if (!isMobileDashboardView || composerOpen) {
@@ -785,14 +786,16 @@ export function GrayDashboardView({
             className={styles.mobileQuickActionButton}
             onClick={() => handleMobileQuickActionSelect("plan")}
           >
-            {t("Task")}
+            <ListTodo size={16} className={styles.mobileQuickActionIcon} aria-hidden="true" />
+            <span>{t("Task")}</span>
           </button>
           <button
             type="button"
             className={styles.mobileQuickActionButton}
             onClick={() => handleMobileQuickActionSelect("event")}
           >
-            {t("Event")}
+            <CalendarPlus2 size={16} className={styles.mobileQuickActionIcon} aria-hidden="true" />
+            <span>{t("Event")}</span>
           </button>
         </div>
       ) : null}
@@ -809,7 +812,11 @@ export function GrayDashboardView({
           aria-label={isMobileQuickActionsOpen ? t("Close quick actions") : t("Open quick actions")}
           onClick={() => setIsMobileQuickActionsOpen((previous) => !previous)}
         >
-          <span aria-hidden="true">+</span>
+          {isMobileQuickActionsOpen ? (
+            <X size={22} className={styles.mobileQuickActionsFabIcon} aria-hidden="true" />
+          ) : (
+            <Plus size={22} className={styles.mobileQuickActionsFabIcon} aria-hidden="true" />
+          )}
         </button>
       ) : null}
     </>

@@ -1,17 +1,18 @@
 """
 Message detection utilities for determining tool/search requirements.
 
-This module provides keyword matching and heuristics to determine whether
-a user message requires tool execution, web search, or reminder functionality.
+This module intentionally keeps policy simple:
+- Structured reminder/calendar tools are available when reminders are enabled.
+- Web search is model-driven in auto mode, with only explicit safety gates.
 """
 import ipaddress
 import re
 from typing import Optional
 from urllib.parse import urlparse
 
-# ==============================================================================
-# Keyword Sets
-# ==============================================================================
+# ============================================================================
+# Structured tool intent keywords
+# ============================================================================
 
 REMINDER_KEYWORDS = frozenset({
     "reminder", "reminders", "remind", "reminds",
@@ -33,7 +34,6 @@ TIME_KEYWORDS = frozenset({
 
 TOOL_TRIGGER_KEYWORDS = REMINDER_KEYWORDS | EVENT_KEYWORDS
 
-# Explicit time expressions to avoid matching common words like "am" or "at".
 _TIME_OF_DAY_RE = re.compile(
     r"\b(?:[01]?\d|2[0-3])(?::[0-5]\d)?\s*(?:am|pm)\b"
     r"|\b(?:[01]?\d|2[0-3]):[0-5]\d\b"
@@ -48,34 +48,9 @@ _RELATIVE_TIME_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Live/recency-oriented keywords for web search detection
-LIVE_KEYWORDS = [
-    "news", "breaking news", "latest news", "recent news", "current events", "today's news",
-    "stock price", "stock prices", "stock market",
-    "crypto price", "bitcoin price", "btc price", "eth price",
-    "exchange rate", "currency rate", "interest rate", "inflation rate",
-    "weather", "forecast", "temperature today",
-    "traffic", "flight status", "train status",
-    "nba score", "nfl score", "soccer score", "game score",
-    "release date", "new version", "new update", "patch notes",
-    "new files", "brand new files", "just dropped", "just released", "conspiracy",
-]
-
-SOFT_RECENCY_PATTERNS = (
-    re.compile(r"\btoday\b", re.IGNORECASE),
-    re.compile(r"\bright now\b", re.IGNORECASE),
-    re.compile(r"\bcurrently\b", re.IGNORECASE),
-    re.compile(r"\bthis week\b", re.IGNORECASE),
-    re.compile(r"\bthis month\b", re.IGNORECASE),
-    re.compile(r"\bthis year\b", re.IGNORECASE),
-)
-
-HARD_RECENCY_PATTERNS = (
-    re.compile(r"\blatest\b", re.IGNORECASE),
-    re.compile(r"\brecent\b", re.IGNORECASE),
-    re.compile(r"\bup to date\b", re.IGNORECASE),
-    re.compile(r"\bup-to-date\b", re.IGNORECASE),
-)
+# ============================================================================
+# Web-search intent/safety patterns
+# ============================================================================
 
 EXPLICIT_SEARCH_PATTERNS = (
     re.compile(
@@ -88,69 +63,6 @@ EXPLICIT_SEARCH_PATTERNS = (
         r"(?:search|google|web\s*search|look\s*up|lookup|find\s+on\s+the\s+web)\b",
         re.IGNORECASE,
     ),
-)
-
-QUESTION_PREFIXES = (
-    "what",
-    "whats",
-    "what's",
-    "who",
-    "whos",
-    "who's",
-    "when",
-    "where",
-    "why",
-    "how",
-    "is",
-    "are",
-    "was",
-    "were",
-    "do",
-    "does",
-    "did",
-    "can",
-    "could",
-    "should",
-    "will",
-    "would",
-)
-
-SMALL_TALK_PATTERNS = (
-    re.compile(r"^\s*(?:hi|hello|hey|yo|sup)\b", re.IGNORECASE),
-    re.compile(r"^\s*(?:thanks|thank you|thx)\b", re.IGNORECASE),
-    re.compile(r"^\s*(?:how are you|how's it going|whats up|what's up)\b", re.IGNORECASE),
-    re.compile(r"^\s*(?:good morning|good afternoon|good evening)\b", re.IGNORECASE),
-)
-
-STABLE_KNOWLEDGE_PATTERNS = (
-    re.compile(r"\b(?:solve|simplify|factor|differentiate|integrate|derive|calculate|compute)\b", re.IGNORECASE),
-    re.compile(r"\b(?:algebra|geometry|calculus|equation|formula|theorem|derivative|integral)\b", re.IGNORECASE),
-    re.compile(r"\b(?:sqrt|square\s*root)\b", re.IGNORECASE),
-    re.compile(r"\b(?:what does .+ mean)\b", re.IGNORECASE),
-    re.compile(r"\b(?:define|definition of)\b", re.IGNORECASE),
-)
-
-VERIFICATION_PATTERNS = (
-    re.compile(r"\b(?:is it true|is this true|is that true)\b", re.IGNORECASE),
-    re.compile(r"\b(?:rumor|rumour|hoax|myth|debunk|fact[\s-]?check|verify|verification|credible evidence|conspiracy)\b", re.IGNORECASE),
-    re.compile(
-        r"\b(?:did|does|do|is|are|was|were|has|have|had)\b[\s\S]{0,140}\b(?:actually|really|true|real|legit|confirmed|evidence)\b",
-        re.IGNORECASE,
-    ),
-)
-
-TREND_PATTERNS = (
-    re.compile(r"\btrending\b", re.IGNORECASE),
-    re.compile(r"\bviral\b", re.IGNORECASE),
-    re.compile(r"\bmeme(?:s)?\b", re.IGNORECASE),
-    re.compile(r"\bmascot\b", re.IGNORECASE),
-    re.compile(r"\bcontrovers(?:y|ial)\b", re.IGNORECASE),
-    re.compile(r"\bwhat(?:'s| is)\s+up\s+with\b", re.IGNORECASE),
-)
-
-TEMPORAL_QUESTION_PATTERNS = (
-    re.compile(r"\bwhat\s+happened\b", re.IGNORECASE),
-    re.compile(r"\bwhat(?:'s| is)\s+going\s+on\b", re.IGNORECASE),
 )
 
 MEMORY_META_PATTERNS = (
@@ -173,27 +85,14 @@ MEMORY_META_PATTERNS = (
     re.compile(r"\bin\s+(?:this|our)\s+(?:chat|conversation|thread|session)\b", re.IGNORECASE),
 )
 
-PERSONAL_RECENCY_PATTERNS = (
-    re.compile(
-        r"\b(today|right now|currently|this week|this month|this year)\b\s+"
-        r"(i|i'm|im|we|we're|our|my|me)\b",
-        re.IGNORECASE,
-    ),
-    re.compile(
-        r"\b(i|i'm|im|we|we're|our|my|me)\b[\s\S]{0,30}\b"
-        r"(today|right now|currently|this week|this month|this year)\b",
-        re.IGNORECASE,
-    ),
+CROSS_CHAT_MEMORY_REQUEST_PATTERN = re.compile(
+    r"\b(?:another|other|previous|earlier|last|different)\s+(?:chat|conversation|thread|session)s?\b"
+    r"|\b(?:from\s+chat\s+to\s+chat|cross[-\s]?chat|across\s+chats?)\b"
+    r"|\b(?:remember\s+(?:what|when)\s+i\s+asked)\b",
+    re.IGNORECASE,
 )
 
-FOLLOW_UP_PATTERNS = (
-    re.compile(r"\b(?:what|how)\s+about\b", re.IGNORECASE),
-    re.compile(r"\b(?:and|also)\s+(?:him|her|them|that|this|it)\b", re.IGNORECASE),
-    re.compile(r"\b(?:about|regarding)\s+(?:him|her|them|that|this|it)\b", re.IGNORECASE),
-    re.compile(r"\b(?:same|related|more\s+on\s+that)\b", re.IGNORECASE),
-)
-FOLLOW_UP_PRONOUN_PATTERN = re.compile(r"\b(him|her|them|that|this|it)\b", re.IGNORECASE)
-
+# Shared with chat API for follow-up search prompt anchoring.
 FOLLOW_UP_CONTEXT_KEYWORDS = (
     "news",
     "file",
@@ -215,28 +114,10 @@ FOLLOW_UP_CONTEXT_KEYWORDS = (
     "court",
 )
 
-SLANG_GUARD_TERMS = {
-    "wtf", "idk", "omg", "lol", "lmfao", "rofl", "ngl", "tbh", "brb", "gtg",
-    "what is wtf", "what does wtf mean",
-}
 
-def _is_small_talk(trimmed: str, word_count: int) -> bool:
-    return word_count <= 8 and any(pattern.search(trimmed) for pattern in SMALL_TALK_PATTERNS)
-
-
-def _is_slang_guard(normalized: str) -> bool:
-    return normalized in SLANG_GUARD_TERMS
-
-
-def _is_question_like(normalized: str) -> bool:
-    return "?" in normalized or any(normalized.startswith(f"{prefix} ") for prefix in QUESTION_PREFIXES)
-
-
-def _is_ambiguous_follow_up(normalized: str) -> bool:
-    return bool(
-        FOLLOW_UP_PRONOUN_PATTERN.search(normalized)
-        and any(pattern.search(normalized) for pattern in FOLLOW_UP_PATTERNS)
-    )
+# ============================================================================
+# Detection helpers
+# ============================================================================
 
 
 def is_explicit_search_request(message: str) -> bool:
@@ -253,194 +134,124 @@ def is_memory_meta_query(message: str) -> bool:
     return any(pattern.search(trimmed) for pattern in MEMORY_META_PATTERNS)
 
 
-def _extract_recent_user_messages(conversation_history: Optional[list]) -> list[str]:
-    if not conversation_history:
-        return []
-    messages: list[str] = []
-    for entry in conversation_history[-8:]:
-        if not isinstance(entry, dict):
-            continue
-        role = (entry.get("role") or "").strip().lower()
-        if role != "user":
-            continue
-        text = (entry.get("text") or "").strip()
-        if text:
-            messages.append(text)
-    return messages
-
-
-def _should_enable_search_base(message: str) -> bool:
+def is_cross_chat_memory_request(message: str) -> bool:
+    """Detect requests that ask about prior messages across chats/sessions."""
     trimmed = (message or "").strip()
     if not trimmed:
         return False
-    normalized = trimmed.lower()
-    word_count = len(normalized.split())
-
-    if is_explicit_search_request(trimmed):
-        return True
-
-    if is_memory_meta_query(trimmed):
-        return False
-
-    if any(keyword in normalized for keyword in LIVE_KEYWORDS):
-        return True
-
-    if "what's happening" in normalized or "whats happening" in normalized:
-        return True
-
-    if _is_small_talk(trimmed, word_count):
-        return False
-
-    if _is_slang_guard(normalized):
-        return False
-
-    if any(pattern.search(normalized) for pattern in STABLE_KNOWLEDGE_PATTERNS):
-        return False
-
-    if any(pattern.search(normalized) for pattern in VERIFICATION_PATTERNS):
-        return True
-
-    if _is_ambiguous_follow_up(normalized):
-        return False
-
-    question_like = _is_question_like(normalized)
-    has_soft_recency = any(pattern.search(normalized) for pattern in SOFT_RECENCY_PATTERNS)
-    has_hard_recency = any(pattern.search(normalized) for pattern in HARD_RECENCY_PATTERNS)
-    has_trend_intent = any(pattern.search(normalized) for pattern in TREND_PATTERNS)
-    has_temporal_intent = any(pattern.search(normalized) for pattern in TEMPORAL_QUESTION_PATTERNS)
-
-    if (has_soft_recency or has_hard_recency) and question_like:
-        return True
-
-    if has_temporal_intent and question_like:
-        return True
-
-    if has_trend_intent and question_like:
-        return True
-
-    if question_like and re.search(r"\b(202[3-9]|203[0-9])\b", normalized):
-        return True
-
-    return False
-
-
-# ==============================================================================
-# Detection Functions
-# ==============================================================================
+    return is_memory_meta_query(trimmed) or bool(CROSS_CHAT_MEMORY_REQUEST_PATTERN.search(trimmed))
 
 
 def needs_structured_tools(message: str) -> bool:
-    """Check if message likely requires tool execution (reminders, calendar, etc).
-    
-    Uses word boundary matching to avoid false positives like 'at' matching 'cat'.
-    """
+    """Check if a message likely requires reminder/plan/calendar tools."""
     normalized = (message or "").lower()
     if not normalized:
         return False
-    
+
     for kw in TOOL_TRIGGER_KEYWORDS:
-        if re.search(rf'\b{re.escape(kw)}\b', normalized):
+        if re.search(rf"\b{re.escape(kw)}\b", normalized):
             return True
     if _TIME_OF_DAY_RE.search(normalized) or _RELATIVE_TIME_RE.search(normalized):
         return True
     for kw in TIME_KEYWORDS:
-        if re.search(rf'\b{re.escape(kw)}\b', normalized):
+        if re.search(rf"\b{re.escape(kw)}\b", normalized):
             return True
     return False
 
 
 def should_request_structured_reminders(message: str) -> bool:
-    """Check if message specifically relates to reminder functionality.
-    
-    Uses word boundary matching to avoid false positives.
-    """
+    """Check if message specifically relates to reminder functionality."""
     normalized = (message or "").lower()
     if not normalized:
         return False
-    
+
     for kw in REMINDER_KEYWORDS:
-        if re.search(rf'\b{re.escape(kw)}\b', normalized):
+        if re.search(rf"\b{re.escape(kw)}\b", normalized):
             return True
     return False
 
 
-def should_use_web_search(message: str, model: Optional[str] = None) -> bool:
+def should_expose_structured_tools(
+    message: str,
+    *,
+    reminders_enabled: bool,
+    is_onboarding_tool: bool = False,
+) -> bool:
     """
-    Use lightweight local heuristics to decide whether this message likely
-    needs up-to-date information from the public web.
+    Codex-style policy: keep structured tools available when reminders are enabled,
+    and let the model decide when to call them.
+    """
+    _ = message
+    return bool(reminders_enabled) and not is_onboarding_tool
 
-    Uses local keyword matching for fast classification without network calls.
-    """
+
+def should_use_web_search(message: str, model: Optional[str] = None) -> bool:
+    """Legacy compatibility wrapper for simple explicit-search detection."""
     _ = model
-    return _should_enable_search_base(message)
+    return should_enable_search(message)
 
 
 def should_enable_search(message: str, conversation_history: Optional[list] = None) -> bool:
-    """Check if message implies a need for web search.
-    
-    Uses explicit and heuristic signals. In auto mode we intentionally err on the
-    side of enabling search for factual questions, while keeping small-talk local.
     """
-    if _should_enable_search_base(message):
-        return True
+    Simple compatibility signal.
 
+    This is no longer a heavy heuristic classifier. It only returns True for
+    explicit web-search requests and stays False for memory-meta prompts.
+    """
+    _ = conversation_history
     trimmed = (message or "").strip()
     if not trimmed:
         return False
-    normalized = trimmed.lower()
-    word_count = len(normalized.split())
-    if _is_small_talk(trimmed, word_count) or _is_slang_guard(normalized):
+    if is_memory_meta_query(trimmed):
         return False
+    return is_explicit_search_request(trimmed)
 
-    # Follow-up prompts ("what about him", "how about that") should inherit context
-    # from recent user turns when those turns were likely search-worthy.
-    if any(pattern.search(normalized) for pattern in FOLLOW_UP_PATTERNS):
-        recent_user_messages = _extract_recent_user_messages(conversation_history)
-        for prior in reversed(recent_user_messages):
-            prior_trimmed = prior.strip()
-            if not prior_trimmed:
-                continue
-            prior_normalized = prior_trimmed.lower()
-            if prior_normalized == normalized:
-                continue
-            prior_word_count = len(prior_normalized.split())
-            if _is_small_talk(prior_trimmed, prior_word_count) or _is_slang_guard(prior_normalized):
-                continue
-            if _should_enable_search_base(prior_trimmed):
-                return True
-            if any(keyword in prior_normalized for keyword in FOLLOW_UP_CONTEXT_KEYWORDS):
-                return True
-            if (
-                _is_question_like(prior_normalized)
-                and prior_word_count >= 4
-                and (
-                    any(pattern.search(prior_normalized) for pattern in HARD_RECENCY_PATTERNS)
-                    or any(keyword in prior_normalized for keyword in LIVE_KEYWORDS)
-                )
-            ):
-                return True
-            break
 
-    return False
+def resolve_web_search_enabled(
+    *,
+    message: str,
+    web_search_mode: Optional[str],
+    client_hint: bool = False,
+    conversation_history: Optional[list] = None,
+) -> bool:
+    """
+    Resolve whether web search should be available to the model.
+
+    - `on`: always enabled.
+    - `off`: disabled unless the user explicitly asks to search.
+    - `auto`: enabled by default (model decides when to call web search).
+    - `None`: legacy payload behavior (`client_hint` or explicit search).
+
+    Cross-chat memory prompts are blocked from implicit web search.
+    """
+    _ = conversation_history
+    mode = (web_search_mode or "").strip().lower() if isinstance(web_search_mode, str) else None
+    explicit_search = is_explicit_search_request(message)
+
+    if mode == "on":
+        return True
+    if mode == "off":
+        return explicit_search
+    if is_cross_chat_memory_request(message) and not explicit_search:
+        return False
+    if mode == "auto":
+        return True
+
+    return bool(client_hint) or explicit_search
 
 
 def extract_urls_from_message(message: str, max_urls: int = 20) -> list:
     """
     Extract URLs from a message for URL context processing.
-    
+
     Returns up to max_urls URLs, filtered to exclude internal/localhost URLs.
     """
     if not message:
         return []
-    
-    # Simple URL pattern
-    url_pattern = re.compile(
-        r'https?://[^\s<>"{}|\\^`\[\]]+',
-        re.IGNORECASE
-    )
-    
+
+    url_pattern = re.compile(r"https?://[^\s<>\"{}|\\^`\[\]]+", re.IGNORECASE)
     urls = url_pattern.findall(message)
-    
+
     def _is_private_hostname(hostname: str) -> bool:
         if not hostname:
             return True
@@ -463,7 +274,6 @@ def extract_urls_from_message(message: str, max_urls: int = 20) -> list:
             or ip.is_unspecified
         )
 
-    # Filter out localhost/internal URLs
     filtered = []
     for url in urls:
         try:
@@ -476,5 +286,5 @@ def extract_urls_from_message(message: str, max_urls: int = 20) -> list:
         filtered.append(url)
         if len(filtered) >= max_urls:
             break
-    
+
     return filtered

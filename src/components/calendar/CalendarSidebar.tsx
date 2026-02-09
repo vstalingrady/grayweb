@@ -7,7 +7,6 @@ import { CalendarInfo } from "./types";
 import styles from "./GrayDashboardCalendar.module.css";
 import { MiniMonth } from "./MiniMonth";
 import { useI18n } from "@/contexts/I18nContext";
-import type { CalendarHolidayCountry } from "./holidayTypes";
 
 type CalendarSidebarProps = {
   monthDate: Date;
@@ -28,14 +27,10 @@ type CalendarSidebarProps = {
   className?: string;
   showCalendarList?: boolean;
   holidayEnabled?: boolean;
-  holidayCountryCode?: string;
-  holidayCountries?: CalendarHolidayCountry[];
   holidayDateKeys?: ReadonlySet<string>;
   holidayNameByDateKey?: ReadonlyMap<string, string>;
-  holidayCountryLoading?: boolean;
   holidayDataLoading?: boolean;
   onHolidayEnabledChange?: (enabled: boolean) => void;
-  onHolidayCountryChange?: (countryCode: string) => void;
   children?: ReactNode;
 };
 
@@ -64,14 +59,10 @@ export function CalendarSidebar({
   className,
   showCalendarList = true,
   holidayEnabled = false,
-  holidayCountryCode = "US",
-  holidayCountries = [],
   holidayDateKeys,
   holidayNameByDateKey,
-  holidayCountryLoading = false,
   holidayDataLoading = false,
   onHolidayEnabledChange,
-  onHolidayCountryChange,
   children,
 }: CalendarSidebarProps) {
   const { t } = useI18n();
@@ -157,23 +148,6 @@ export function CalendarSidebar({
             />
             <span>{t("Public holidays")}</span>
           </label>
-          <select
-            className={styles.calendarSidebarHolidaySelect}
-            value={holidayCountryCode}
-            onChange={(event) => onHolidayCountryChange?.(event.target.value)}
-            disabled={!holidayEnabled || holidayCountryLoading || holidayCountries.length === 0}
-            aria-label={t("Holiday country")}
-          >
-            {holidayCountries.length === 0 ? (
-              <option value={holidayCountryCode}>{t("Loading countries...")}</option>
-            ) : (
-              holidayCountries.map((country) => (
-                <option key={country.code} value={country.code}>
-                  {country.name}
-                </option>
-              ))
-            )}
-          </select>
           {holidayEnabled && holidayDataLoading ? (
             <span className={styles.calendarSidebarHolidayStatus}>{t("Loading holidays...")}</span>
           ) : null}

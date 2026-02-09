@@ -363,16 +363,12 @@ export function GrayDashboardCalendar({
 
   const {
     holidayEnabled,
-    holidayCountryCode,
-    availableCountries,
     holidayDateKeys,
     holidayNameByDateKey,
     weekHolidayEntries,
     dayHolidayEntries,
-    isHolidayCountryLoading,
     isHolidayDataLoading,
     setHolidayEnabled,
-    setHolidayCountryCode,
   } = usePublicHolidays({
     monthDate,
     selectedDate,
@@ -493,8 +489,9 @@ export function GrayDashboardCalendar({
       responsiveLayoutStage === "day_with_sidebar"
     : showSidebar;
 
+  const hideSidebarForCompactNoList = !showCalendarList;
   const effectiveShowSidebar =
-    showSidebar && (forceSidebarOnNarrow || responsiveSidebarVisible);
+    showSidebar && (forceSidebarOnNarrow || responsiveSidebarVisible) && !hideSidebarForCompactNoList;
   const effectiveForceSidebarOnNarrow =
     effectiveShowSidebar &&
     (forceSidebarOnNarrow || responsiveLayoutStage === "day_with_sidebar");
@@ -604,14 +601,10 @@ export function GrayDashboardCalendar({
             showCalendarList={showCalendarList}
             onIntegrationAction={onIntegrationAction}
             holidayEnabled={holidayEnabled}
-            holidayCountryCode={holidayCountryCode}
-            holidayCountries={availableCountries}
             holidayDateKeys={holidayDateKeys}
             holidayNameByDateKey={holidayNameByDateKey}
-            holidayCountryLoading={isHolidayCountryLoading}
             holidayDataLoading={isHolidayDataLoading}
             onHolidayEnabledChange={setHolidayEnabled}
-            onHolidayCountryChange={setHolidayCountryCode}
           />
         </div>
       )}

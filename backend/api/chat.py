@@ -52,9 +52,8 @@ from backend.core.chat_starter_helpers import sse_event as _sse_event
 from backend.core.title_generator import generate_chat_title_inline as _generate_chat_title_inline
 from backend.core.media_attachments import resolve_attachment_metadata
 from backend.core.message_detection import (
-    is_explicit_search_request,
-    is_memory_meta_query,
-    should_enable_search,
+    FOLLOW_UP_CONTEXT_KEYWORDS,
+    resolve_web_search_enabled as _resolve_web_search_mode,
 )
 from backend.core.streaks import (
     append_streak_context,
@@ -91,40 +90,11 @@ LOW_INFORMATION_SEARCH_TURN_PATTERN = re.compile(
     r"^\s*(?:search|search\s+please|pls\s+search|please\s+search|google\s+it|look\s+it\s+up)\s*$",
     re.IGNORECASE,
 )
-FOLLOW_UP_CONTEXT_KEYWORDS = (
-    "news",
-    "file",
-    "files",
-    "report",
-    "reports",
-    "document",
-    "documents",
-    "release",
-    "update",
-    "updates",
-    "investigation",
-    "case",
-    "price",
-    "weather",
-    "score",
-    "election",
-    "policy",
-    "court",
-)
 WEB_ACCESS_DISCLAIMER_PATTERN = re.compile(
     r"(?:\bi\s+(?:don['’]t|do not)\s+have\s+(?:real[\s-]?time|live)\s+access\b|"
     r"\bi\s+(?:can['’]t|cannot)\s+browse\b|"
     r"\bmy\s+knowledge\s+has\s+(?:a\s+)?cutoff\b|"
     r"\bknowledge\s+cutoff\b)",
-    re.IGNORECASE,
-)
-MEMORY_RECALL_REQUEST_PATTERN = re.compile(
-    r"\b(?:another|other|previous|earlier|last|different)\s+(?:chat|conversation|thread|session)s?\b"
-    r"|\b(?:from\s+chat\s+to\s+chat|cross[-\s]?chat|across\s+chats?)\b"
-    r"|\b(?:did\s+i\s+ask(?:\s+you)?(?:\s+before)?)\b"
-    r"|\b(?:have\s+i\s+asked(?:\s+you)?(?:\s+before)?)\b"
-    r"|\b(?:what\s+did\s+i\s+ask(?:\s+you)?(?:\s+before)?)\b"
-    r"|\b(?:remember\s+(?:what|when)\s+i\s+asked)\b",
     re.IGNORECASE,
 )
 GPT_OSS_120B_MODEL_ID = "openai/gpt-oss-120b"
@@ -143,20 +113,6 @@ def _is_low_information_search_turn(text: str) -> bool:
     if len(words) <= 3 and any(token in normalized for token in ("search", "google", "lookup", "look up")):
         return True
     return False
-
-
-def _is_explicit_web_search_request(text: Optional[str]) -> bool:
-    normalized = (text or "").strip()
-    if not normalized:
-        return False
-    return is_explicit_search_request(normalized)
-
-
-def _is_cross_chat_memory_request(text: Optional[str]) -> bool:
-    normalized = (text or "").strip()
-    if not normalized:
-        return False
-    return bool(MEMORY_RECALL_REQUEST_PATTERN.search(normalized) or is_memory_meta_query(normalized))
 
 
 def _has_web_grounding(metadata: Optional[Dict[str, Any]]) -> bool:
@@ -244,23 +200,12 @@ def _resolve_web_search_enabled(
     chat_request: ChatRequest,
     conversation_history: Optional[List[Dict[str, Any]]] = None,
 ) -> bool:
-    mode = getattr(chat_request, "web_search_mode", None)
-    explicit_search = _is_explicit_web_search_request(chat_request.message)
-    cross_chat_memory_request = _is_cross_chat_memory_request(chat_request.message)
-    if mode == "on":
-        return True
-    if mode == "off":
-        return explicit_search
-    if mode == "auto":
-        if cross_chat_memory_request and not explicit_search:
-            return False
-        # In auto mode, allow either side to opt-in:
-        # - frontend hint can proactively enable search
-        # - backend heuristics can still enable it even when the frontend hint is false
-        client_hint = bool(getattr(chat_request, "web_search_enabled", False))
-        server_decision = should_enable_search(chat_request.message, conversation_history=conversation_history)
-        return client_hint or server_decision
-    return bool(chat_request.web_search_enabled) or explicit_search
+    return _resolve_web_search_mode(
+        message=chat_request.message,
+        web_search_mode=getattr(chat_request, "web_search_mode", None),
+        client_hint=bool(getattr(chat_request, "web_search_enabled", False)),
+        conversation_history=conversation_history,
+    )
 
 
 def _resolve_provider_routing(

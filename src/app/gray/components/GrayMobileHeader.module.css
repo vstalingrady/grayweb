@@ -140,22 +140,17 @@
 .mobileToggle {
   display: flex !important;
   align-items: center;
-  background: #121212;
-  /* Darker background, almost black */
-  padding: 4px;
-  /* Tighter padding */
+  background: transparent;
+  padding: 0;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  /* Subtle border */
+  border: none;
   gap: 0;
-  /* No gap for segmented control look */
   pointer-events: auto;
   position: relative;
   width: min(320px, 100%);
   min-width: 0;
   max-width: 100%;
   box-shadow: none;
-  /* Removed shadow */
 }
 
 .mobileToggleOption {
@@ -238,8 +233,8 @@
 }
 
 :global(html.light) .mobileToggle {
-  background: var(--gray-ui-surface-elevated, #ffffff);
-  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+  background: transparent;
+  border-color: transparent;
 }
 
 :global(html.light) .mobileToggleOption {
