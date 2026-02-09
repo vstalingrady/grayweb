@@ -61,21 +61,34 @@ LIVE_KEYWORDS = [
     "new files", "brand new files", "just dropped", "just released", "conspiracy",
 ]
 
-SOFT_RECENCY_TOKENS = [
-    "today",
-    "right now",
-    "currently",
-    "this week",
-    "this month",
-    "this year",
-]
+SOFT_RECENCY_PATTERNS = (
+    re.compile(r"\btoday\b", re.IGNORECASE),
+    re.compile(r"\bright now\b", re.IGNORECASE),
+    re.compile(r"\bcurrently\b", re.IGNORECASE),
+    re.compile(r"\bthis week\b", re.IGNORECASE),
+    re.compile(r"\bthis month\b", re.IGNORECASE),
+    re.compile(r"\bthis year\b", re.IGNORECASE),
+)
 
-HARD_RECENCY_TOKENS = [
-    "latest",
-    "recent",
-    "up to date",
-    "up-to-date",
-]
+HARD_RECENCY_PATTERNS = (
+    re.compile(r"\blatest\b", re.IGNORECASE),
+    re.compile(r"\brecent\b", re.IGNORECASE),
+    re.compile(r"\bup to date\b", re.IGNORECASE),
+    re.compile(r"\bup-to-date\b", re.IGNORECASE),
+)
+
+EXPLICIT_SEARCH_PATTERNS = (
+    re.compile(
+        r"^\s*(?:please\s+|pls\s+)?"
+        r"(?:search|google|web\s*search|look\s*up|lookup|find\s+on\s+the\s+web)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:can|could|would|will)\s+you\s+(?:please\s+)?"
+        r"(?:search|google|web\s*search|look\s*up|lookup|find\s+on\s+the\s+web)\b",
+        re.IGNORECASE,
+    ),
+)
 
 QUESTION_PREFIXES = (
     "what",
@@ -137,8 +150,27 @@ TREND_PATTERNS = (
 
 TEMPORAL_QUESTION_PATTERNS = (
     re.compile(r"\bwhat\s+happened\b", re.IGNORECASE),
-    re.compile(r"\bwhy\s+is\b", re.IGNORECASE),
     re.compile(r"\bwhat(?:'s| is)\s+going\s+on\b", re.IGNORECASE),
+)
+
+MEMORY_META_PATTERNS = (
+    re.compile(
+        r"\b(?:did|have)\s+(?:i|we)\s+(?:already\s+)?"
+        r"(?:ask|asked|search(?:ed)?(?:\s+up)?|google(?:d)?|look(?:ed)?\s*up)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bwhat\s+did\s+(?:i|we)\s+"
+        r"(?:ask|search(?:ed)?(?:\s+up)?|google(?:d)?|look(?:ed)?\s*up)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\bdid\s+i\s+ask\s+before\b", re.IGNORECASE),
+    re.compile(
+        r"\b(?:earlier|before|previously)\b[\s\S]{0,30}\b"
+        r"(?:this|our)\s+(?:chat|conversation|thread|session)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\bin\s+(?:this|our)\s+(?:chat|conversation|thread|session)\b", re.IGNORECASE),
 )
 
 PERSONAL_RECENCY_PATTERNS = (
@@ -153,8 +185,6 @@ PERSONAL_RECENCY_PATTERNS = (
         re.IGNORECASE,
     ),
 )
-
-NAME_LIKE_PATTERN = re.compile(r"\b[A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,}){0,2}\b")
 
 FOLLOW_UP_PATTERNS = (
     re.compile(r"\b(?:what|how)\s+about\b", re.IGNORECASE),
@@ -209,40 +239,18 @@ def _is_ambiguous_follow_up(normalized: str) -> bool:
     )
 
 
-def _compute_search_need_score(
-    *,
-    trimmed: str,
-    normalized: str,
-    has_soft_recency: bool,
-    has_hard_recency: bool,
-    question_like: bool,
-) -> int:
-    score = 0
+def is_explicit_search_request(message: str) -> bool:
+    trimmed = (message or "").strip()
+    if not trimmed:
+        return False
+    return any(pattern.search(trimmed) for pattern in EXPLICIT_SEARCH_PATTERNS)
 
-    if has_hard_recency:
-        score += 2
-    if has_soft_recency:
-        score += 1
-    if question_like:
-        score += 1
-    if any(pattern.search(normalized) for pattern in TREND_PATTERNS):
-        score += 2
-    if any(pattern.search(normalized) for pattern in TEMPORAL_QUESTION_PATTERNS):
-        score += 2
-    if re.search(r"\b(202[3-9]|203[0-9])\b", normalized):
-        score += 1
-    if (
-        NAME_LIKE_PATTERN.search(trimmed)
-        and (
-            has_soft_recency
-            or has_hard_recency
-            or any(pattern.search(normalized) for pattern in TREND_PATTERNS)
-            or any(pattern.search(normalized) for pattern in TEMPORAL_QUESTION_PATTERNS)
-        )
-    ):
-        score += 1
 
-    return score
+def is_memory_meta_query(message: str) -> bool:
+    trimmed = (message or "").strip()
+    if not trimmed:
+        return False
+    return any(pattern.search(trimmed) for pattern in MEMORY_META_PATTERNS)
 
 
 def _extract_recent_user_messages(conversation_history: Optional[list]) -> list[str]:
@@ -266,21 +274,18 @@ def _should_enable_search_base(message: str) -> bool:
     if not trimmed:
         return False
     normalized = trimmed.lower()
-    words = normalized.split()
-    word_count = len(words)
+    word_count = len(normalized.split())
 
-    explicit_patterns = [
-        r"\bsearch\b",
-        r"\bgoogle\b",
-        r"\bweb\s*search\b",
-        r"\blook\s*up\b",
-        r"\blookup\b",
-        r"\bfind\s+on\s+the\s+web\b",
-    ]
-    if any(re.search(pattern, normalized) for pattern in explicit_patterns):
+    if is_explicit_search_request(trimmed):
         return True
 
-    if should_use_web_search(message, model=None):
+    if is_memory_meta_query(trimmed):
+        return False
+
+    if any(keyword in normalized for keyword in LIVE_KEYWORDS):
+        return True
+
+    if "what's happening" in normalized or "whats happening" in normalized:
         return True
 
     if _is_small_talk(trimmed, word_count):
@@ -295,10 +300,26 @@ def _should_enable_search_base(message: str) -> bool:
     if any(pattern.search(normalized) for pattern in VERIFICATION_PATTERNS):
         return True
 
-    # Don't auto-search ambiguous follow-ups without conversation anchor.
-    # The contextual pass in should_enable_search handles these.
     if _is_ambiguous_follow_up(normalized):
         return False
+
+    question_like = _is_question_like(normalized)
+    has_soft_recency = any(pattern.search(normalized) for pattern in SOFT_RECENCY_PATTERNS)
+    has_hard_recency = any(pattern.search(normalized) for pattern in HARD_RECENCY_PATTERNS)
+    has_trend_intent = any(pattern.search(normalized) for pattern in TREND_PATTERNS)
+    has_temporal_intent = any(pattern.search(normalized) for pattern in TEMPORAL_QUESTION_PATTERNS)
+
+    if (has_soft_recency or has_hard_recency) and question_like:
+        return True
+
+    if has_temporal_intent and question_like:
+        return True
+
+    if has_trend_intent and question_like:
+        return True
+
+    if question_like and re.search(r"\b(202[3-9]|203[0-9])\b", normalized):
+        return True
 
     return False
 
@@ -350,65 +371,8 @@ def should_use_web_search(message: str, model: Optional[str] = None) -> bool:
 
     Uses local keyword matching for fast classification without network calls.
     """
-    trimmed = (message or "").strip()
-    if not trimmed:
-        return False
-
-    normalized = trimmed.lower()
-
-    # Obvious "live data" phrases – news, markets, prices, weather, etc.
-    if any(keyword in normalized for keyword in LIVE_KEYWORDS):
-        return True
-
-    # Questions explicitly about something "happening" now.
-    if "what's happening" in normalized or "whats happening" in normalized:
-        return True
-
-    # Explicit slang guard: Messages that are just slang terms (or simple "what is X")
-    # should be handled by the LLM's internal knowledge to avoid robotic "According to..." headers.
-    _SLANG_GUARD_TERMS = {
-        "wtf", "idk", "omg", "lol", "lmfao", "rofl", "ngl", "tbh", "brb", "gtg",
-        "what is wtf", "what does wtf mean",
-    }
-    if normalized in _SLANG_GUARD_TERMS:
-        return False
-
-    if any(pattern.search(normalized) for pattern in PERSONAL_RECENCY_PATTERNS):
-        return False
-
-    word_count = len(normalized.split())
-    if _is_small_talk(trimmed, word_count):
-        return False
-
-    if any(pattern.search(normalized) for pattern in STABLE_KNOWLEDGE_PATTERNS):
-        return False
-
-    if any(pattern.search(normalized) for pattern in VERIFICATION_PATTERNS):
-        return True
-
-    if _is_ambiguous_follow_up(normalized):
-        return False
-
-    has_soft_recency = any(token in normalized for token in SOFT_RECENCY_TOKENS)
-    has_hard_recency = any(token in normalized for token in HARD_RECENCY_TOKENS)
-    search_score = _compute_search_need_score(
-        trimmed=trimmed,
-        normalized=normalized,
-        has_soft_recency=has_soft_recency,
-        has_hard_recency=has_hard_recency,
-        question_like=_is_question_like(normalized),
-    )
-    if search_score >= 3:
-        return True
-
-    # Simple year-based heuristic: questions that mention a near-future or
-    # current year along with "news" or "update" are likely live.
-    if re.search(r"\b(202[3-9]|203[0-9])\b", normalized) and any(
-        phrase in normalized for phrase in ("news", "update", "updates", "trending")
-    ):
-        return True
-
-    return False
+    _ = model
+    return _should_enable_search_base(message)
 
 
 def should_enable_search(message: str, conversation_history: Optional[list] = None) -> bool:
@@ -424,8 +388,7 @@ def should_enable_search(message: str, conversation_history: Optional[list] = No
     if not trimmed:
         return False
     normalized = trimmed.lower()
-    words = normalized.split()
-    word_count = len(words)
+    word_count = len(normalized.split())
     if _is_small_talk(trimmed, word_count) or _is_slang_guard(normalized):
         return False
 
@@ -447,7 +410,14 @@ def should_enable_search(message: str, conversation_history: Optional[list] = No
                 return True
             if any(keyword in prior_normalized for keyword in FOLLOW_UP_CONTEXT_KEYWORDS):
                 return True
-            if _is_question_like(prior_normalized) and prior_word_count >= 4:
+            if (
+                _is_question_like(prior_normalized)
+                and prior_word_count >= 4
+                and (
+                    any(pattern.search(prior_normalized) for pattern in HARD_RECENCY_PATTERNS)
+                    or any(keyword in prior_normalized for keyword in LIVE_KEYWORDS)
+                )
+            ):
                 return True
             break
 

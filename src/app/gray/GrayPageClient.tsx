@@ -472,6 +472,7 @@ function GrayPageClientInner({
       deadline: toDateKey(payload.start),
       scheduleSlot: scheduleSlot,
       description: payload.description || null,
+      color: payload.color || null,
     };
     const existingPlanId = parsePlanIdFromComposerEventId(payload.id);
 

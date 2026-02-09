@@ -23,6 +23,11 @@ def test_mode_off_keeps_non_search_request_disabled() -> None:
     assert _resolve_web_search_enabled(request) is False
 
 
+def test_mode_on_stays_enabled_for_memory_meta_prompt() -> None:
+    request = _build_request("what did i search up before this", mode="on", enabled=False)
+    assert _resolve_web_search_enabled(request) is True
+
+
 def test_legacy_payload_without_mode_honors_explicit_search_request() -> None:
     request = _build_request("can you google this meme?", mode=None, enabled=False)
     assert _resolve_web_search_enabled(request) is True
@@ -53,3 +58,8 @@ def test_mode_auto_keeps_explicit_search_when_memory_phrase_present() -> None:
         enabled=False,
     )
     assert _resolve_web_search_enabled(request) is True
+
+
+def test_mode_auto_disables_meta_search_history_question() -> None:
+    request = _build_request("what did i search up before this", mode="auto", enabled=False)
+    assert _resolve_web_search_enabled(request) is False

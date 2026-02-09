@@ -90,7 +90,7 @@ export const mapPlansToCalendarEvents = (plans: PlanItem[]): CalendarEvent[] => 
         title: plan.label,
         start: effectiveStart,
         end: effectiveEnd,
-        color: PLAN_EVENT_COLOR,
+        color: plan.color || PLAN_EVENT_COLOR,
         entryType: "plan" as const,
         description: plan.details ?? plan.scheduleSlot ?? undefined,
         displayHint: shouldDisplayAsLine ? ("line" as const) : undefined,

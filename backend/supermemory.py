@@ -31,6 +31,29 @@ _SUPERMEMORY_CONTEXT_RE = re.compile(
     re.IGNORECASE,
 )
 _METADATA_KEY_RE = re.compile(r"^[\w.-]+$")
+_ATOMIC_SENTENCE_SPLIT_RE = re.compile(r"[.!?\n;]+")
+_ATOMIC_LIST_PREFIX_RE = re.compile(r"^\s*(?:[-*]\s+|\d+[.)]\s+)")
+_ATOMIC_SPACE_RE = re.compile(r"\s+")
+_ATOMIC_FIRST_PERSON_RE = re.compile(
+    r"\b(i|i am|i'm|i have|i've|i will|i'll|my|me|mine|we|our)\b",
+    re.IGNORECASE,
+)
+_ATOMIC_PREFERENCE_RE = re.compile(
+    r"\b(i (?:prefer|like|love|hate|dislike|enjoy|want)|my favorite|i am into|i'm into)\b",
+    re.IGNORECASE,
+)
+_ATOMIC_DECISION_RE = re.compile(
+    r"\b(i (?:decided|choose|chose|picked|pick|will|am going to|going with)|i'll|we will|we're going to|let's)\b",
+    re.IGNORECASE,
+)
+_ATOMIC_FACT_RE = re.compile(
+    r"\b(i am|i'm|i have|i've|i use|i work|i live|my [a-z0-9_ ]{1,32} is|my [a-z0-9_ ]{1,32} are)\b",
+    re.IGNORECASE,
+)
+_ATOMIC_NON_MEMORY_PREFIX_RE = re.compile(
+    r"^(can|could|would|please|help|tell|show|what|why|how|when|where)\b",
+    re.IGNORECASE,
+)
 
 MEMORY_CATEGORIES = ("preference", "fact", "decision", "entity", "other")
 
@@ -278,6 +301,157 @@ def _normalize_search_results(results: Any) -> List[Dict[str, Any]]:
             payload["id"] = memory_id.strip()
         normalized.append(payload)
     return normalized
+
+
+def _normalize_atomic_memory_text(text: str, *, max_len: int = 240) -> str:
+    if not text:
+        return ""
+    cleaned = _ATOMIC_LIST_PREFIX_RE.sub("", text.strip())
+    cleaned = _ATOMIC_SPACE_RE.sub(" ", cleaned)
+    cleaned = cleaned.strip(" \"'`")
+    cleaned = cleaned.strip()
+    cleaned = cleaned.rstrip(".,;:")
+    if len(cleaned) > max_len:
+        cleaned = cleaned[:max_len].rstrip(" ,;:-")
+    return cleaned
+
+
+def _classify_atomic_user_memory(text: str) -> Optional[str]:
+    if not text or len(text) < 8:
+        return None
+    lower = text.lower()
+    if lower.endswith("?"):
+        return None
+    if _ATOMIC_NON_MEMORY_PREFIX_RE.match(lower):
+        return None
+    if "as an ai" in lower:
+        return None
+    if not _ATOMIC_FIRST_PERSON_RE.search(lower):
+        return None
+    if _ATOMIC_PREFERENCE_RE.search(lower):
+        return "preference"
+    if _ATOMIC_DECISION_RE.search(lower):
+        return "decision"
+    if _ATOMIC_FACT_RE.search(lower):
+        return "fact"
+    detected = detect_memory_category(text)
+    if detected in {"preference", "fact", "decision", "entity"}:
+        return detected
+    return None
+
+
+def _extract_atomic_user_memories(user_text: str, *, max_items: int = 6) -> List[Tuple[str, str]]:
+    if not user_text:
+        return []
+    cleaned = sanitize_content(
+        _SUPERMEMORY_CONTEXT_RE.sub("", user_text),
+        max_len=10_000,
+    )
+    if not cleaned:
+        return []
+    memories: List[Tuple[str, str]] = []
+    seen = set()
+    for part in _ATOMIC_SENTENCE_SPLIT_RE.split(cleaned):
+        normalized = _normalize_atomic_memory_text(part)
+        if not normalized:
+            continue
+        category = _classify_atomic_user_memory(normalized)
+        if not category:
+            continue
+        dedup_key = normalized.lower()
+        if dedup_key in seen:
+            continue
+        seen.add(dedup_key)
+        memories.append((normalized, category))
+        if len(memories) >= max_items:
+            break
+    return memories
+
+
+def _build_capture_metadata(
+    *,
+    user_id: int,
+    conversation_id: Optional[str],
+    timestamp: str,
+    source: str,
+    category: Optional[str] = None,
+) -> Dict[str, str]:
+    metadata: Dict[str, str] = {
+        "source": source,
+        "timestamp": timestamp,
+        "user_id": str(user_id),
+    }
+    if conversation_id:
+        metadata["conversation_id"] = str(conversation_id)
+    if category:
+        metadata["category"] = category
+        metadata["type"] = category
+    return metadata
+
+
+def _normalize_for_capture_id(text: str) -> str:
+    if not text:
+        return ""
+    return _ATOMIC_SPACE_RE.sub(" ", text.strip().lower())
+
+
+def _build_atomic_capture_custom_id(
+    *,
+    user_id: int,
+    category: str,
+    content: str,
+) -> str:
+    fingerprint = _sha256_hex(
+        f"{user_id}|{category}|{_normalize_for_capture_id(content)}"
+    )
+    return f"gray_atomic_{fingerprint[:32]}"
+
+
+def _build_turn_capture_custom_id(
+    *,
+    user_id: int,
+    conversation_id: Optional[str],
+    content: str,
+) -> str:
+    conversation_key = (conversation_id or "").strip() or "none"
+    fingerprint = _sha256_hex(
+        f"{user_id}|{conversation_key}|{_normalize_for_capture_id(content)}"
+    )
+    return f"gray_turn_{fingerprint[:32]}"
+
+
+def _select_forget_target(
+    *,
+    query: str,
+    results: List[Dict[str, Any]],
+    min_similarity: float,
+) -> Optional[Dict[str, Any]]:
+    cleaned_query = (query or "").strip().lower()
+    if cleaned_query:
+        for item in results:
+            memory = item.get("memory")
+            if isinstance(memory, str) and memory.strip().lower() == cleaned_query:
+                return item
+
+    if len(results) == 1:
+        candidate = results[0]
+        similarity = candidate.get("similarity")
+        if not isinstance(similarity, (int, float)) or float(similarity) >= min_similarity:
+            return candidate
+
+    best: Optional[Dict[str, Any]] = None
+    best_similarity = float("-inf")
+    for item in results:
+        similarity = item.get("similarity")
+        if not isinstance(similarity, (int, float)):
+            continue
+        score = float(similarity)
+        if score < min_similarity:
+            continue
+        if score > best_similarity:
+            best_similarity = score
+            best = item
+    return best
 
 
 def _format_relative_time(iso_timestamp: str) -> str:
@@ -600,6 +774,26 @@ class SupermemoryService:
         turn = self._count_user_turns(history) + 1
         return turn <= 1 or turn % self.profile_frequency == 0
 
+    async def _search_fallback_for_recall(
+        self,
+        *,
+        container_tag: str,
+        prompt: str,
+        policy: SupermemoryPolicy,
+    ) -> List[Dict[str, Any]]:
+        payload: Dict[str, Any] = {
+            "q": prompt,
+            "containerTag": container_tag,
+            "limit": max(1, min(policy.max_recall_results, 20)),
+            "searchMode": "memories",
+        }
+        if policy.threshold is not None:
+            payload["threshold"] = policy.threshold
+        data = await self._post("/v4/search", payload, container_tag=container_tag)
+        if not isinstance(data, dict):
+            return []
+        return _normalize_search_results(data.get("results"))
+
     async def recall_context(
         self,
         *,
@@ -621,17 +815,24 @@ class SupermemoryService:
         if policy.threshold is not None:
             payload["threshold"] = policy.threshold
         data = await self._post("/v4/profile", payload, container_tag=container_tag)
-        if not data:
-            return None
-
-        profile = data.get("profile") or {}
+        profile_payload = data if isinstance(data, dict) else {}
+        profile = profile_payload.get("profile") or {}
         static_facts = _ensure_str_list(profile.get("static"))
         dynamic_facts = _ensure_str_list(profile.get("dynamic"))
-        search_results = _normalize_search_results((data.get("searchResults") or {}).get("results"))
+        search_results = _normalize_search_results(
+            (profile_payload.get("searchResults") or {}).get("results")
+        )
 
         if not self._should_include_profile(conversation_history):
             static_facts = []
             dynamic_facts = []
+
+        if not static_facts and not dynamic_facts and not search_results:
+            search_results = await self._search_fallback_for_recall(
+                container_tag=container_tag,
+                prompt=prompt,
+                policy=policy,
+            )
 
         context = format_supermemory_context(
             static_facts=static_facts,
@@ -676,6 +877,40 @@ class SupermemoryService:
         if not user_text and not assistant_text:
             return
 
+        turn_timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        container_tag = self._container_tag(user_id)
+        atomic_memories = _extract_atomic_user_memories(user_text)
+        stored_atomic_count = 0
+        for memory_text, category in atomic_memories:
+            content = sanitize_content(memory_text, max_len=512)
+            if not content:
+                continue
+            metadata = _build_capture_metadata(
+                user_id=user_id,
+                conversation_id=conversation_id,
+                timestamp=turn_timestamp,
+                source="gray_capture_turn",
+                category=category,
+            )
+            payload: Dict[str, Any] = {
+                "content": content,
+                "containerTag": container_tag,
+                "customId": _build_atomic_capture_custom_id(
+                    user_id=user_id,
+                    category=category,
+                    content=content,
+                ),
+            }
+            safe_metadata = sanitize_metadata(metadata)
+            if safe_metadata:
+                payload["metadata"] = safe_metadata
+            result = await self._post("/v3/documents", payload, container_tag=container_tag)
+            if result is not None:
+                stored_atomic_count += 1
+
+        if stored_atomic_count > 0:
+            return
+
         blocks: List[str] = []
         if user_text:
             blocks.append(f"[role: user]\n{user_text}\n[user:end]")
@@ -686,19 +921,21 @@ class SupermemoryService:
         if not content:
             return
 
-        metadata: Dict[str, str] = {
-            "source": "gray",
-            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "user_id": str(user_id),
-        }
-        if conversation_id:
-            metadata["conversation_id"] = str(conversation_id)
-
-        container_tag = self._container_tag(user_id)
+        metadata = _build_capture_metadata(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            timestamp=turn_timestamp,
+            source="gray",
+        )
         safe_metadata = sanitize_metadata(metadata)
         payload = {
             "content": content,
             "containerTag": container_tag,
+            "customId": _build_turn_capture_custom_id(
+                user_id=user_id,
+                conversation_id=conversation_id,
+                content=content,
+            ),
         }
         if safe_metadata:
             payload["metadata"] = safe_metadata
@@ -832,7 +1069,15 @@ class SupermemoryService:
         results = await self.search_memories(user_id=user_id, query=query, limit=5, plan_tier=plan_tier)
         if not results:
             return {"success": False, "message": "No matching memory found to forget."}
-        target = results[0]
+        policy = self.policy_for_tier(plan_tier)
+        threshold = float(policy.threshold) if isinstance(policy.threshold, (int, float)) else 0.0
+        target = _select_forget_target(
+            query=query,
+            results=results,
+            min_similarity=max(0.75, threshold),
+        )
+        if not target:
+            return {"success": False, "message": "No matching memory found to forget."}
         memory_id = target.get("id") or target.get("memoryId") or target.get("documentId")
         if memory_id:
             deleted = await self.delete_memory(

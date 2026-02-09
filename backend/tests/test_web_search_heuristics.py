@@ -18,8 +18,17 @@ def test_should_enable_search_explicit_request():
     assert should_enable_search("Can you google the latest iPhone price?") is True
 
 
+def test_should_enable_search_explicit_command_with_memory_wording():
+    assert should_enable_search("search the web for what i asked before") is True
+
+
 def test_should_enable_search_live_data():
     assert should_enable_search("What's the weather in Paris today?") is True
+
+
+def test_should_enable_search_not_for_memory_meta_prompt():
+    assert should_enable_search("what did i search up before this") is False
+    assert should_enable_search("did i ask before") is False
 
 
 def test_should_enable_search_not_for_research_word():

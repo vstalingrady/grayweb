@@ -51,7 +51,11 @@ from backend.onboarding_tools import ONBOARDING_TOOLS
 from backend.core.chat_starter_helpers import sse_event as _sse_event
 from backend.core.title_generator import generate_chat_title_inline as _generate_chat_title_inline
 from backend.core.media_attachments import resolve_attachment_metadata
-from backend.core.message_detection import should_enable_search
+from backend.core.message_detection import (
+    is_explicit_search_request,
+    is_memory_meta_query,
+    should_enable_search,
+)
 from backend.core.streaks import (
     append_streak_context,
     build_engagement_context,
@@ -114,10 +118,6 @@ WEB_ACCESS_DISCLAIMER_PATTERN = re.compile(
     r"\bknowledge\s+cutoff\b)",
     re.IGNORECASE,
 )
-EXPLICIT_WEB_SEARCH_REQUEST_PATTERN = re.compile(
-    r"\b(?:search|google|web\s*search|look\s*up|lookup|find\s+on\s+the\s+web)\b",
-    re.IGNORECASE,
-)
 MEMORY_RECALL_REQUEST_PATTERN = re.compile(
     r"\b(?:another|other|previous|earlier|last|different)\s+(?:chat|conversation|thread|session)s?\b"
     r"|\b(?:from\s+chat\s+to\s+chat|cross[-\s]?chat|across\s+chats?)\b"
@@ -149,14 +149,14 @@ def _is_explicit_web_search_request(text: Optional[str]) -> bool:
     normalized = (text or "").strip()
     if not normalized:
         return False
-    return bool(EXPLICIT_WEB_SEARCH_REQUEST_PATTERN.search(normalized))
+    return is_explicit_search_request(normalized)
 
 
 def _is_cross_chat_memory_request(text: Optional[str]) -> bool:
     normalized = (text or "").strip()
     if not normalized:
         return False
-    return bool(MEMORY_RECALL_REQUEST_PATTERN.search(normalized))
+    return bool(MEMORY_RECALL_REQUEST_PATTERN.search(normalized) or is_memory_meta_query(normalized))
 
 
 def _has_web_grounding(metadata: Optional[Dict[str, Any]]) -> bool:

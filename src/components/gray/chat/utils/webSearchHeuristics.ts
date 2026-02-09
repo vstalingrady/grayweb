@@ -53,13 +53,9 @@ const HARD_RECENCY_PATTERNS = [
   /\bup-to-date\b/i,
 ];
 
-const EXPLICIT_PATTERNS = [
-  /\bsearch\b/i,
-  /\bgoogle\b/i,
-  /\bweb\s*search\b/i,
-  /\blook\s*up\b/i,
-  /\blookup\b/i,
-  /\bfind\s+on\s+the\s+web\b/i,
+const EXPLICIT_SEARCH_PATTERNS = [
+  /^\s*(?:please\s+|pls\s+)?(?:search|google|web\s*search|look\s*up|lookup|find\s+on\s+the\s+web)\b/i,
+  /\b(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:search|google|web\s*search|look\s*up|lookup|find\s+on\s+the\s+web)\b/i,
 ];
 
 const QUESTION_PREFIXES = [
@@ -119,11 +115,16 @@ const TREND_PATTERNS = [
 
 const TEMPORAL_QUESTION_PATTERNS = [
   /\bwhat\s+happened\b/i,
-  /\bwhy\s+is\b/i,
   /\bwhat(?:'s| is)\s+going\s+on\b/i,
 ];
 
-const NAME_LIKE_PATTERN = /\b[A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,}){0,2}\b/;
+const MEMORY_META_PATTERNS = [
+  /\b(?:did|have)\s+(?:i|we)\s+(?:already\s+)?(?:ask|asked|search(?:ed)?(?:\s+up)?|google(?:d)?|look(?:ed)?\s*up)\b/i,
+  /\bwhat\s+did\s+(?:i|we)\s+(?:ask|search(?:ed)?(?:\s+up)?|google(?:d)?|look(?:ed)?\s*up)\b/i,
+  /\bdid\s+i\s+ask\s+before\b/i,
+  /\b(?:earlier|before|previously)\b[\s\S]{0,30}\b(?:this|our)\s+(?:chat|conversation|thread|session)\b/i,
+  /\bin\s+(?:this|our)\s+(?:chat|conversation|thread|session)\b/i,
+];
 
 const PERSONAL_RECENCY_PATTERNS = [
   /\b(today|right now|currently|this week|this month|this year)\b\s+(i|i'm|im|we|we're|our|my|me)\b/i,
@@ -168,72 +169,20 @@ const isSmallTalk = (trimmed: string, wordCount: number): boolean =>
 const isAmbiguousFollowUp = (normalized: string): boolean =>
   FOLLOW_UP_PRONOUN_PATTERN.test(normalized) && FOLLOW_UP_PATTERNS.some((pattern) => pattern.test(normalized));
 
-const computeSearchNeedScore = ({
-  trimmed,
-  normalized,
-  hasSoftRecency,
-  hasHardRecency,
-  questionLike,
-}: {
-  trimmed: string;
-  normalized: string;
-  hasSoftRecency: boolean;
-  hasHardRecency: boolean;
-  questionLike: boolean;
-}): number => {
-  let score = 0;
-
-  if (hasHardRecency) {
-    score += 2;
-  }
-  if (hasSoftRecency) {
-    score += 1;
-  }
-  if (questionLike) {
-    score += 1;
-  }
-  if (TREND_PATTERNS.some((pattern) => pattern.test(normalized))) {
-    score += 2;
-  }
-  if (TEMPORAL_QUESTION_PATTERNS.some((pattern) => pattern.test(normalized))) {
-    score += 2;
-  }
-  if (/\b(202[3-9]|203[0-9])\b/.test(normalized)) {
-    score += 1;
-  }
-  if (
-    NAME_LIKE_PATTERN.test(trimmed) &&
-    (hasSoftRecency ||
-      hasHardRecency ||
-      TREND_PATTERNS.some((pattern) => pattern.test(normalized)) ||
-      TEMPORAL_QUESTION_PATTERNS.some((pattern) => pattern.test(normalized)))
-  ) {
-    score += 1;
-  }
-
-  return score;
-};
+const isMemoryMetaQuery = (normalized: string): boolean =>
+  MEMORY_META_PATTERNS.some((pattern) => pattern.test(normalized));
 
 export type WebSearchDecision = {
   enabled: boolean;
   mode: "on" | "auto" | "off";
 };
 
-const EXPLICIT_SEARCH_FORCE_PATTERNS = [
-  /\bsearch\b/i,
-  /\bgoogle\b/i,
-  /\bweb\s*search\b/i,
-  /\blook\s*up\b/i,
-  /\blookup\b/i,
-  /\bfind\s+on\s+the\s+web\b/i,
-];
-
 const isExplicitSearchRequest = (message: string): boolean => {
   const trimmed = (message || "").trim();
   if (!trimmed) {
     return false;
   }
-  return EXPLICIT_SEARCH_FORCE_PATTERNS.some((pattern) => pattern.test(trimmed));
+  return EXPLICIT_SEARCH_PATTERNS.some((pattern) => pattern.test(trimmed));
 };
 
 export const shouldEnableWebSearch = (message: string, recentUserMessages?: string[]): boolean => {
@@ -259,8 +208,12 @@ export const shouldEnableWebSearch = (message: string, recentUserMessages?: stri
     "what does wtf mean",
   ]);
 
-  if (EXPLICIT_PATTERNS.some((pattern) => pattern.test(normalized))) {
+  if (isExplicitSearchRequest(trimmed)) {
     return true;
+  }
+
+  if (isMemoryMetaQuery(normalized)) {
+    return false;
   }
 
   if (LIVE_KEYWORDS.some((keyword) => normalized.includes(keyword))) {
@@ -302,14 +255,19 @@ export const shouldEnableWebSearch = (message: string, recentUserMessages?: stri
     return false;
   }
 
-  const searchScore = computeSearchNeedScore({
-    trimmed,
-    normalized,
-    hasSoftRecency,
-    hasHardRecency,
-    questionLike: isQuestionLike(normalized),
-  });
-  if (searchScore >= 3) {
+  const questionLike = isQuestionLike(normalized);
+  const hasTrendIntent = TREND_PATTERNS.some((pattern) => pattern.test(normalized));
+  const hasTemporalIntent = TEMPORAL_QUESTION_PATTERNS.some((pattern) => pattern.test(normalized));
+  if ((hasSoftRecency || hasHardRecency) && questionLike) {
+    return true;
+  }
+  if (hasTemporalIntent && questionLike) {
+    return true;
+  }
+  if (hasTrendIntent && questionLike) {
+    return true;
+  }
+  if (questionLike && /\b(202[3-9]|203[0-9])\b/.test(normalized)) {
     return true;
   }
 

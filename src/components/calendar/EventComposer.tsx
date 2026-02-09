@@ -112,6 +112,9 @@ export function EventComposer({
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(referenceDate));
   const [monthDate, setMonthDate] = useState(() => startOfMonth(referenceDate));
   const activeEventId = activeEvent?.id;
+  const activeEventIdRef = useRef(activeEventId ?? null);
+  const closeWithOptionalAutoCreateRef = useRef<((options?: { allowAutoCreate?: boolean }) => void) | null>(null);
+  const handleDeleteRef = useRef<(() => void) | null>(null);
   const lastResetSignatureRef = useRef<string | null>(null);
   const calendarOptions = useMemo(() => {
     if (calendars.length === 0) {
@@ -367,6 +370,18 @@ export function EventComposer({
   }, [activeEventId, onDelete]);
 
   useEffect(() => {
+    activeEventIdRef.current = activeEventId ?? null;
+  }, [activeEventId]);
+
+  useEffect(() => {
+    closeWithOptionalAutoCreateRef.current = closeWithOptionalAutoCreate;
+  }, [closeWithOptionalAutoCreate]);
+
+  useEffect(() => {
+    handleDeleteRef.current = handleDelete;
+  }, [handleDelete]);
+
+  useEffect(() => {
     if (!isOpen) {
       return undefined;
     }
@@ -423,12 +438,12 @@ export function EventComposer({
 
       if (event.key === "Escape") {
         event.preventDefault();
-        closeWithOptionalAutoCreate();
+        closeWithOptionalAutoCreateRef.current?.();
         return;
       }
-      if (event.key === "Delete" && activeEventId && !isTextInputTarget && !event.isComposing) {
+      if (event.key === "Delete" && activeEventIdRef.current && !isTextInputTarget && !event.isComposing) {
         event.preventDefault();
-        handleDelete();
+        handleDeleteRef.current?.();
         return;
       }
       if (event.key === "Enter") {
@@ -449,7 +464,7 @@ export function EventComposer({
         previous.focus();
       }
     };
-  }, [activeEventId, closeWithOptionalAutoCreate, handleDelete, isOpen]);
+  }, [isOpen]);
 
   useEffect(() => {
     const closePickers = () => {
