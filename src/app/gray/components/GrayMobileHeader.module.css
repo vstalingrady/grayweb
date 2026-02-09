@@ -177,17 +177,14 @@
 }
 
 .mobileToggleOption[data-active="true"] {
-  background: rgba(255, 255, 255, 0.12);
-  /* Subtle highlight for active state */
+  background: transparent;
   color: rgba(255, 255, 255, 1);
-  /* Bright white active text */
   font-weight: 600;
   box-shadow: none;
-  /* Removed shadow */
 }
 
 .mobileToggleOption:hover:not([data-active="true"]) {
-  background: rgba(255, 255, 255, 0.04);
+  background: transparent;
   color: rgba(255, 255, 255, 0.8);
 }
 
@@ -242,11 +239,11 @@
 }
 
 :global(html.light) .mobileToggleOption[data-active="true"] {
-  background: var(--gray-ui-hover-strong, rgba(0, 0, 0, 0.1));
+  background: transparent;
   color: var(--gray-ui-text, rgba(24, 24, 27, 0.94));
 }
 
 :global(html.light) .mobileToggleOption:hover:not([data-active="true"]) {
-  background: var(--gray-ui-hover, rgba(0, 0, 0, 0.06));
+  background: transparent;
   color: var(--gray-ui-text, rgba(24, 24, 27, 0.88));
 }
