@@ -46,6 +46,7 @@ export const useChatViewScroll = ({
   const programmaticScrollResetTimeoutRef = useRef<number | null>(null);
   const userScrollIntentRef = useRef(false);
   const userScrollIntentResetTimeoutRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
   const [composerHeight, setComposerHeight] = useState(0);
   const prevMessageCountRef = useRef(0);
   const prevSessionKeyRef = useRef<string | null>(null);
@@ -62,6 +63,19 @@ export const useChatViewScroll = ({
       window.clearTimeout(timeoutId);
     }
     initialSyncTimersRef.current = [];
+  }, []);
+
+  const clearProgrammaticScrollLock = useCallback(() => {
+    if (typeof window === "undefined") {
+      isProgrammaticScrollRef.current = false;
+      programmaticScrollResetTimeoutRef.current = null;
+      return;
+    }
+    if (programmaticScrollResetTimeoutRef.current !== null) {
+      window.clearTimeout(programmaticScrollResetTimeoutRef.current);
+      programmaticScrollResetTimeoutRef.current = null;
+    }
+    isProgrammaticScrollRef.current = false;
   }, []);
 
   const scrollToBottom = useCallback(() => {
@@ -178,18 +192,14 @@ export const useChatViewScroll = ({
       if (typeof window === "undefined") {
         return;
       }
-      if (programmaticScrollResetTimeoutRef.current !== null) {
-        window.clearTimeout(programmaticScrollResetTimeoutRef.current);
-        programmaticScrollResetTimeoutRef.current = null;
-      }
+      clearProgrammaticScrollLock();
       if (userScrollIntentResetTimeoutRef.current !== null) {
         window.clearTimeout(userScrollIntentResetTimeoutRef.current);
         userScrollIntentResetTimeoutRef.current = null;
       }
-      isProgrammaticScrollRef.current = false;
       userScrollIntentRef.current = false;
     },
-    []
+    [clearProgrammaticScrollLock]
   );
 
   const streamingTargetId = useMemo(() => {
@@ -227,23 +237,31 @@ export const useChatViewScroll = ({
     }
     const threshold = 120;
     const currentScrollTop = viewport.scrollTop;
+    const previousScrollTop = lastScrollTopRef.current;
     const isNearBottom = viewport.scrollHeight - currentScrollTop - viewport.clientHeight <= threshold;
+    const didScrollUp = currentScrollTop < previousScrollTop - 1;
+    const didScrollDown = currentScrollTop > previousScrollTop + 1;
     lastScrollTopRef.current = currentScrollTop;
     isAtBottomRef.current = isNearBottom;
+    if (didScrollUp) {
+      // Respect manual upward scrolling immediately, even if programmatic scroll is active.
+      userScrolledAwayRef.current = true;
+      isAtBottomRef.current = false;
+      clearProgrammaticScrollLock();
+      return;
+    }
     if (isProgrammaticScrollRef.current) {
-      if (isNearBottom) {
-        userScrolledAwayRef.current = false;
-      }
       return;
     }
     if (!isNearBottom && userScrollIntentRef.current) {
       userScrolledAwayRef.current = true;
       return;
     }
-    if (isNearBottom) {
+    // Only re-arm auto-follow after a deliberate downward move toward bottom.
+    if (isNearBottom && didScrollDown) {
       userScrolledAwayRef.current = false;
     }
-  }, []);
+  }, [clearProgrammaticScrollLock]);
 
   // When streaming begins (activeStreamingMessageId becomes non-null), auto-scroll to bottom
   // This ensures users see the AI response even if they weren't at the bottom
@@ -308,8 +326,30 @@ export const useChatViewScroll = ({
       return;
     }
 
-    const markUserScrollIntent = () => {
+    const markUserScrollIntent = (event: WheelEvent | TouchEvent | PointerEvent) => {
       userScrollIntentRef.current = true;
+      if (event.type === "wheel") {
+        const wheelEvent = event as WheelEvent;
+        if (wheelEvent.deltaY < -0.1) {
+          userScrolledAwayRef.current = true;
+          isAtBottomRef.current = false;
+          clearProgrammaticScrollLock();
+        }
+      } else if (event.type === "touchstart") {
+        const touchStart = (event as TouchEvent).touches?.[0];
+        touchStartYRef.current = touchStart?.clientY ?? null;
+      } else if (event.type === "touchmove") {
+        const touchMove = (event as TouchEvent).touches?.[0];
+        if (touchMove && touchStartYRef.current !== null) {
+          const deltaY = touchMove.clientY - touchStartYRef.current;
+          // On touch devices, pulling finger downward typically scrolls content upward.
+          if (deltaY > 2) {
+            userScrolledAwayRef.current = true;
+            isAtBottomRef.current = false;
+            clearProgrammaticScrollLock();
+          }
+        }
+      }
       const nearBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 120;
       if (!nearBottom) {
         userScrolledAwayRef.current = true;
@@ -338,8 +378,9 @@ export const useChatViewScroll = ({
         userScrollIntentResetTimeoutRef.current = null;
       }
       userScrollIntentRef.current = false;
+      touchStartYRef.current = null;
     };
-  }, [hasHydrated, sessionKey]);
+  }, [clearProgrammaticScrollLock, hasHydrated, sessionKey]);
 
   useLayoutEffect(() => {
     const composer = composerDockRef.current;

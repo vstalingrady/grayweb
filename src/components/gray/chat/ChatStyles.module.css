@@ -1090,8 +1090,9 @@
 }
 
 .chatStreamingToken {
-  display: inline;
-  animation: chatTokenFadeIn 1s ease-out both;
+  display: inline-block;
+  animation: chatTokenFadeIn 240ms ease-out both;
+  will-change: opacity;
 }
 
 .chatStreamingText {

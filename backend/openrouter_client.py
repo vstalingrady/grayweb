@@ -177,6 +177,9 @@ def _store_cached_pdf_text_from_grounding(
             store_cached_pdf_text(cache_key, text)
 
 
+OPENROUTER_LITE_MODEL = "xiaomi/mimo-v2-flash"
+
+
 class OpenRouterService:
     """Client for OpenRouter API supporting various LLM models."""
 
@@ -200,7 +203,10 @@ class OpenRouterService:
         "gpt-5.2-chat": "openai/gpt-5.2-chat",
         "gpt-5.2-pro": "openai/gpt-5.2-pro",
         "openai/gpt-oss-120b:fast": "openai/gpt-oss-120b",
-        "z-ai/glm-4.7:fast": "z-ai/glm-4.7",
+        "z-ai/glm-5:fast": "z-ai/glm-5",
+        # Backward compatibility for older stored selections.
+        "z-ai/glm-4.7": "z-ai/glm-5",
+        "z-ai/glm-4.7:fast": "z-ai/glm-5",
         "gpt-4o": "openai/gpt-4o",
         "gpt-4-turbo": "openai/gpt-4-turbo",
         "gpt-4o-mini": "openai/gpt-4o-mini",
@@ -221,8 +227,12 @@ class OpenRouterService:
         "grok-3": "x-ai/grok-3",
         "grok-2": "x-ai/grok-2-1212",
         # Google Gemini models (via OpenRouter)
-        "gemini-3-pro": "google/gemini-3-pro-preview",
-        "gemini-3-flash": "google/gemini-3-flash-preview",
+        "gemini-3-pro": "google/gemini-3.1-pro-preview",
+        "gemini-3-flash": "google/gemini-3.1-flash",
+        # Backward compatibility for older stored selections.
+        "google/gemini-3-pro-preview": "google/gemini-3.1-pro-preview",
+        "google/gemini-3-flash-preview": "google/gemini-3.1-flash",
+        "qwen/qwen3-max-thinking": "qwen/qwen3.5-plus-02-15",
         # Default fallback
         "default": "anthropic/claude-sonnet-4.5",
     }
@@ -243,14 +253,16 @@ class OpenRouterService:
         "openai/gpt-5.2": "openai/gpt-5.2-chat",
     }
 
-    # Models where reasoning is ALWAYS on (toggle should be grayed out in frontend)
-    # These models don't need/support the reasoning param - they always reason
+    # Models where reasoning is ALWAYS on at the provider level.
+    # Frontend may still expose effort controls (for example Gemini 3 Pro low/high).
     ALWAYS_REASONING_MODELS = {
         "deepseek/deepseek-v3.2-speciale",  # Speciale variant always reasons
         "openai/gpt-5.2",  # The reasoning variant of gpt-5.2
         "openai/gpt-5.2-pro",
         "moonshotai/kimi-k2.5",  # Kimi K2.5 streams reasoning by default
-        "google/gemini-3-pro-preview",  # Gemini 3 Pro always emits reasoning details
+        "google/gemini-3.1-pro-preview",  # Gemini 3.1 Pro supports low/high reasoning effort
+        # Legacy compatibility for pre-3.1 model ids.
+        "google/gemini-3-pro-preview",
     }
 
     # Non-reasoning fallbacks to avoid hidden reasoning tokens when reasoning_mode is disabled.
@@ -287,15 +299,18 @@ class OpenRouterService:
         "moonshotai/kimi-k2.5": 262_144,
         "moonshotai/kimi-k2-0905": 262_144,
         # MiniMax models
-        "minimax/minimax-m2.1": 205_000,
+        "minimax/minimax-m2.5": 205_000,
         "minimax/minimax-m2-her": 65_536,
         # xAI Grok models
         "x-ai/grok-4.1-fast": 2_000_000,  # 2M context
         "x-ai/grok-3": 131_072,
         "x-ai/grok-2-1212": 131_072,
         # Google Gemini (via OpenRouter)
-        "google/gemini-3-pro-preview": 1_048_576,  # 1M context
-        "google/gemini-3-flash-preview": 1_048_576,  # 1M context
+        "google/gemini-3.1-pro-preview": 1_048_576,  # 1M context
+        "google/gemini-3.1-flash": 1_048_576,  # 1M context
+        # Legacy aliases
+        "google/gemini-3-pro-preview": 1_048_576,
+        "google/gemini-3-flash-preview": 1_048_576,
     }
 
     @classmethod
@@ -322,16 +337,22 @@ class OpenRouterService:
         }
         # Anthropic and Google Gemini require explicit cache_control breakpoints.
         # OpenAI, DeepSeek, Grok, Moonshot, Groq have automatic caching.
-        cache_prefixes = os.getenv("OPENROUTER_PROMPT_CACHE_PREFIXES", "anthropic/,google/")
+        cache_prefixes_raw = os.getenv("OPENROUTER_PROMPT_CACHE_PREFIXES")
+        cache_prefixes = cache_prefixes_raw if cache_prefixes_raw is not None else "anthropic/,google/"
+        self._prompt_cache_all_models = cache_prefixes.strip() == "*"
         self._prompt_cache_prefixes = [
             prefix.strip().lower() for prefix in cache_prefixes.split(",") if prefix.strip()
         ]
-        self._lite_model = os.getenv("OPENROUTER_LITE_MODEL", "xiaomi/mimo-v2-flash:free")
+        # Empty env values should not force cache_control on every model.
+        if cache_prefixes_raw is not None and not cache_prefixes.strip():
+            self._prompt_cache_prefixes = ["anthropic/", "google/"]
+        self._lite_model = OPENROUTER_LITE_MODEL
         self._default_model = os.getenv("OPENROUTER_DEFAULT_MODEL", self.MODEL_MAPPINGS["default"])
         base_url = os.getenv("OPENROUTER_BASE_URL")
         if provider == "moltbot":
             base_url = os.getenv("MOLTBOT_BASE_URL") or base_url or "http://127.0.0.1:18789/v1"
-        self._base_url = (base_url or self.BASE_URL).rstrip("/")
+        normalized_base_url = _trim(base_url) or self.BASE_URL
+        self._base_url = normalized_base_url.strip("\"'").rstrip("/")
         # Keep a small window for the free/lite path, but widen it for Pioneer-grade models
         # so onboarding context is not dropped mid-flow.
         self._max_history_lite = _int_env("OPENROUTER_MAX_HISTORY_MESSAGES", 10)
@@ -440,8 +461,10 @@ class OpenRouterService:
         model_lower = (resolved_model or "").strip().lower()
         if not model_lower:
             return False
-        if not self._prompt_cache_prefixes:
+        if self._prompt_cache_all_models:
             return True
+        if not self._prompt_cache_prefixes:
+            return False
         return any(model_lower.startswith(prefix) for prefix in self._prompt_cache_prefixes)
 
     def _wrap_cache_control(self, text: str, model: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -463,8 +486,9 @@ class OpenRouterService:
         return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
 
     def _can_cache_history(self, model: Optional[str]) -> bool:
-        model_lower = (model or "").strip().lower()
-        return model_lower.startswith(("anthropic/", "google/"))
+        # Keep history cache policy aligned with system prompt cache policy so
+        # OPENROUTER_PROMPT_CACHE / OPENROUTER_PROMPT_CACHE_PREFIXES apply consistently.
+        return self._should_cache_prompt(model)
 
     def _build_messages(
         self,
@@ -474,20 +498,17 @@ class OpenRouterService:
         attachments: Optional[List[Any]] = None,
         *,
         history_token_budget: Optional[int] = None,
-        runtime_context: Optional[str] = None,
+        runtime_context: Optional[Any] = None,
         cache_model: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Build messages array from conversation history, current message, and attachments."""
         history = conversation_history or []
         if history_token_budget is not None and history_token_budget > 0:
             recent_history = trim_history_by_token_budget(history, history_token_budget)
-            history_trimmed = len(recent_history) < len(history)
         else:
             recent_history = history[-history_limit:] if history_limit > 0 else history
-            history_trimmed = history_limit > 0 and len(recent_history) < len(history)
         payload: List[Dict[str, Any]] = []
-        applied_history_cache = False
-        should_cache_history = self._can_cache_history(cache_model) and not history_trimmed
+        should_cache_history = self._can_cache_history(cache_model)
         
         for entry in recent_history:
             role = entry.get("role")
@@ -519,17 +540,21 @@ class OpenRouterService:
                 continue
             # OpenRouter uses "assistant" for model responses
             openrouter_role = "assistant" if role == "model" else "user"
-            if should_cache_history and not applied_history_cache:
+            if should_cache_history:
                 payload.append({
                     "role": openrouter_role,
                     "content": self._wrap_cache_control(text, cache_model),
                 })
-                applied_history_cache = True
             else:
                 payload.append({"role": openrouter_role, "content": text})
         
         trimmed_message = _trim(message)
-        current_user_turn_added = False
+        if isinstance(runtime_context, list):
+            runtime_entries = runtime_context
+        else:
+            runtime_entries = self._build_runtime_context(runtime_context) or []
+        if runtime_entries:
+            payload.append(self._build_runtime_context_message(runtime_entries, cache_model))
         
         # If we have attachments, we need to construct a multipart message
         if attachments:
@@ -592,30 +617,11 @@ class OpenRouterService:
 
             if content_parts:
                 payload.append({"role": "user", "content": content_parts})
-                current_user_turn_added = True
             elif trimmed_message:  # Fallback if no valid attachments processed
                 payload.append({"role": "user", "content": trimmed_message})
-                current_user_turn_added = True
 
         elif trimmed_message:
             payload.append({"role": "user", "content": trimmed_message})
-            current_user_turn_added = True
-        
-        # Append runtime context to the current user turn so volatile context
-        # (time/calendar/memory) does not destabilize cacheable prompt prefixes.
-        runtime_text = _trim(runtime_context)
-        if runtime_text:
-            runtime_block = f"[Runtime context]\n{runtime_text}"
-            if current_user_turn_added and payload and payload[-1].get("role") == "user":
-                content = payload[-1].get("content")
-                if isinstance(content, str):
-                    payload[-1]["content"] = "\n\n".join(filter(None, [content, runtime_block]))
-                elif isinstance(content, list):
-                    content.append({"type": "text", "text": runtime_block})
-                else:
-                    payload.append({"role": "user", "content": runtime_block})
-            else:
-                payload.append({"role": "system", "content": runtime_text})
 
         return payload
 
@@ -645,11 +651,63 @@ class OpenRouterService:
         
         return "\n\n".join(pieces) if pieces else None
 
-    def _build_runtime_context(self, time_context: Optional[str]) -> Optional[str]:
+    def _build_runtime_context(self, time_context: Optional[str | Dict[str, Any]]) -> Optional[List[Dict[str, Any]]]:
+        """Build ordered runtime context entries.
+
+        Supports legacy string runtime context and structured payloads:
+        {"parts": [{"text": "...", "cacheable": bool}, ...]}.
+        """
+        if isinstance(time_context, dict):
+            parts = time_context.get("parts")
+            if not isinstance(parts, list):
+                return None
+            entries: List[Dict[str, Any]] = []
+            for part in parts:
+                if not isinstance(part, dict):
+                    continue
+                text = _trim(part.get("text"))
+                if not text:
+                    continue
+                entries.append({"text": text, "cacheable": bool(part.get("cacheable"))})
+            return entries or None
         trimmed = _trim(time_context)
         if not trimmed:
             return None
-        return "<context>\n" + trimmed + "\n</context>"
+        return [{"text": trimmed, "cacheable": False}]
+
+    def _build_runtime_context_message(
+        self,
+        runtime_entries: List[Dict[str, Any]],
+        cache_model: Optional[str],
+    ) -> Dict[str, Any]:
+        normalized_entries: List[Dict[str, Any]] = []
+        for entry in runtime_entries:
+            if not isinstance(entry, dict):
+                continue
+            text = entry.get("text")
+            if not isinstance(text, str):
+                continue
+            normalized_entries.append({"text": text, "cacheable": bool(entry.get("cacheable"))})
+
+        texts = [entry["text"] for entry in normalized_entries]
+        if not texts:
+            return {"role": "system", "content": "<context>\n</context>"}
+        wrapped_text = "<context>\n" + "\n\n".join(texts) + "\n</context>"
+        should_cache_parts = self._should_cache_prompt(cache_model)
+        has_cacheable_segment = any(bool(entry.get("cacheable")) for entry in normalized_entries)
+        if not should_cache_parts or not has_cacheable_segment:
+            return {"role": "system", "content": wrapped_text}
+        content_parts: List[Dict[str, Any]] = [{"type": "text", "text": "<context>\n"}]
+        for index, entry in enumerate(normalized_entries):
+            text = entry["text"]
+            if entry.get("cacheable"):
+                content_parts.extend(self._wrap_cache_control(text, cache_model))
+            else:
+                content_parts.append({"type": "text", "text": text})
+            if index < len(normalized_entries) - 1:
+                content_parts.append({"type": "text", "text": "\n\n"})
+        content_parts.append({"type": "text", "text": "\n</context>"})
+        return {"role": "system", "content": content_parts}
 
     def _build_headers(self, extra_headers: Optional[Dict[str, str]] = None) -> Dict[str, str]:
         """Build request headers for OpenRouter API."""
@@ -774,13 +832,38 @@ class OpenRouterService:
 
         return plugin_list or None
 
+    def _build_404_retry_payloads(self, payload: Dict[str, Any]) -> List[Tuple[str, Dict[str, Any]]]:
+        """Build progressively simplified payloads for OpenRouter 404 retries."""
+        retry_steps: List[Tuple[str, Tuple[str, ...]]] = [
+            ("drop_routing_hints", ("provider", "transforms")),
+            ("drop_search_params", ("plugins", "web_search_options")),
+            ("drop_tools", ("tools", "tool_choice")),
+            ("drop_strict_output", ("response_format", "reasoning")),
+        ]
+        retries: List[Tuple[str, Dict[str, Any]]] = []
+        current_payload = dict(payload)
+        for label, keys in retry_steps:
+            if not any(key in current_payload for key in keys):
+                continue
+            next_payload = dict(current_payload)
+            for key in keys:
+                next_payload.pop(key, None)
+            if next_payload == current_payload:
+                continue
+            if any(next_payload == existing for _, existing in retries):
+                current_payload = next_payload
+                continue
+            retries.append((label, next_payload))
+            current_payload = next_payload
+        return retries
+
     async def generate(
         self,
         message: str,
         conversation_history: Optional[List[Dict[str, Any]]] = None,
         workspace_context: Optional[str] = None,
         system_prompt: Optional[str] = None,
-        time_context: Optional[str] = None,
+        time_context: Optional[str | Dict[str, Any]] = None,
         model: Optional[str] = None,
         attachments: Optional[List[Any]] = None,
         include_usage: bool = False,
@@ -874,13 +957,33 @@ class OpenRouterService:
                 payload["messages"].insert(0, {"role": "system", "content": system})
 
         client = await self._get_client()
-        response = await client.post(
-            f"{self._base_url}/chat/completions",
-            headers=self._build_headers(extra_headers),
-            json=payload,
-        )
+        _logger = logging.getLogger("openrouter_client")
+        endpoint = f"{self._base_url}/chat/completions"
+        payload_variants = [("primary", payload), *self._build_404_retry_payloads(payload)]
+        response: Optional[httpx.Response] = None
+        for attempt, (variant_name, request_payload) in enumerate(payload_variants, start=1):
+            response = await client.post(
+                endpoint,
+                headers=self._build_headers(extra_headers),
+                json=request_payload,
+            )
+            if response.status_code == 404 and attempt < len(payload_variants):
+                _logger.warning(
+                    "OpenRouter non-stream request returned 404; retrying with simplified payload",
+                    extra={
+                        "status_code": response.status_code,
+                        "response_text": response.text[:1000],
+                        "model": resolved_model,
+                        "retry_payload_variant": variant_name,
+                        "retry_attempt": attempt,
+                        "retry_total": len(payload_variants),
+                    },
+                )
+                continue
+            break
+        if response is None:
+            raise RuntimeError("OpenRouter request failed before receiving a response")
         if response.status_code >= 400:
-            _logger = logging.getLogger("openrouter_client")
             _logger.error(
                 "OpenRouter non-stream request failed",
                 extra={
@@ -932,7 +1035,7 @@ class OpenRouterService:
         conversation_history: Optional[List[Dict[str, Any]]] = None,
         workspace_context: Optional[str] = None,
         system_prompt: Optional[str] = None,
-        time_context: Optional[str] = None,
+        time_context: Optional[str | Dict[str, Any]] = None,
         model: Optional[str] = None,
         include_usage: bool = False,
         response_format: Optional[Dict[str, Any]] = None,
@@ -1045,7 +1148,7 @@ class OpenRouterService:
             # Skip for grok-4 models which error on reasoning param
             is_grok4 = "grok-4" in resolved_model.lower() or "grok4" in resolved_model.lower()
             is_kimi_k25 = resolved_model.lower() == "moonshotai/kimi-k2.5"
-            is_gemini_3_pro = resolved_model.lower() == "google/gemini-3-pro-preview"
+            is_gemini_3_pro = resolved_model.lower() in {"google/gemini-3.1-pro-preview", "google/gemini-3-pro-preview"}
             if not is_grok4 and not is_kimi_k25:
                 effort = "high"
                 if is_gemini_3_pro and not reasoning_mode:
@@ -1072,126 +1175,174 @@ class OpenRouterService:
                 payload["messages"].insert(0, {"role": "system", "content": system})
 
         client = await self._get_client()
-        async with client.stream(
-            "POST",
-            f"{self._base_url}/chat/completions",
-            headers=self._build_headers(extra_headers),
-            json=payload,
-        ) as response:
-            if response.status_code >= 400:
-                body = await response.aread()
-                _logger.error(
-                    "OpenRouter stream request failed",
-                    extra={
-                        "status_code": response.status_code,
-                        "response_text": body.decode("utf-8", errors="replace")[:1000],
-                        "model": resolved_model,
-                    },
-                )
-            response.raise_for_status()
-            
-            buffer = ""
-            async for chunk in response.aiter_text():
-                buffer += chunk
+        endpoint = f"{self._base_url}/chat/completions"
+        payload_variants = [("primary", payload), *self._build_404_retry_payloads(payload)]
+        for attempt, (variant_name, request_payload) in enumerate(payload_variants, start=1):
+            async with client.stream(
+                "POST",
+                endpoint,
+                headers=self._build_headers(extra_headers),
+                json=request_payload,
+            ) as response:
+                if response.status_code == 404 and attempt < len(payload_variants):
+                    body = await response.aread()
+                    _logger.warning(
+                        "OpenRouter stream request returned 404; retrying with simplified payload",
+                        extra={
+                            "status_code": response.status_code,
+                            "response_text": body.decode("utf-8", errors="replace")[:1000],
+                            "model": resolved_model,
+                            "retry_payload_variant": variant_name,
+                            "retry_attempt": attempt,
+                            "retry_total": len(payload_variants),
+                        },
+                    )
+                    continue
+                if response.status_code >= 400:
+                    body = await response.aread()
+                    _logger.error(
+                        "OpenRouter stream request failed",
+                        extra={
+                            "status_code": response.status_code,
+                            "response_text": body.decode("utf-8", errors="replace")[:1000],
+                            "model": resolved_model,
+                        },
+                    )
+                response.raise_for_status()
+                
+                buffer = ""
+                async for chunk in response.aiter_text():
+                    buffer += chunk
 
-                while "\n" in buffer:
-                    line, buffer = buffer.split("\n", 1)
-                    line = line.strip()
-                    if not line:
-                        continue
-                    
-                    if line.startswith("data: "):
-                        data_str = line[6:]
-                        try:
-                            if data_str == "[DONE]":
-                                return
+                    while "\n" in buffer:
+                        line, buffer = buffer.split("\n", 1)
+                        line = line.strip()
+                        if not line:
+                            continue
+                        
+                        if line.startswith("data: "):
+                            data_str = line[6:]
+                            try:
+                                if data_str == "[DONE]":
+                                    return
 
-                            import json
-                            data = json.loads(data_str)
-                            
-                            # Check for mid-stream errors (per OpenRouter docs)
-                            if "error" in data:
-                                yield {"error": data["error"]}
-                                return
-                            
-                            if "choices" in data and len(data["choices"]) > 0:
-                                choice = data["choices"][0]
-                                finish_reason = choice.get("finish_reason")
+                                import json
+                                data = json.loads(data_str)
                                 
-                                # Handle error finish reason
-                                if finish_reason == "error":
-                                    error_msg = choice.get("delta", {}).get("content") or "Stream error"
-                                    yield {"error": {"message": error_msg}}
+                                # Check for mid-stream errors (per OpenRouter docs)
+                                if "error" in data:
+                                    yield {"error": data["error"]}
                                     return
                                 
-                                delta = choice.get("delta", {})
-                                content = delta.get("content")
-                                tool_calls = delta.get("tool_calls")
-                                annotations = _extract_annotations_from_delta(delta, choice)
-                                if annotations:
-                                    _store_cached_pdf_text_from_grounding(
-                                        openrouter_annotations_to_grounding(annotations),
-                                        attachments,
-                                    )
-                                    yield {"annotations": annotations}
-                                
-                                if tool_calls:
-                                    yield {"tool_calls": tool_calls}
-                                
-                                # Handle reasoning content - both plaintext and encrypted.
-                                # Only surface reasoning when explicitly enabled to avoid leaking tags.
-                                allow_reasoning = effective_reasoning_mode
-                                reasoning = delta.get("reasoning") or delta.get("reasoning_content")
-                                yielded_reasoning = False
-                                if allow_reasoning and reasoning:
-                                    yield {"type": "reasoning", "content": reasoning}
-                                    yielded_reasoning = True
-
-                                # Handle reasoning_details (may contain encrypted xAI reasoning)
-                                reasoning_pieces = []
-                                details = delta.get("reasoning_details") or []
-                                if isinstance(details, list):
-                                    for item in details:
-                                        if not isinstance(item, dict):
-                                            continue
-                                        if allow_reasoning and item.get("type") == "reasoning.encrypted":
-                                            # Emit a thinking indicator for encrypted reasoning
-                                            yield {"type": "reasoning_active", "encrypted": True}
-                                        txt = item.get("text")
-                                        if txt:
-                                            reasoning_pieces.append(txt)
-
-                                # If reasoning is disabled and content is empty, avoid leaking thought text.
-                                if not allow_reasoning and not content:
-                                    if reasoning or reasoning_pieces:
-                                        _logger.info(
-                                            "[OpenRouter] Dropped reasoning-only chunk because reasoning_mode is disabled"
+                                if "choices" in data and len(data["choices"]) > 0:
+                                    choice = data["choices"][0]
+                                    finish_reason = choice.get("finish_reason")
+                                    
+                                    # Handle error finish reason
+                                    if finish_reason == "error":
+                                        error_msg = choice.get("delta", {}).get("content") or "Stream error"
+                                        yield {"error": {"message": error_msg}}
+                                        return
+                                    
+                                    delta = choice.get("delta", {})
+                                    content = delta.get("content")
+                                    tool_calls = delta.get("tool_calls")
+                                    annotations = _extract_annotations_from_delta(delta, choice)
+                                    if annotations:
+                                        _store_cached_pdf_text_from_grounding(
+                                            openrouter_annotations_to_grounding(annotations),
+                                            attachments,
                                         )
+                                        yield {"annotations": annotations}
+                                    
+                                    if tool_calls:
+                                        yield {"tool_calls": tool_calls}
+                                    
+                                    # Handle reasoning content - both plaintext and encrypted.
+                                    # Only surface reasoning when explicitly enabled to avoid leaking tags.
+                                    allow_reasoning = effective_reasoning_mode
+                                    reasoning = delta.get("reasoning") or delta.get("reasoning_content")
+                                    yielded_reasoning = False
+                                    if allow_reasoning and reasoning:
+                                        yield {"type": "reasoning", "content": reasoning}
+                                        yielded_reasoning = True
 
-                                # DeepSeek can mirror text in both reasoning_content and content.
-                                # Other providers may include distinct visible content in the same delta,
-                                # so only suppress duplicated content for DeepSeek-family models.
-                                suppress_content_for_duplicate_reasoning = (
-                                    allow_reasoning
-                                    and yielded_reasoning
-                                    and "deepseek" in resolved_model.lower()
+                                    # Handle reasoning_details (may contain encrypted xAI reasoning)
+                                    reasoning_pieces = []
+                                    details = delta.get("reasoning_details") or []
+                                    if isinstance(details, list):
+                                        for item in details:
+                                            if not isinstance(item, dict):
+                                                continue
+                                            if allow_reasoning and item.get("type") == "reasoning.encrypted":
+                                                # Emit a thinking indicator for encrypted reasoning
+                                                yield {"type": "reasoning_active", "encrypted": True}
+                                            txt = item.get("text")
+                                            if txt:
+                                                reasoning_pieces.append(txt)
+
+                                    # If reasoning is disabled and content is empty, avoid leaking thought text.
+                                    if not allow_reasoning and not content:
+                                        if reasoning or reasoning_pieces:
+                                            _logger.info(
+                                                "[OpenRouter] Dropped reasoning-only chunk because reasoning_mode is disabled"
+                                            )
+
+                                    # Some providers mirror reasoning text in both reasoning fields and content.
+                                    # Suppress content when it duplicates reasoning payload to avoid
+                                    # mixing internal thoughts into the visible answer.
+                                    normalized_content = (
+                                        " ".join(str(content).split()).strip().lower()
+                                        if isinstance(content, str)
+                                        else ""
+                                    )
+                                    normalized_reasoning = (
+                                        " ".join(str(reasoning).split()).strip().lower()
+                                        if isinstance(reasoning, str)
+                                        else ""
+                                    )
+                                    normalized_reasoning_details = (
+                                        " ".join("".join(reasoning_pieces).split()).strip().lower()
+                                        if reasoning_pieces
+                                        else ""
+                                    )
+                                    duplicate_reasoning_content = bool(
+                                        normalized_content
+                                        and (
+                                            (normalized_reasoning and normalized_content == normalized_reasoning)
+                                            or (
+                                                normalized_reasoning_details
+                                                and normalized_content == normalized_reasoning_details
+                                            )
+                                        )
+                                    )
+
+                                    # DeepSeek can mirror text in both reasoning_content and content.
+                                    suppress_content_for_duplicate_reasoning = (
+                                        duplicate_reasoning_content
+                                        or (
+                                            allow_reasoning
+                                            and yielded_reasoning
+                                            and "deepseek" in resolved_model.lower()
+                                        )
+                                    )
+                                    if content and not suppress_content_for_duplicate_reasoning:
+                                        yield content
+                                    elif allow_reasoning and reasoning_pieces and not yielded_reasoning:
+                                        # Plaintext reasoning_details support
+                                        yield {"type": "reasoning", "content": "".join(reasoning_pieces)}
+
+                                    if include_usage and "usage" in data:
+                                        yield {"usage": data["usage"]}
+                            except json.JSONDecodeError:
+                                continue
+                            except asyncio.CancelledError:
+                                raise
+                            except Exception as e:
+                                _logger.warning(
+                                    "OpenRouter stream parse error",
+                                    extra={"event_type": "fallback_activation", "fallback": "openrouter_stream_parse_error", "error": str(e)},
                                 )
-                                if content and not suppress_content_for_duplicate_reasoning:
-                                    yield content
-                                elif allow_reasoning and reasoning_pieces and not yielded_reasoning:
-                                    # Plaintext reasoning_details support
-                                    yield {"type": "reasoning", "content": "".join(reasoning_pieces)}
-
-                                if include_usage and "usage" in data:
-                                    yield {"usage": data["usage"]}
-                        except json.JSONDecodeError:
-                            continue
-                        except asyncio.CancelledError:
-                            raise
-                        except Exception as e:
-                            _logger.warning(
-                                "OpenRouter stream parse error",
-                                extra={"event_type": "fallback_activation", "fallback": "openrouter_stream_parse_error", "error": str(e)},
-                            )
-                            yield {"error": {"message": str(e)}}
-                            return
+                                yield {"error": {"message": str(e)}}
+                                return
+                return

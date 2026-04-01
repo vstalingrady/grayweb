@@ -201,7 +201,7 @@ function GrayPageClientInner({
   // Derived state for hooks
   const userId = typeof user?.id === "number" ? user.id : null;
   const normalizedTier = useMemo(() => normalizePlanTier(user), [user]);
-  const hasCalendarAccess = normalizedTier === "voyager" || normalizedTier === "pioneer";
+  const hasCalendarAccess = userId !== null;
   const resolvedTimezone = useMemo(() => {
     try {
       return Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
@@ -1653,7 +1653,8 @@ function GrayPageClientInner({
     },
     [greeting, shouldShowWorkspaceGreeting, normalizedTier, streakCount]
   );
-  const dashboardTabAttr = isDashboardView ? dashboardTab : undefined;
+  const dashboardTabAttr =
+    isDashboardView || (isMobileViewport && mobilePulseActive) ? dashboardTab : undefined;
   const isMobileCalendarView =
     isMobileViewport &&
     (dashboardTab === "calendar" || activeNav === "calendar" || pathname?.startsWith("/cal"));

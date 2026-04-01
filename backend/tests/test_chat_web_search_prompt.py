@@ -39,3 +39,22 @@ def test_non_follow_up_prompt_omits_context_anchors() -> None:
     assert prompt is not None
     assert "Recent user context to anchor follow-up search:" not in prompt
     assert "Recent assistant context to anchor follow-up search:" not in prompt
+
+
+def test_low_information_search_turn_anchors_recent_context() -> None:
+    request = _build_request("search")
+    history = [
+        {"role": "user", "text": "was pope john paul in the epstein files"},
+        {
+            "role": "model",
+            "text": "I can verify that with sources, and I will summarize what the files actually mention.",
+        },
+    ]
+
+    prompt = _build_effective_web_search_prompt(request, conversation_history=history)
+
+    assert prompt is not None
+    assert "Recent user context to anchor follow-up search:" in prompt
+    assert "epstein files" in prompt.lower()
+    assert "Recent assistant context to anchor follow-up search:" not in prompt
+    assert "Low-information search turn detected." in prompt

@@ -288,26 +288,165 @@ export function DashboardPulseGrid({
     [eventsForDay, t]
   );
 
-  const rootClassName = isCompactLayout ? styles.mobilePulseLayout : styles.dashboardGridFinal;
-  const calendarSectionClassName = isCompactLayout
-    ? `${styles.mobilePulseSection} ${styles.mobilePulseCalendarSection}`
-    : `${styles.dashboardCard} ${styles.dashboardCardCalendar}`;
-  const eventsSectionClassName = isCompactLayout
-    ? `${styles.mobilePulseSection} ${styles.mobilePulseEventsSection}`
-    : `${styles.dashboardCard} ${styles.dashboardCardEvents}`;
-  const proactivitySectionClassName = isCompactLayout
-    ? `${styles.mobilePulseSection} ${styles.mobilePulseProactivitySection}`
-    : `${styles.dashboardCard} ${styles.dashboardCardProactivity}`;
-  const bodyClassName = isCompactLayout
-    ? `${styles.dashboardCardBody} ${styles.mobilePulseSectionBody}`
-    : styles.dashboardCardBody;
+  const selectedDayLabel = useMemo(
+    () =>
+      selectedDay.toLocaleDateString(undefined, {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      }),
+    [selectedDay]
+  );
+
+  if (isCompactLayout) {
+    return (
+      <div className={styles.compactPulseStack}>
+        <section className={`${styles.compactPulseSection} ${styles.compactCalendarSection}`}>
+          <div className={styles.compactSectionHeader}>
+            <div className={styles.compactHeaderCopy}>
+              <h2 className={styles.compactSectionTitle}>{t("Calendar")}</h2>
+              <span className={styles.compactSectionMeta}>{selectedDayLabel}</span>
+            </div>
+            <div className={styles.miniCalendarHeaderControls}>
+              <button
+                type="button"
+                className={styles.miniCalendarNavButton}
+                aria-label={t("Previous")}
+                title={t("Go to previous month")}
+                onClick={() => shiftCalendarMonth(-1)}
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <button
+                type="button"
+                className={styles.miniCalendarNavButton}
+                aria-label={t("Next")}
+                title={t("Go to next month")}
+                onClick={() => shiftCalendarMonth(1)}
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+          <div className={`${styles.compactSectionBody} ${styles.compactCalendarBody}`}>
+            <div className={styles.compactMonthLabel}>{calendarMonthLabel}</div>
+            <div className={styles.compactMiniMonthShell}>
+              <div className={styles.miniCalendarCompact}>
+                <MiniMonth
+                  referenceDate={calendarReferenceDate}
+                  selectedDate={selectedDay}
+                  onSelectDate={handleMiniMonthSelect}
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className={`${styles.compactPulseSection} ${styles.compactEventsSection}`}>
+          <div className={styles.compactSectionHeader}>
+            <h2 className={styles.compactSectionTitle}>{t("Events")}</h2>
+            {onAddEvent ? (
+              <button
+                type="button"
+                className={styles.dashboardCardAction}
+                onClick={() => onAddEvent(selectedDay)}
+                aria-label={t("Add event")}
+              >
+                <Plus size={18} />
+              </button>
+            ) : null}
+          </div>
+          <div className={styles.compactSectionBody}>
+            {eventEntries.length > 0 ? (
+              <ul className={`${styles.dashboardEventList} ${styles.compactEventList}`}>
+                {eventEntries.map((entry) => (
+                  <li key={`event-${entry.id}`} className={styles.dashboardEventItem}>
+                    <div
+                      className={styles.dashboardEventMarker}
+                      style={{ backgroundColor: entry.color }}
+                    />
+                    <div className={styles.dashboardEventInfo}>
+                      <div className={styles.dashboardEventTitle}>{entry.title}</div>
+                      <div className={styles.dashboardEventTime}>{entry.meta}</div>
+                      {entry.details ? (
+                        <div className={styles.dashboardEventDetails}>{entry.details}</div>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className={styles.dashboardListEmpty}>
+                {isViewingToday
+                  ? t("No events for today")
+                  : t("No events for selected day")}
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className={`${styles.compactPulseSection} ${styles.compactProactivitySection}`}>
+          <div className={styles.compactSectionHeader}>
+            <h2 className={styles.compactSectionTitle}>{t("Proactivity")}</h2>
+            {canConfigureProactivity ? (
+              <button
+                type="button"
+                className={styles.dashboardCardAction}
+                onClick={onConfigureProactivity}
+                aria-label={t("Configure proactivity")}
+              >
+                <Settings size={18} />
+              </button>
+            ) : null}
+          </div>
+          <div className={styles.compactSectionBody}>
+            {shouldShowNotificationBanner ? (
+              <div className={styles.proactivityNotificationBanner}>
+                <p>{notificationBannerLabel}</p>
+                {notificationPermission !== "denied" ? (
+                  <button
+                    type="button"
+                    onClick={handleNotificationEnable}
+                    className={styles.proactivityNotificationButton}
+                  >
+                    {t("Enable alerts")}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+            {scheduleEntries.length > 0 ? (
+              <ul className={`${styles.proactivityChecklist} ${styles.compactProactivityChecklist}`}>
+                {scheduleEntries.map(({ label, delivered }, index) => (
+                  <li key={`${label}-${index}`} className={styles.proactivityChecklistItem}>
+                    <span className={styles.proactivityChecklistIcon} aria-hidden="true">
+                      {delivered ? <Check size={14} /> : <Square size={14} />}
+                    </span>
+                    <span className={styles.proactivityChecklistLabel}>{label}</span>
+                    <span className={styles.srOnly}>
+                      {delivered ? t("Delivered") : t("Pending")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className={styles.proactivityEmptyState}>
+                <span>{t("No check-ins scheduled")}</span>
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  const rootClassName = styles.dashboardGridFinal;
+  const calendarSectionClassName = `${styles.dashboardCard} ${styles.dashboardCardCalendar}`;
+  const eventsSectionClassName = `${styles.dashboardCard} ${styles.dashboardCardEvents}`;
+  const proactivitySectionClassName = `${styles.dashboardCard} ${styles.dashboardCardProactivity}`;
+  const bodyClassName = styles.dashboardCardBody;
   const miniCalendarBodyClassName = `${bodyClassName} ${styles.miniCalendarBody}`;
-  const eventListClassName = isCompactLayout
-    ? `${styles.dashboardEventList} ${styles.mobileEventList}`
-    : styles.dashboardEventList;
-  const checklistClassName = isCompactLayout
-    ? `${styles.proactivityChecklist} ${styles.mobileProactivityChecklist}`
-    : styles.proactivityChecklist;
+  const eventListClassName = styles.dashboardEventList;
+  const checklistClassName = styles.proactivityChecklist;
 
   return (
     <div className={rootClassName}>

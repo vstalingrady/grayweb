@@ -32,7 +32,7 @@ from backend.core.ai_utils import (
     openrouter_annotations_to_grounding,
     validate_json_text_against_schema,
 )
-from backend.core.cache import load_context_cache as _load_context_cache, context_cache_contents as _context_cache_contents
+from backend.core.cache import load_context_cache as _load_context_cache
 from backend.core.chat_history import normalize_conversation_history
 from backend.core.message_detection import (
     should_expose_structured_tools as _should_expose_structured_tools,
@@ -63,12 +63,16 @@ DEFAULT_CHAT_TOOLS = get_default_chat_tools()
 SEARCH_TOOL = None
 
 DEFAULT_HISTORY_TAIL_TURNS = 8
+DEFAULT_HISTORY_TAIL_TURNS_AUTO = 6
 DEFAULT_RECALL_EVERY_N = 1
 DEFAULT_RECALL_MIN_PROMPT_CHARS = 0
 WEB_SEARCH_RUNTIME_NOTE = (
-    "You have access to web search. Use it for current events, news, and factual queries where your knowledge may be outdated. "
+    "You have access to web search. Use it for current events, news, and factual queries where your knowledge may be outdated "
+    "or when the user explicitly asks to search. "
+    "If the user sends a low-information command like 'search' or 'please search', resolve it against the most recent substantive user topic. "
     "Keep search queries concise and user-facing. Never expose chain-of-thought or <thinking> tags in the final answer. "
-    "Do not claim that you cannot browse or that your knowledge is cutoff when web search is available."
+    "Do not claim that you cannot browse or that your knowledge is cutoff when web search is available. "
+    "This runtime note is scaffolding only and must never be copied into search query text."
 )
 
 
@@ -80,6 +84,24 @@ def _get_history_tail_turns() -> int:
         return max(0, int(raw))
     except (TypeError, ValueError):
         return DEFAULT_HISTORY_TAIL_TURNS
+
+
+def _get_auto_history_tail_turns() -> int:
+    raw = os.getenv("GRAY_HISTORY_TAIL_TURNS_AUTO")
+    if raw is None or raw.strip() == "":
+        return DEFAULT_HISTORY_TAIL_TURNS_AUTO
+    try:
+        return max(1, int(raw))
+    except (TypeError, ValueError):
+        return DEFAULT_HISTORY_TAIL_TURNS_AUTO
+
+
+def _get_effective_history_tail_turns(requested_model: Optional[str]) -> int:
+    base_turns = _get_history_tail_turns()
+    model_lower = (requested_model or "").strip().lower()
+    if model_lower in {"openrouter/auto", "auto", "lite", "gray-lite"}:
+        return min(base_turns, _get_auto_history_tail_turns())
+    return base_turns
 
 
 def _history_tail_force_enabled() -> bool:
@@ -278,14 +300,24 @@ def _build_web_search_options(search_context_size: Optional[str]) -> Optional[Di
     return {"search_context_size": normalized}
 
 
-def _with_web_search_runtime_note(
-    time_context: Optional[str],
+def _append_openrouter_runtime_part(
+    parts: List[Dict[str, Any]],
+    text: Optional[str],
     *,
-    search_enabled: bool,
-) -> Optional[str]:
-    if not search_enabled:
-        return time_context
-    return "\n\n".join(filter(None, [time_context, WEB_SEARCH_RUNTIME_NOTE]))
+    cacheable: bool,
+) -> None:
+    if not isinstance(text, str):
+        return
+    normalized = text.strip()
+    if not normalized:
+        return
+    parts.append({"text": normalized, "cacheable": cacheable})
+
+
+def _build_openrouter_runtime_context(parts: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not parts:
+        return None
+    return {"parts": parts}
 
 def _get_deps():
     tier_conversation_token_limit = lambda plan_tier, model_id=None: _tier_conversation_token_limit(  # noqa: E731
@@ -318,7 +350,6 @@ def _get_deps():
         "stream_openrouter_response": stream_openrouter_response,
         "_execute_function_call": _execute_function_call,
         "_load_context_cache": _load_context_cache,
-        "_context_cache_contents": _context_cache_contents,
         "_row_get": _row_get,
         "SUPERMEMORY_TOOLS": SUPERMEMORY_TOOLS,
     }
@@ -376,10 +407,9 @@ async def stream_ai_response(
     ):
         conversation_history = _trim_history_by_turns(
             conversation_history,
-            _get_history_tail_turns(),
+            _get_effective_history_tail_turns(model),
         )
-    normalized_tier = normalize_plan_tier(plan_tier)
-    has_calendar_access = normalized_tier in ("voyager", "pioneer")
+    has_calendar_access = user_id is not None
 
     # Determine whether this turn is part of a reminder/plan/habit flow.
     intent_window_text = deps["build_intent_window_text"](message, conversation_history)
@@ -453,21 +483,19 @@ async def stream_ai_response(
             )
 
     # Initialize context
-    runtime_context_parts: List[str] = []
-    if provider == "openrouter" and isinstance(time_context, str) and time_context.strip():
-        runtime_context_parts.append(time_context.strip())
+    runtime_context_parts: List[Dict[str, Any]] = []
+    if provider == "openrouter":
+        _append_openrouter_runtime_part(runtime_context_parts, time_context, cacheable=False)
     if provider == "openrouter" and search_enabled:
-        runtime_context_parts.append(WEB_SEARCH_RUNTIME_NOTE)
+        _append_openrouter_runtime_part(runtime_context_parts, WEB_SEARCH_RUNTIME_NOTE, cacheable=True)
 
     workspace_with_cache = workspace_context
     cache_record = None
-    cached_contents = None
     if context_cache_id:
         cache_record = await deps["_load_context_cache"](context_cache_id, user_id, db)
         cache_text = deps["_row_get"](cache_record, "content")
         if isinstance(cache_text, str) and cache_text.strip():
             workspace_with_cache = "\n\n".join(filter(None, [workspace_context, f"Context cache:\n{cache_text.strip()}"]))
-        cached_contents = deps["_context_cache_contents"](cache_record)
 
     if has_calendar_access:
         try:
@@ -479,7 +507,7 @@ async def stream_ai_response(
             )
             if calendar_context_block:
                 if provider == "openrouter":
-                    runtime_context_parts.append(calendar_context_block)
+                    _append_openrouter_runtime_part(runtime_context_parts, calendar_context_block, cacheable=False)
                 else:
                     workspace_with_cache = "\n\n".join(filter(None, [workspace_with_cache, calendar_context_block]))
         except Exception as error:
@@ -487,7 +515,7 @@ async def stream_ai_response(
 
     if memory_context:
         if provider == "openrouter":
-            runtime_context_parts.append(memory_context)
+            _append_openrouter_runtime_part(runtime_context_parts, memory_context, cacheable=False)
         else:
             workspace_with_cache = "\n\n".join(filter(None, [workspace_with_cache, memory_context]))
 
@@ -498,7 +526,7 @@ async def stream_ai_response(
             "- Reminders & plans are disabled for this session unless explicitly enabled.\n"
         )
         if provider == "openrouter":
-            runtime_context_parts.append(reminders_note)
+            _append_openrouter_runtime_part(runtime_context_parts, reminders_note, cacheable=True)
         else:
             effective_system_prompt = (effective_system_prompt or "") + "\n\n" + reminders_note
 
@@ -511,7 +539,11 @@ async def stream_ai_response(
     
     tool_list = [*tools]
     memory_policy = SUPERMEMORY_SERVICE.policy_for_tier(memory_plan_tier)
-    if memory_enabled and SUPERMEMORY_SERVICE.available and memory_policy.enabled:
+    if (
+        memory_enabled
+        and SUPERMEMORY_SERVICE.available
+        and memory_policy.enabled
+    ):
         tool_list = [*tool_list, *deps["SUPERMEMORY_TOOLS"]]
     if needs_structured_tools:
         tool_list = [*tool_list, *deps["PLAN_TOOLS"]]
@@ -529,7 +561,7 @@ async def stream_ai_response(
             yield ("final", {"text": error_msg, "grounding_metadata": None})
             return
         
-        runtime_context = "\n\n".join(runtime_context_parts) if runtime_context_parts else None
+        runtime_context = _build_openrouter_runtime_context(runtime_context_parts)
         web_search_plugin = _build_web_search_plugin(
             search_enabled,
             web_search_engine,
@@ -625,7 +657,7 @@ async def generate_ai_response(
     ):
         conversation_history = _trim_history_by_turns(
             conversation_history,
-            _get_history_tail_turns(),
+            _get_effective_history_tail_turns(model),
         )
 
     intent_window_text = deps["build_intent_window_text"](message, conversation_history)
@@ -686,8 +718,15 @@ async def generate_ai_response(
                 },
             )
 
+    runtime_context_parts: List[Dict[str, Any]] = []
+    if provider == "openrouter":
+        _append_openrouter_runtime_part(runtime_context_parts, time_context, cacheable=False)
+
     if memory_context:
-        time_context = "\n\n".join(filter(None, [time_context, memory_context]))
+        if provider == "openrouter":
+            _append_openrouter_runtime_part(runtime_context_parts, memory_context, cacheable=False)
+        else:
+            time_context = "\n\n".join(filter(None, [time_context, memory_context]))
 
     media_attachments: List[Any] = []
     if attachments and user_id is not None and db is not None:
@@ -701,10 +740,9 @@ async def generate_ai_response(
     if provider == "openrouter":
         if (os.getenv("AI_PROVIDER") or "openrouter").strip().lower() == "moltbot":
             conversation_history = []
-        time_context = _with_web_search_runtime_note(
-            time_context,
-            search_enabled=search_enabled,
-        )
+        if search_enabled:
+            _append_openrouter_runtime_part(runtime_context_parts, WEB_SEARCH_RUNTIME_NOTE, cacheable=True)
+        runtime_context = _build_openrouter_runtime_context(runtime_context_parts)
         web_search_plugin = _build_web_search_plugin(
             search_enabled,
             web_search_engine,
@@ -717,7 +755,7 @@ async def generate_ai_response(
             conversation_history,
             workspace_with_cache,
             system_prompt,
-            time_context,
+            runtime_context,
             model,
             attachments=media_attachments or None,
             plugins=web_search_plugin,

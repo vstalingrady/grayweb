@@ -38,6 +38,8 @@ type ProactivityPayload = {
   delivery_key?: string;
   sent_at?: string;
   timezone?: string;
+  notification_type?: string;
+  reminder_delivery_mode?: string;
 };
 
 const buildProactivityEventKey = (payload: ProactivityPayload): string | null => {
@@ -54,6 +56,7 @@ const buildProactivityEventKey = (payload: ProactivityPayload): string | null =>
 };
 
 const CHECK_IN_DELIVERY_REGEX = /^check_in:\d+:(\d{8})T(\d{4})$/;
+const REMINDER_DELIVERY_KEY_PREFIX = "reminder:";
 
 const formatDateTimeKey = (date: Date, timeZone: string): string | null => {
   try {
@@ -227,9 +230,28 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
         void hydrateGeneralHistory();
       }
 
-      // 2. Show browser notification if enabled and proactivity notifications are on
-      if (notificationPreferences.device && notificationPreferences.proactivity && Notification.permission === "granted") {
-        new Notification("Gray", {
+      const normalizedType = (payload.notification_type || "").trim().toLowerCase();
+      const deliveryKey = (payload.delivery_key || "").trim().toLowerCase();
+      const isReminderNotification =
+        normalizedType === "reminder" || deliveryKey.startsWith(REMINDER_DELIVERY_KEY_PREFIX);
+      const reminderDeliveryMode = (payload.reminder_delivery_mode || "").trim().toLowerCase();
+      const hasExplicitReminderMode = reminderDeliveryMode.length > 0;
+      const isCalendarReminder = isReminderNotification && reminderDeliveryMode === "event";
+
+      const reminderNotificationsEnabled = isCalendarReminder
+        ? notificationPreferences.calendarEvents
+        : hasExplicitReminderMode
+          ? notificationPreferences.tasks
+          : (notificationPreferences.tasks || notificationPreferences.calendarEvents);
+      const shouldShowNotification =
+        notificationPreferences.device &&
+        Notification.permission === "granted" &&
+        (isReminderNotification ? reminderNotificationsEnabled : notificationPreferences.proactivity);
+
+      // 2. Show browser notification when the matching channel is enabled.
+      if (shouldShowNotification) {
+        const notificationTitle = isReminderNotification ? "Reminder" : "Gray";
+        new Notification(notificationTitle, {
           body: payload.message || t("New message from Gray"),
           icon: "/grayai.png",
           requireInteraction: true,
@@ -243,8 +265,10 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
       appendMessage,
       hydrateGeneralHistory,
       t,
+      notificationPreferences.calendarEvents,
       notificationPreferences.device,
       notificationPreferences.proactivity,
+      notificationPreferences.tasks,
     ]
   );
 
@@ -357,7 +381,11 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
 
   useEffect(() => {
     if (!userId || typeof window === "undefined") return;
-    if (!notificationPreferences.device || !notificationPreferences.proactivity) return;
+    const hasPushEnabledCategory =
+      notificationPreferences.proactivity ||
+      notificationPreferences.tasks ||
+      notificationPreferences.calendarEvents;
+    if (!notificationPreferences.device || !hasPushEnabledCategory) return;
     if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
     if (window.isSecureContext === false) return;
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
@@ -396,7 +424,11 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
         return;
       }
 
-      const registration = await navigator.serviceWorker.register("/sw.js");
+      const existingRegistration = await navigator.serviceWorker.getRegistration();
+      const registration =
+        existingRegistration ??
+        (await navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }));
+      await registration.update().catch(() => undefined);
       const subscribeOptions = {
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(
@@ -444,7 +476,14 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
       cancelled = true;
       clearRetry();
     };
-  }, [getAuthToken, notificationPreferences.device, notificationPreferences.proactivity, userId]);
+  }, [
+    getAuthToken,
+    notificationPreferences.calendarEvents,
+    notificationPreferences.device,
+    notificationPreferences.proactivity,
+    notificationPreferences.tasks,
+    userId,
+  ]);
 
   return (
     <ProactivityNotificationContext.Provider value={{ deliveredKeys }}>

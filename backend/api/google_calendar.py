@@ -29,23 +29,12 @@ from backend.google_calendar import (
     SCOPES,
 )
 from backend.time_utils import utcnow
-from backend.tier_utils import normalize_plan_tier
-from backend.compat_imports import row_get as _row_get
 
 router = APIRouter(tags=["google-calendar"])
 
 
 def _require_calendar_access(current_user: Dict[str, Any]) -> None:
-    tier = normalize_plan_tier(
-        _row_get(current_user, "plan_tier"),
-        _row_get(current_user, "role"),
-        _row_get(current_user, "subscription_expires_at"),
-    )
-    if tier not in ("voyager", "pioneer"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Calendar access requires a Voyager or Pioneer plan.",
-        )
+    return None
 
 
 def _parse_time_param(value: Optional[str]) -> Optional[datetime]:

@@ -60,6 +60,7 @@ const FREE_FEATURES: FeatureItem[] = [
     },
     { id: "limited_messages", label: "Limited daily messages", icon: MessageSquare },
     { id: "token_memory", label: "65,536 token memory", icon: Pin },
+    { id: "calendar_access", label: "Calendar access", icon: Clock },
     { id: "plans_habits_reminders", label: "Plans, habits, and reminders", icon: Clock },
     { id: "daily_pulse", label: "Daily pulse", icon: CalendarClock },
     { id: "discord_support", label: "Discord community support", icon: Users },
@@ -70,7 +71,7 @@ export const PATHFINDER_FEATURES: FeatureItem[] = [
         id: "choose_model",
         label: "Choose your model",
         icon: Shuffle,
-        subtext: "Claude Haiku 4.5, Gemini 3 Flash, DeepSeek V3.2, Kimi K2.5, MiniMax M2.1, GLM 4.7, Grok 4.1 Fast",
+        subtext: "Claude Haiku 4.5, Gemini 3.1 Flash, DeepSeek V3.2, Kimi K2.5, MiniMax M2.5, GLM 5, Qwen3.5 Plus, Grok 4.1 Fast",
     },
     {
         id: "more_messages",
@@ -92,7 +93,7 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
         id: "choose_model",
         label: "Premium models",
         icon: Shuffle,
-        subtext: "Claude Sonnet 4.5, GPT 5.2, Gemini 3 Pro",
+        subtext: "Claude Sonnet 4.5, GPT 5.2, Gemini 3.1 Pro",
     },
     {
         id: "more_messages",
@@ -106,18 +107,13 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
         subtext: "2M token context",
     },
     {
-        id: "calendar_access",
-        label: "Calendar access",
-        icon: Clock,
-    },
-    {
         id: "chatgpt_export_compression",
         label: "Import ChatGPT Data",
         icon: ChatGptIcon,
     },
     {
         id: "integrations",
-        label: "Google Calendar, Gmail, Notion integrations",
+        label: "Gmail and Notion integrations",
         icon: CalendarClock,
         subtext: "Coming soon",
         subtextParens: true,

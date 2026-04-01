@@ -4,6 +4,7 @@ Cache utilities for the Gray backend.
 Provides TTL-based caching for synchronous and asynchronous operations.
 Extracted from main.py to reduce its size and improve modularity.
 """
+import os
 import time
 from importlib.util import find_spec
 from typing import Any, Callable, Dict, Optional, Tuple
@@ -113,10 +114,18 @@ class TTLCache:
 
 
 # Pre-configured cache instances
-USER_CACHE = AsyncTTLCache(ttl_seconds=300)
-# Shorten default user cache TTL to 10 seconds as a safety fallback
-# when Redis happens to be unavailable.
-USER_CACHE.ttl_seconds = 10
+def _env_positive_int(name: str, default: int) -> int:
+    raw = (os.getenv(name, "") or "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+USER_CACHE = AsyncTTLCache(ttl_seconds=_env_positive_int("USER_CACHE_TTL_SECONDS", 60))
 CONVERSATION_OWNER_CACHE = TTLCache(ttl_seconds=900, max_size=512)
 CONVERSATION_HISTORY_CACHE = TTLCache(ttl_seconds=900, max_size=256)
 # Context cache records are immutable once created; keep a short-lived local cache

@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 import type { User, UserUpdate } from "@/lib/api";
-import { ALL_PIONEER_MODEL_IDS, PIONEER_GROUPS, PIONEER_ONLY_MODEL_IDS } from "../../modelCatalog";
+import { ALL_PIONEER_MODEL_IDS, ALWAYS_REASONING_MODEL_IDS, PIONEER_GROUPS, PIONEER_ONLY_MODEL_IDS } from "../../modelCatalog";
 import { normalizePlanTier } from "../../utils/helperFunctions";
 
 const VISIBLE_MODEL_IDS_STORAGE_PREFIX = "gray_visible_model_ids";
+const SELECTED_MODEL_ID_STORAGE_PREFIX = "gray_selected_model_id";
+const LEGACY_MODEL_ID_MIGRATIONS: Record<string, string> = {
+  "moonshotai/kimi-k2-fast": "moonshotai/kimi-k2-0905",
+  "minimax/minimax-m2.1": "minimax/minimax-m2.5",
+  "z-ai/glm-4.7": "z-ai/glm-5",
+  "z-ai/glm-4.7:fast": "z-ai/glm-5:fast",
+  "z-ai/glm-4.7-flash": "z-ai/glm-5",
+};
 
 type ModelTier = "lite" | "pro" | "pioneer";
 
@@ -74,6 +82,8 @@ export const useModelPreferences = ({
     []
   );
 
+  const selectedModelStorageKey = `${SELECTED_MODEL_ID_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
+
   // Restore model selection from local storage
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -85,20 +95,26 @@ export const useModelPreferences = ({
         setModelTier("lite");
         localStorage.setItem("gray_model_tier", "lite");
       }
-      const storedModelId = localStorage.getItem("gray_selected_model_id");
-      if (storedModelId && !user) {
+      const storedModelId = user
+        ? localStorage.getItem(selectedModelStorageKey)
+        : localStorage.getItem(selectedModelStorageKey) ?? localStorage.getItem(SELECTED_MODEL_ID_STORAGE_PREFIX);
+      if (storedModelId && !selectedModelId) {
         setSelectedModelId(storedModelId);
       }
     }
-  }, [setModelTier, setSelectedModelId, user]);
+  }, [selectedModelId, selectedModelStorageKey, setModelTier, setSelectedModelId, user]);
 
   // Enforce plan-tier model access on the client to avoid stale localStorage
   // keeping a user on a higher-tier model after downgrade.
   useEffect(() => {
     const normalizedTier = normalizePlanTier(user);
+    const isReasoningForcedOn =
+      modelTier === "pioneer" &&
+      typeof selectedModelId === "string" && ALWAYS_REASONING_MODEL_IDS.includes(selectedModelId);
 
-    if (selectedModelId === "moonshotai/kimi-k2-fast") {
-      setSelectedModelId("moonshotai/kimi-k2-0905");
+    const migratedModelId = selectedModelId ? LEGACY_MODEL_ID_MIGRATIONS[selectedModelId] : undefined;
+    if (migratedModelId) {
+      setSelectedModelId(migratedModelId);
       return;
     }
 
@@ -109,14 +125,21 @@ export const useModelPreferences = ({
       if (selectedModelId) {
         setSelectedModelId(null);
       }
+      if (reasoningMode) {
+        setReasoningMode(false);
+      }
       return;
     }
 
-    if (selectedModelId === "moonshotai/kimi-k2.5") {
+    if (isReasoningForcedOn) {
       if (!reasoningMode) {
         setReasoningMode(true);
       }
       return;
+    }
+
+    if (modelTier === "lite" && reasoningMode) {
+      setReasoningMode(false);
     }
 
     const selectedModelTierRequired = selectedModelId
@@ -229,12 +252,18 @@ export const useModelPreferences = ({
   }, [modelTier]);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && !user) {
+    if (typeof window !== "undefined") {
       if (selectedModelId) {
-        localStorage.setItem("gray_selected_model_id", selectedModelId);
+        localStorage.setItem(selectedModelStorageKey, selectedModelId);
+        if (!user) {
+          localStorage.setItem(SELECTED_MODEL_ID_STORAGE_PREFIX, selectedModelId);
+        }
       } else {
-        localStorage.removeItem("gray_selected_model_id");
+        localStorage.removeItem(selectedModelStorageKey);
+        if (!user) {
+          localStorage.removeItem(SELECTED_MODEL_ID_STORAGE_PREFIX);
+        }
       }
     }
-  }, [selectedModelId, user]);
+  }, [selectedModelId, selectedModelStorageKey, user]);
 };

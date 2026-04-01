@@ -2873,6 +2873,17 @@
 }
 
 @media (max-width: 768px) {
+  .page[data-compact="true"][data-dashboard-tab="pulse"] .main[data-dashboard="true"][data-dashboard-free="true"],
+  .page[data-compact="true"][data-dashboard-tab="calendar"] .main[data-dashboard="true"][data-dashboard-free="true"] {
+    padding-top: calc(60px + env(safe-area-inset-top, 0px));
+    overflow-y: auto;
+    height: auto;
+    min-height: 100dvh;
+    box-sizing: border-box;
+  }
+}
+
+@media (max-width: 768px) {
   .page[data-dashboard-tab="pulse"] .main[data-dashboard="true"][data-dashboard-free="true"],
   .page[data-dashboard-tab="calendar"] .main[data-dashboard="true"][data-dashboard-free="true"] {
     padding-top: calc(60px + env(safe-area-inset-top, 0px));
@@ -2880,6 +2891,9 @@
     padding-bottom: 0;
     padding-left: 0;
     overflow-y: auto;
+    height: auto;
+    min-height: 100dvh;
+    box-sizing: border-box;
   }
 }
 
@@ -5101,13 +5115,22 @@ h1.greeting {
 }
 
 /* Ensure both pulse and calendar tabs have identical sizing */
-.page[data-dashboard-tab="pulse"] .dashboardCalendarShell,
+.page[data-dashboard-tab="pulse"] .dashboardCalendarShell:not([data-compact="true"]),
 .page[data-dashboard-tab="calendar"] .dashboardCalendarShell {
   height: 100%;
   min-height: 0;
   max-height: var(--dashboard-panel-max-height, none);
   max-width: 100%;
   overflow: hidden;
+}
+
+.page[data-dashboard-tab="pulse"] .dashboardCalendarContainer[data-compact="true"],
+.page[data-dashboard-tab="pulse"] .dashboardCalendarShell[data-compact="true"],
+.page[data-dashboard-tab="pulse"] .dashboardCalendarSurface[data-compact="true"] {
+  height: auto;
+  max-height: none;
+  min-height: 0;
+  overflow: visible;
 }
 
 .dashboardCalendarContainer>* {
@@ -5372,8 +5395,8 @@ h1.greeting {
   right: 18px;
   border-radius: 16px;
   padding: 12px 14px;
-  background: linear-gradient(135deg, #2f4dff, #4f64ff);
-  box-shadow: 0 18px 34px rgba(47, 77, 255, 0.3);
+  background: linear-gradient(135deg, #3f434b, #555b65);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.42);
   color: #f7f8ff;
   display: flex;
   flex-direction: column;
@@ -5390,7 +5413,7 @@ h1.greeting {
   font-size: 0.7rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: rgba(237, 238, 255, 0.8);
+  color: rgba(237, 237, 237, 0.82);
 }
 
 .dashboardCalendarLayout {
@@ -5640,23 +5663,23 @@ h1.greeting {
 }
 
 .calendarSidebarColor[data-variant="primary"] {
-  background: linear-gradient(135deg, #4e7cff, #5c8bff);
+  background: linear-gradient(135deg, #f2f2f2, #d9d9d9);
 }
 
 .calendarSidebarColor[data-variant="secondary"] {
-  background: linear-gradient(135deg, #ff6f61, #ff947b);
+  background: linear-gradient(135deg, #d8d8d8, #bfbfbf);
 }
 
 .calendarSidebarColor[data-variant="tertiary"] {
-  background: linear-gradient(135deg, #f7c948, #fbd671);
+  background: linear-gradient(135deg, #c2c2c2, #a9a9a9);
 }
 
 .calendarSidebarColor[data-variant="quaternary"] {
-  background: linear-gradient(135deg, #5ed2a0, #6de0b1);
+  background: linear-gradient(135deg, #ababab, #939393);
 }
 
 .calendarSidebarColor[data-variant="quinary"] {
-  background: linear-gradient(135deg, #a67cff, #b893ff);
+  background: linear-gradient(135deg, #969696, #7f7f7f);
 }
 
 .calendarSidebarLabel {
@@ -6094,7 +6117,7 @@ h1.greeting {
   width: 48px;
   height: 48px;
   border-radius: 16px;
-  background: linear-gradient(135deg, rgba(68, 121, 255, 0.4), rgba(156, 74, 255, 0.35));
+  background: linear-gradient(135deg, rgba(186, 186, 186, 0.34), rgba(120, 120, 120, 0.3));
   border: 1px solid rgba(255, 255, 255, 0.15);
   display: flex;
   align-items: center;
@@ -7292,8 +7315,8 @@ h1.greeting {
   padding: 10px 18px;
   border-radius: 14px;
   border: none;
-  background: linear-gradient(135deg, rgba(82, 91, 255, 0.95), rgba(142, 101, 255, 0.95));
-  color: white;
+  background: linear-gradient(135deg, rgba(236, 236, 236, 0.96), rgba(188, 188, 188, 0.96));
+  color: #111111;
   font-weight: 600;
   cursor: pointer;
 }

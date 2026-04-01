@@ -49,7 +49,7 @@ def _normalize_search_query(value: Any) -> Optional[str]:
 
 
 def _extract_search_query(tool_name: str, tool_args: Any) -> Optional[str]:
-    """Best-effort extraction of user-visible search query text from tool args."""
+    """Extract search query text from explicit query-like fields only."""
     normalized_name = (tool_name or "").strip().lower()
     if not normalized_name:
         return None
@@ -59,25 +59,8 @@ def _extract_search_query(tool_name: str, tool_args: Any) -> Optional[str]:
         "query",
         "queries",
         "q",
-        "search",
         "search_query",
         "searchQuery",
-        "search_term",
-        "searchTerm",
-        "query_text",
-        "queryText",
-        "keywords",
-        "keyword",
-        "terms",
-        "question",
-        "topic",
-        "text",
-        "prompt",
-        "input",
-        "value",
-        "request",
-        "params",
-        "arguments",
     )
 
     def _pull(value: Any) -> Optional[str]:
@@ -99,20 +82,6 @@ def _extract_search_query(tool_name: str, tool_args: Any) -> Optional[str]:
                     nested = _pull(value.get(key))
                     if nested:
                         return nested
-            for nested_value in value.values():
-                nested = _pull(nested_value)
-                if nested:
-                    return nested
-        if isinstance(value, str):
-            for pattern in (
-                r'"(?:query|q|search_query|searchQuery|search_term|searchTerm|keywords|text|prompt|question|topic|input)"\s*:\s*"([^"]+)"',
-                r"'(?:query|q|search_query|searchQuery|search_term|searchTerm|keywords|text|prompt|question|topic|input)'\s*:\s*'([^']+)'",
-            ):
-                match = re.search(pattern, value, flags=re.IGNORECASE)
-                if match:
-                    extracted = _normalize_search_query(match.group(1))
-                    if extracted:
-                        return extracted
         return None
 
     if isinstance(tool_args, dict):
@@ -125,13 +94,34 @@ def _extract_search_query(tool_name: str, tool_args: Any) -> Optional[str]:
     return _pull(tool_args)
 
 
+def _has_web_grounding_metadata(metadata: Optional[Dict[str, Any]]) -> bool:
+    if not isinstance(metadata, dict):
+        return False
+
+    queries = metadata.get("web_search_queries") or metadata.get("webSearchQueries")
+    if isinstance(queries, list) and any(isinstance(item, str) and item.strip() for item in queries):
+        return True
+
+    chunks = metadata.get("grounding_chunks") or metadata.get("groundingChunks")
+    if isinstance(chunks, list):
+        for chunk in chunks:
+            if isinstance(chunk, dict) and (chunk.get("web") or chunk.get("retrieved_context") or chunk.get("retrievedContext")):
+                return True
+
+    search_entry = metadata.get("search_entry_point") or metadata.get("searchEntryPoint")
+    if isinstance(search_entry, dict) and search_entry:
+        return True
+
+    return False
+
+
 async def stream_openrouter_response(
     openrouter_service,
     message: str,
     conversation_history: List[Dict[str, Any]],
     workspace_context: Optional[str],
     system_prompt: Optional[str],
-    time_context: Optional[str],
+    time_context: Optional[str | Dict[str, Any]],
     model: Optional[str],
     tool_list: List[types.Tool],
     search_enabled: bool,
@@ -193,7 +183,7 @@ async def _stream_openrouter_response_impl(
     conversation_history: List[Dict[str, Any]],
     workspace_context: Optional[str],
     system_prompt: Optional[str],
-    time_context: Optional[str],
+    time_context: Optional[str | Dict[str, Any]],
     model: Optional[str],
     tool_list: List[types.Tool],
     search_enabled: bool,
@@ -262,24 +252,6 @@ async def _stream_openrouter_response_impl(
         if normalized in executed_search_queries:
             return
         executed_search_queries.append(normalized)
-
-    def _resolve_fallback_search_query() -> Optional[str]:
-        if isinstance(current_message, str):
-            normalized_current = _normalize_search_query(current_message)
-            if normalized_current:
-                return normalized_current
-        for entry in reversed(current_history):
-            if not isinstance(entry, dict):
-                continue
-            role = str(entry.get("role") or "").strip().lower()
-            if role != "user":
-                continue
-            text = entry.get("text")
-            if isinstance(text, str):
-                normalized_text = _normalize_search_query(text)
-                if normalized_text:
-                    return normalized_text
-        return None
     
     for turn in range(max_tool_turns + 1):
         accumulated = ""
@@ -302,14 +274,10 @@ async def _stream_openrouter_response_impl(
         run_system_prompt = system_prompt
         
         if search_enabled:
-            # Track web search cost ($10/K = $0.01 per search)
-            if usage_tracker_cls and user_id and db:
-                try:
-                    tracker = usage_tracker_cls(db)
-                    await tracker.track_cost(user_id, 0.01, "web_search")
-                except Exception as e:
-                    api_logger.warning(f"Failed to track search cost: {e}")
             # Search guidance is injected into runtime context to keep the system prompt stable for caching.
+            # Explicit web-search cost tracking is applied once at the end of the response only when
+            # grounded web evidence is present, to avoid charging per turn when no search actually ran.
+            pass
         
         # Stream from OpenRouter
         try:
@@ -600,8 +568,6 @@ async def _stream_openrouter_response_impl(
                 # Emit tool status so the client can show UI feedback while the tool runs.
                 tool_status_payload: Dict[str, Any] = {"name": tool_name, "status": "start"}
                 search_query = _extract_search_query(tool_name, tool_args)
-                if not search_query and (("search" in tool_name.lower()) or ("web" in tool_name.lower())):
-                    search_query = _resolve_fallback_search_query()
                 if search_query:
                     _remember_search_query(search_query)
                     tool_status_payload["query"] = search_query
@@ -702,6 +668,12 @@ async def _stream_openrouter_response_impl(
                 merged_queries.append(query)
         if merged_queries:
             grounding_metadata["web_search_queries"] = merged_queries
+    if search_enabled and usage_tracker_cls and user_id and db and _has_web_grounding_metadata(grounding_metadata):
+        try:
+            tracker = usage_tracker_cls(db)
+            await tracker.track_cost(user_id, 0.01, "web_search")
+        except Exception as error:
+            api_logger.warning(f"Failed to track search cost: {error}", extra={"user_id": user_id})
     final_text = total_accumulated
 
     if response_format:

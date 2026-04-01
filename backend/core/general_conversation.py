@@ -85,6 +85,40 @@ def _timestamp_ms_to_datetime(value: Optional[int]) -> Optional[datetime]:
         return None
 
 
+def _queue_general_cache_append(
+    *,
+    user_id: int,
+    role: str,
+    text: str,
+    created_at: datetime,
+    grounding_metadata: Optional[Any] = None,
+    attachments: Optional[Any] = None,
+    reminders: Optional[Any] = None,
+) -> None:
+    if find_spec("backend.chat_cache") is None:
+        return
+    append_cached_message = import_module("backend.chat_cache").append_cached_message
+    conversation_id = f"general:{user_id}"
+    timestamp_ms = int(created_at.replace(tzinfo=timezone.utc).timestamp() * 1000)
+    payload: Dict[str, Any] = {
+        "role": role,
+        "text": text,
+        "timestamp": timestamp_ms,
+    }
+    if grounding_metadata is not None:
+        payload["grounding_metadata"] = grounding_metadata
+    if attachments is not None:
+        payload["attachments"] = attachments
+    if reminders is not None:
+        payload["reminders"] = reminders
+
+    create_logged_task(
+        append_cached_message(conversation_id, payload),
+        logger=_get_logger(),
+        name="chat_cache.append_general_conversation_message",
+    )
+
+
 async def load_general_conversation_history(
     user_id: int,
     *,
@@ -213,6 +247,15 @@ async def insert_general_conversation_message(
         logger.info(
             f"Successfully saved general chat message for user {user_id}, role={role}, id={result}",
             extra={"event_type": "general_message_insert_success", "user_id": user_id, "role": role, "message_id": result}
+        )
+        _queue_general_cache_append(
+            user_id=user_id,
+            role=role,
+            text=text,
+            created_at=now,
+            grounding_metadata=grounding_metadata,
+            attachments=attachments,
+            reminders=reminders,
         )
         return result
     except Exception as error:

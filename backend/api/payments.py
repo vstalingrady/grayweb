@@ -52,6 +52,7 @@ _PLAN_PRICING_USD: Dict[str, Dict[str, int]] = {
 }
 
 _ADAPTIVE_CURRENCY_MARKER = "ADAPTIVE"
+_DODO_WEBHOOK_KEY_MISSING_WARNED = False
 
 
 def _normalize_provider(provider: Optional[str]) -> str:
@@ -1135,8 +1136,11 @@ async def handle_dodo_webhook(request: Request, background_tasks: BackgroundTask
     }
 
     if not os.getenv("DODO_PAYMENTS_WEBHOOK_KEY"):
-        app_logger.error("Dodo webhook key missing")
-        raise HTTPException(status_code=503, detail="Dodo webhook verification is not configured")
+        global _DODO_WEBHOOK_KEY_MISSING_WARNED
+        if not _DODO_WEBHOOK_KEY_MISSING_WARNED:
+            app_logger.warning("Dodo webhook key missing; acknowledging webhook without verification")
+            _DODO_WEBHOOK_KEY_MISSING_WARNED = True
+        return {"status": "ignored", "reason": "webhook_verification_not_configured"}
 
     try:
         client = get_dodo_client()

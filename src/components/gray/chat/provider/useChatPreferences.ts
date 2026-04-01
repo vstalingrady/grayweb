@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { User, UserUpdate } from "@/lib/api";
 import { useModelPreferences } from "./useModelPreferences";
 
@@ -16,6 +16,7 @@ export const useChatPreferences = ({ user, updateUser }: UseChatPreferencesOptio
   const [modelTier, setModelTier] = useState<ModelTier>("lite");
   const [selectedModelIdOverride, setSelectedModelIdOverride] = useState<string | null | undefined>(undefined);
   const [visibleModelIds, setVisibleModelIds] = useState<string[] | null>(null);
+  const lastUserIdRef = useRef<number | null>(null);
 
   const autoWebSearchEnabled =
     autoWebSearchEnabledOverride === undefined
@@ -39,6 +40,15 @@ export const useChatPreferences = ({ user, updateUser }: UseChatPreferencesOptio
     visibleModelIds,
     setVisibleModelIds,
   });
+
+  useEffect(() => {
+    const nextUserId = user?.id ?? null;
+    if (nextUserId !== lastUserIdRef.current) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Reset stale local model override when account context changes.
+      setSelectedModelIdOverride(undefined);
+      lastUserIdRef.current = nextUserId;
+    }
+  }, [user?.id]);
 
   const toggleWebSearchEnabled = useCallback(() => {
     setWebSearchEnabled((prev) => !prev);
@@ -90,4 +100,3 @@ export const useChatPreferences = ({ user, updateUser }: UseChatPreferencesOptio
     setVisibleModelIds,
   };
 };
-

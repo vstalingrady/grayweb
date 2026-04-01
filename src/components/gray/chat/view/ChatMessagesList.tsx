@@ -34,16 +34,40 @@ type InlineSourceLink = {
 type StreamingTokenPiece = {
   id: number;
   value: string;
+  delayMs: number;
 };
 
-const STREAMING_MARKDOWN_PATTERN =
-  /(?:\*\*|__|~~|`{1,3}|(?:^|\n)\s{0,3}#{1,6}\s|(?:^|\n)\s*[-*+]\s|(?:^|\n)\s*\d+\.\s|\[[^\]]+\]\([^)]+\)|(?:^|\n)\s*>\s)/m;
+const STREAMING_TOKEN_DELAY_MS = 18;
+const STREAMING_TOKEN_MAX_DELAY_MS = 180;
 
-const shouldPreferMarkdownStreamingRender = (text: string): boolean => {
-  if (!text) {
-    return false;
+const splitStreamingTextIntoPieces = (value: string): string[] => {
+  if (!value) {
+    return [];
   }
-  return STREAMING_MARKDOWN_PATTERN.test(text);
+  const chunks = value.match(/[^\S\r\n]+|[\r\n]+|\S+/g);
+  if (!chunks || chunks.length === 0) {
+    return [value];
+  }
+  return chunks;
+};
+
+const buildAnimatedPieces = (
+  values: string[],
+  state: { nextPieceId: number }
+): StreamingTokenPiece[] => {
+  let visibleTokenIndex = 0;
+  return values.map((chunk) => {
+    const hasVisibleGlyph = /\S/.test(chunk);
+    const delay = Math.min(visibleTokenIndex * STREAMING_TOKEN_DELAY_MS, STREAMING_TOKEN_MAX_DELAY_MS);
+    if (hasVisibleGlyph) {
+      visibleTokenIndex += 1;
+    }
+    return {
+      id: state.nextPieceId++,
+      value: chunk,
+      delayMs: delay,
+    };
+  });
 };
 
 const getCommonPrefixLength = (left: string, right: string): number => {
@@ -73,7 +97,7 @@ const StreamingTokenText = memo(({ text, ariaLive }: { text: string; ariaLive?: 
       state.pieces = [];
       nextPieces = [];
     } else if (!state.previousText) {
-      nextPieces = [{ id: state.nextPieceId++, value: text }];
+      nextPieces = buildAnimatedPieces(splitStreamingTextIntoPieces(text), state);
       state.previousText = text;
       state.pieces = nextPieces;
     } else {
@@ -82,9 +106,7 @@ const StreamingTokenText = memo(({ text, ariaLive }: { text: string; ariaLive?: 
 
       if (commonPrefixLength === previousText.length && text.length > previousText.length) {
         const appendedChunk = text.slice(previousText.length);
-        const appendedPieces = appendedChunk
-          ? [{ id: state.nextPieceId++, value: appendedChunk }]
-          : [];
+        const appendedPieces = buildAnimatedPieces(splitStreamingTextIntoPieces(appendedChunk), state);
         nextPieces = appendedPieces.length > 0 ? [...state.pieces, ...appendedPieces] : state.pieces;
       } else {
         let keepCount = 0;
@@ -100,8 +122,22 @@ const StreamingTokenText = memo(({ text, ariaLive }: { text: string; ariaLive?: 
         }
 
         const keptPieces = keepCount > 0 ? state.pieces.slice(0, keepCount) : [];
-        const suffix = text.slice(consumedTextLength);
-        const suffixPieces = suffix ? [{ id: state.nextPieceId++, value: suffix }] : [];
+        if (keepCount < state.pieces.length && commonPrefixLength > consumedTextLength) {
+          const partialPrefixLength = commonPrefixLength - consumedTextLength;
+          const partialPiece = state.pieces[keepCount];
+          const partialValue = partialPiece.value.slice(0, partialPrefixLength);
+          if (partialValue) {
+            keptPieces.push({
+              ...partialPiece,
+              value: partialValue,
+              delayMs: 0,
+            });
+            consumedTextLength = commonPrefixLength;
+          }
+        }
+
+        const suffix = text.slice(commonPrefixLength);
+        const suffixPieces = buildAnimatedPieces(splitStreamingTextIntoPieces(suffix), state);
         nextPieces = suffixPieces.length > 0 ? [...keptPieces, ...suffixPieces] : keptPieces;
       }
 
@@ -115,7 +151,11 @@ const StreamingTokenText = memo(({ text, ariaLive }: { text: string; ariaLive?: 
   return (
     <div className={styles.chatStreamingText} aria-live={ariaLive}>
       {pieces.map((piece) => (
-        <span key={piece.id} className={styles.chatStreamingToken}>
+        <span
+          key={piece.id}
+          className={styles.chatStreamingToken}
+          style={piece.delayMs > 0 ? { animationDelay: `${piece.delayMs}ms` } : undefined}
+        >
           {piece.value}
         </span>
       ))}
@@ -257,10 +297,8 @@ const getAssistantDisplayContent = (rawContent: string): AssistantDisplayContent
   const rawThinkingText = assistantSections?.thinking ?? null;
   const aiText = assistantSections?.ai ?? rawContent;
   const hasRawThinkingText = typeof rawThinkingText === "string" && rawThinkingText.trim().length > 0;
-  const hasAiText = aiText.trim().length > 0;
-  const useThinkingAsAnswer = hasRawThinkingText && !hasAiText;
-  const shouldSurfaceThinking = hasRawThinkingText && !useThinkingAsAnswer;
-  const assistantTextCandidate = useThinkingAsAnswer ? rawThinkingText ?? "" : aiText;
+  const shouldSurfaceThinking = hasRawThinkingText;
+  const assistantTextCandidate = aiText;
   const sanitizedAssistantTextCandidate = stripGrayTitleMarkers(assistantTextCandidate);
   const assistantTextAfterRemovals = sanitizedAssistantTextCandidate.replace(REMINDER_CODE_BLOCK_REGEX, "").trim();
 
@@ -421,7 +459,6 @@ export const ChatMessagesList = memo(
           const hasTextContent = Boolean(visibleAssistantText.trim());
           const assistantReminders = isAssistant && Array.isArray(message.reminders) ? message.reminders : [];
           const showAssistantMarkdown = isAssistant && hasTextContent;
-          const shouldUseStreamingMarkdown = isStreamingMessage && shouldPreferMarkdownStreamingRender(visibleAssistantText);
           const hasVisibleContent = hasThinkingContent || showAssistantMarkdown || assistantReminders.length > 0;
           const isStreamingAssistantMessage = isAssistant && isStreamingMessage;
           const isAwaitingStreamContent = isStreamingAssistantMessage && !hasVisibleContent;
@@ -544,7 +581,7 @@ export const ChatMessagesList = memo(
                         data-streaming={isStreamingMessage ? "true" : undefined}
                         aria-live={isStreamingMessage ? "polite" : undefined}
                       >
-                        {isStreamingMessage && !shouldUseStreamingMarkdown ? (
+                        {isStreamingMessage ? (
                           <StreamingTokenText text={visibleAssistantText} ariaLive="polite" />
                         ) : (
                           <ReactMarkdown

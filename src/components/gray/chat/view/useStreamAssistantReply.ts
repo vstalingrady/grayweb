@@ -22,6 +22,8 @@ import {
   shouldRequestAutoTitleForSession,
 } from "../utils";
 import { resolveWebSearchDecision } from "../utils/webSearchHeuristics";
+import { createStreamReasoningTracker } from "../streamingReasoning";
+import { StreamTextAccumulator } from "../streamTextAccumulator";
 
 type UseStreamAssistantReplyOptions = {
   session?: ChatSession;
@@ -178,7 +180,8 @@ export const useStreamAssistantReply = ({
       const useWorkspaceContext = shouldIncludeWorkspaceContext(prompt, workspaceContext);
       const contextPayload = useWorkspaceContext ? workspaceContext ?? undefined : undefined;
 
-      let accumulated = "";
+      const streamTextAccumulator = new StreamTextAccumulator();
+      let accumulated = streamTextAccumulator.get();
       let capturedReminders: unknown[] = [];
       const isGeneralSession = session?.scope === "general";
       let streamedConversationId: string | null = isGeneralSession
@@ -193,6 +196,8 @@ export const useStreamAssistantReply = ({
       const streamingUserId = resolvedUser.id;
       const abortController = new AbortController();
       streamAbortControllerRef.current = abortController;
+      const effectiveModel = modelTier === "pioneer" ? selectedModelId ?? modelTier : modelTier;
+      const effectiveReasoningMode = modelTier !== "lite" && reasoningMode;
       const recentUserMessages =
         session?.messages
           .filter(
@@ -237,8 +242,8 @@ export const useStreamAssistantReply = ({
             query?: string;
           }
         | undefined;
-      let localThinkingStartTime: number | null = null;
       let didSetReasoningSeconds = false;
+      const reasoningTracker = createStreamReasoningTracker(Date.now());
       let shouldClearToolStatusOnNextToken = false;
       let latestSearchQuery: string | null = null;
       let latestSearchToolName: string | null = null;
@@ -286,8 +291,8 @@ export const useStreamAssistantReply = ({
             web_search_mode: webSearchMode,
             web_search_engine: "google",
             web_search_max_results: 50,
-            model: selectedModelId ?? modelTier,
-            reasoning_mode: reasoningMode,
+            model: effectiveModel,
+            reasoning_mode: effectiveReasoningMode,
             reminders_enabled: remindersEnabled,
           },
           { signal: abortController.signal }
@@ -337,22 +342,14 @@ export const useStreamAssistantReply = ({
               });
               shouldClearToolStatusOnNextToken = false;
             }
-            const prevAccumulated = accumulated;
-            accumulated = accumulated && delta.startsWith(accumulated) ? delta : accumulated + delta;
-
-            const hasThinkingTag = accumulated.toLowerCase().includes("<thinking>");
-            const hadThinkingTag = prevAccumulated.toLowerCase().includes("<thinking>");
-            if (hasThinkingTag && !hadThinkingTag) {
+            accumulated = streamTextAccumulator.append(delta);
+            const transition = reasoningTracker.onAccumulatedText(accumulated, Date.now());
+            if (transition.opened) {
               setIsActivelyThinking(true);
-              localThinkingStartTime = Date.now();
-              setThinkingStartTime(localThinkingStartTime);
+              setThinkingStartTime(transition.thinkingStartedAtMs ?? Date.now());
             }
-
-            const hasClosingTag = accumulated.toLowerCase().includes("</thinking>");
-            const hadClosingTag = prevAccumulated.toLowerCase().includes("</thinking>");
-            if (hasClosingTag && !hadClosingTag && localThinkingStartTime) {
-              const elapsed = (Date.now() - localThinkingStartTime) / 1000;
-              finalizeReasoningSeconds(elapsed);
+            if (transition.reasoningSeconds !== null && !didSetReasoningSeconds) {
+              finalizeReasoningSeconds(transition.reasoningSeconds);
             }
 
             if (assistantMessageId) {
@@ -384,10 +381,6 @@ export const useStreamAssistantReply = ({
           }
 
           if (event.type === "end") {
-            if (localThinkingStartTime && !didSetReasoningSeconds) {
-              const elapsed = (Date.now() - localThinkingStartTime) / 1000;
-              finalizeReasoningSeconds(elapsed);
-            }
             if (!isGeneralSession) {
               streamedConversationId = normalizeConversationIdValue(event.conversationId) ?? streamedConversationId;
               if (streamedConversationId) {
@@ -397,16 +390,18 @@ export const useStreamAssistantReply = ({
                 }
               }
             }
-            const streamedText = accumulated;
+            const streamedText = streamTextAccumulator.get();
             const endResponseText = typeof event.response === "string" ? event.response : "";
-            const normalizeWhitespace = (value: string) => value.trim().replace(/\s+/g, " ");
-            const preferEndPayload =
-              streamedText.trim().length === 0 ||
-              (endResponseText.trim().length > 0 &&
-                normalizeWhitespace(endResponseText) === normalizeWhitespace(streamedText));
-            const responseSource = preferEndPayload ? endResponseText || streamedText : streamedText;
+            const responseSource = reasoningTracker.selectFinalResponseSource(streamedText, endResponseText);
+            const finalizedReasoningSeconds = reasoningTracker.finalizeReasoningFromResponse(
+              responseSource,
+              Date.now()
+            );
+            if (finalizedReasoningSeconds !== null && !didSetReasoningSeconds) {
+              finalizeReasoningSeconds(finalizedReasoningSeconds);
+            }
             const normalizedResponse = normalizeAssistantContent(responseSource, prompt);
-            accumulated = normalizedResponse;
+            accumulated = streamTextAccumulator.set(normalizedResponse);
             if (event.title) {
               applyAutoTitle(targetSessionId, event.title, { sync: false });
             } else {
@@ -447,8 +442,8 @@ export const useStreamAssistantReply = ({
           }
         }
 
-        const normalized = normalizeAssistantContent(accumulated, prompt);
-        accumulated = normalized;
+        const normalized = normalizeAssistantContent(streamTextAccumulator.get(), prompt);
+        accumulated = streamTextAccumulator.set(normalized);
         applyFallbackTitle();
         const baseVariants = previousVariants.length > 0 ? previousVariants : [];
         const nextVariants = normalized ? [...baseVariants, normalized] : baseVariants;
@@ -483,7 +478,9 @@ export const useStreamAssistantReply = ({
             isGeneratingTitle: false,
           });
           clearAttachments();
-          return normalizeAssistantContent(accumulated, prompt);
+          const abortedResponse = normalizeAssistantContent(streamTextAccumulator.get(), prompt);
+          accumulated = streamTextAccumulator.set(abortedResponse);
+          return abortedResponse;
         }
         console.warn("Failed to stream assistant reply:", error);
         try {
@@ -511,8 +508,8 @@ export const useStreamAssistantReply = ({
             web_search_engine: "google",
             web_search_max_results: 50,
             should_generate_title: requestTitleHint,
-            model: selectedModelId ?? modelTier,
-            reasoning_mode: reasoningMode,
+            model: effectiveModel,
+            reasoning_mode: effectiveReasoningMode,
             reminders_enabled: remindersEnabled,
           });
           streamedConversationId =

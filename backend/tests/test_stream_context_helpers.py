@@ -48,6 +48,19 @@ def test_determine_provider_and_model_maps_tier_alias_and_sets_flag() -> None:
     assert is_alias is True
 
 
+def test_determine_provider_and_model_maps_openrouter_auto_alias() -> None:
+    provider, model, is_alias = determine_provider_and_model(
+        model="openrouter/auto",
+        openrouter_available=True,
+        needs_structured_tools=False,
+        is_onboarding_tool=False,
+    )
+
+    assert provider == "openrouter"
+    assert model == "openrouter/auto"
+    assert is_alias is False
+
+
 def test_determine_provider_and_model_maps_pioneer_alias() -> None:
     provider, model, is_alias = determine_provider_and_model(
         model="pioneer",

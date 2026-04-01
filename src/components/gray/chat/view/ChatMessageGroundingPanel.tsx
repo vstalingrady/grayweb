@@ -671,8 +671,10 @@ export function ChatMessageGroundingPanel({ metadata, t }: ChatMessageGroundingP
     new Set(
       cards
         .filter((card) => !card.previewImageUrl)
-        .map((card) => card.href?.trim())
-        .filter((href): href is string => Boolean(href) && HTTP_URL_PATTERN.test(href))
+        .map((card) => card.href)
+        .filter((href): href is string => typeof href === "string")
+        .map((href) => href.trim())
+        .filter((href) => href.length > 0 && HTTP_URL_PATTERN.test(href))
     )
   ).slice(0, LINK_PREVIEW_FETCH_LIMIT);
   const previewLookupKey = previewLookupCandidates.join("\n");

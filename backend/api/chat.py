@@ -106,6 +106,8 @@ GPT_OSS_120B_MODEL_ID = "openai/gpt-oss-120b"
 GPT_OSS_120B_FAST_MODEL_ID = "openai/gpt-oss-120b:fast"
 GLM_47_MODEL_ID = "z-ai/glm-4.7"
 GLM_47_FAST_MODEL_ID = "z-ai/glm-4.7:fast"
+GLM_5_MODEL_ID = "z-ai/glm-5"
+GLM_5_FAST_MODEL_ID = "z-ai/glm-5:fast"
 
 
 def _is_low_information_search_turn(text: str) -> bool:
@@ -223,7 +225,12 @@ def _resolve_provider_routing(
     effective = (effective_model or "").strip().lower()
     requested = (requested_model or "").strip().lower()
     gpt_oss_targets = {GPT_OSS_120B_MODEL_ID, GPT_OSS_120B_FAST_MODEL_ID}
-    glm_47_targets = {GLM_47_MODEL_ID, GLM_47_FAST_MODEL_ID}
+    glm_5_targets = {
+        GLM_47_MODEL_ID,
+        GLM_47_FAST_MODEL_ID,
+        GLM_5_MODEL_ID,
+        GLM_5_FAST_MODEL_ID,
+    }
 
     # GPT OSS 120b defaults:
     # - Normal model prioritizes cheapest provider
@@ -234,14 +241,19 @@ def _resolve_provider_routing(
         else:
             routing.setdefault("sort", "price")
 
-    # GLM 4.7 defaults:
+    # GLM defaults:
     # - Normal model prioritizes cheapest provider
     # - :fast variant prioritizes fastest provider
-    if effective in glm_47_targets or requested in glm_47_targets:
-        if requested == GLM_47_FAST_MODEL_ID or effective == GLM_47_FAST_MODEL_ID:
+    if effective in glm_5_targets or requested in glm_5_targets:
+        glm_fast_targets = {GLM_47_FAST_MODEL_ID, GLM_5_FAST_MODEL_ID}
+        if requested in glm_fast_targets or effective in glm_fast_targets:
             routing.setdefault("sort", "throughput")
         else:
             routing.setdefault("sort", "price")
+
+    # Keep OpenRouter autorouter unsteered by model, but prefer cheapest provider.
+    if requested in {"openrouter/auto", "auto", "lite", "gray-lite"}:
+        routing.setdefault("sort", "price")
 
     return routing or None
 
@@ -281,7 +293,9 @@ def _build_effective_web_search_prompt(
         "Never run standalone generic queries such as 'other half', 'the rest', or 'what about him'. "
         "Keep the user domain intact; do not reinterpret ambiguous words into unrelated domains. "
         "Never derive search terms from runtime scaffolding like timezone metadata, UTC offsets, ISO timestamps, "
-        "or reminder formatting instructions. "
+        "reminder formatting instructions, system/tool notes, calendar/memory context, or runtime context blocks. "
+        "If the user sends a low-information search command (for example, 'search' or 'please search'), "
+        "treat it as a follow-up search and anchor strictly to the latest substantive user topic. "
         "For factual claims or rumor/verification style questions, if confidence is not high, run one targeted web search before concluding. "
         "If the referent is still ambiguous, ask one clarifying question instead of broad generic searches. "
         "Do not claim you cannot browse or that your knowledge is cutoff when web search is enabled."
@@ -352,15 +366,24 @@ def _build_effective_web_search_prompt(
         prompt_parts.append(base_prompt)
     prompt_parts.append(guidance)
     follow_up_message = chat_request.message or ""
+    low_info_search = _is_low_information_search_turn(follow_up_message)
     follow_up_like = bool(
         FOLLOW_UP_PRONOUN_PATTERN.search(follow_up_message)
         or FOLLOW_UP_REFERENTIAL_PATTERN.search(follow_up_message)
+        or low_info_search
     )
+    if low_info_search:
+        prompt_parts.append(
+            "Low-information search turn detected. "
+            "Use the most recent substantive USER topic as the search anchor and ignore runtime/timezone/reminder scaffolding."
+        )
     if follow_up_like and recent_user_context:
         prompt_parts.append(
             f"Recent user context to anchor follow-up search: {_compact_context_snippet(recent_user_context)}"
         )
-    if follow_up_like and recent_assistant_context:
+    # For low-information search commands, assistant text is more likely to include
+    # formatting/runtime scaffolding. Keep anchoring user-led.
+    if follow_up_like and recent_assistant_context and not low_info_search:
         prompt_parts.append(
             "Recent assistant context to anchor follow-up search: "
             f"{_compact_context_snippet(recent_assistant_context)}"

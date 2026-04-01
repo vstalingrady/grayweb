@@ -3,7 +3,6 @@
 import React from "react";
 import Navigation from "./Navigation";
 import HeroSection from "./HeroSection";
-import IntegrationsSection from "./IntegrationsSection";
 import MarketingFooter from "./MarketingFooter";
 
 type MarketingLandingProps = {
@@ -16,7 +15,6 @@ export default function MarketingLanding({ tryGrayUrl }: MarketingLandingProps) 
             <div className="page-root">
                 <Navigation />
                 <HeroSection />
-                <IntegrationsSection />
                 <MarketingFooter tryGrayUrl={tryGrayUrl} />
             </div>
         </>

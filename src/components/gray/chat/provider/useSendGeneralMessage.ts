@@ -23,7 +23,9 @@ import {
   shouldRequestAutoTitleForSession,
 } from "../utils";
 import { resolveWebSearchDecision } from "../utils/webSearchHeuristics";
-import { extractGrayRemindersFromText, resolveAssistantReminders } from "../reminderUtils";
+import { resolveAssistantReminders } from "../reminderUtils";
+import { createStreamReasoningTracker } from "../streamingReasoning";
+import { StreamTextAccumulator } from "../streamTextAccumulator";
 
 declare global {
   interface Window {
@@ -99,7 +101,6 @@ export const useSendGeneralMessage = ({
   generalConversationIdRef,
 }: UseSendGeneralMessageOptions): UseSendGeneralMessageResult => {
   const lastSentProfileHashRef = useRef<string>("");
-  const reasoningStartTimeRef = useRef<number | null>(null);
 
   const sendGeneralMessage = useCallback(
     async (content: string): Promise<string> => {
@@ -177,9 +178,13 @@ export const useSendGeneralMessage = ({
       });
 
       (async () => {
-        let accumulated = "";
+        const streamTextAccumulator = new StreamTextAccumulator();
+        let accumulated = streamTextAccumulator.get();
         let capturedReminders: unknown[] = [];
-        let didReceiveToken = false;
+        let capturedReasoningSeconds: number | null = null;
+        const reasoningTracker = createStreamReasoningTracker(Date.now());
+        const effectiveModel = modelTier === "pioneer" ? selectedModelId ?? modelTier : modelTier;
+        const effectiveReasoningMode = modelTier !== "lite" && reasoningMode;
         const streamingUserId = resolvedUser.id;
         let shouldClearToolStatusOnNextToken = false;
         let latestSearchQuery: string | null = null;
@@ -220,10 +225,6 @@ export const useSendGeneralMessage = ({
             lastSentProfileHashRef.current = currentProfileHash;
           }
 
-          if (reasoningMode) {
-            reasoningStartTimeRef.current = Date.now();
-          }
-
           const shouldGenerateTitle = shouldRequestAutoTitleForSession(generalSession);
           if (shouldGenerateTitle) {
             updateSession(generalSession.id, { isGeneratingTitle: true });
@@ -252,9 +253,9 @@ export const useSendGeneralMessage = ({
             web_search_mode: webSearchMode,
             web_search_engine: "google",
             web_search_max_results: 50,
-            reasoning_mode: reasoningMode,
+            reasoning_mode: effectiveReasoningMode,
             reminders_enabled: remindersEnabled,
-            model: selectedModelId ?? modelTier,
+            model: effectiveModel,
           })) {
             if (event.type === "tool_status") {
               if (assistantMessageId) {
@@ -299,14 +300,13 @@ export const useSendGeneralMessage = ({
                 });
                 shouldClearToolStatusOnNextToken = false;
               }
-              accumulated = accumulated && delta.startsWith(accumulated) ? delta : accumulated + delta;
+              accumulated = streamTextAccumulator.append(delta);
+              const transition = reasoningTracker.onAccumulatedText(accumulated, Date.now());
               if (assistantMessageId) {
                 const updates: Partial<ChatMessage> = { content: stripMcpToolBlocks(accumulated) };
-                if (!didReceiveToken && reasoningStartTimeRef.current) {
-                  const elapsed = (Date.now() - reasoningStartTimeRef.current) / 1000;
-                  reasoningStartTimeRef.current = null;
-                  updates.reasoningSeconds = elapsed;
-                  didReceiveToken = true;
+                if (transition.reasoningSeconds !== null && capturedReasoningSeconds === null) {
+                  capturedReasoningSeconds = transition.reasoningSeconds;
+                  updates.reasoningSeconds = transition.reasoningSeconds;
                 }
                 updateMessageThrottled(
                   generalSession.id,
@@ -327,15 +327,11 @@ export const useSendGeneralMessage = ({
             if (event.type === "end") {
               streamedConversationId =
                 coerceConversationIdForRequest(event.conversationId) ?? streamedConversationId;
-              const streamedText = accumulated;
+              const streamedText = streamTextAccumulator.get();
               const endResponseText = typeof event.response === "string" ? event.response : "";
-              const normalizeWhitespace = (value: string) => value.trim().replace(/\s+/g, " ");
-              const preferEndPayload =
-                streamedText.trim().length === 0 ||
-                (endResponseText.trim().length > 0 &&
-                  normalizeWhitespace(endResponseText) === normalizeWhitespace(streamedText));
-              const responseSource = preferEndPayload ? endResponseText || streamedText : streamedText;
+              const responseSource = reasoningTracker.selectFinalResponseSource(streamedText, endResponseText);
               const finalResponse = normalizeAssistantContent(responseSource, trimmed);
+              accumulated = streamTextAccumulator.set(finalResponse);
               const metadata = event.groundingMetadata ?? undefined;
               const timingUpdate = event.timing ? { backendTimings: event.timing } : undefined;
 
@@ -349,9 +345,16 @@ export const useSendGeneralMessage = ({
                 ...(timingUpdate ?? {}),
               };
 
-              if (!didReceiveToken && reasoningStartTimeRef.current) {
-                const elapsed = (Date.now() - reasoningStartTimeRef.current) / 1000;
-                finalMessageUpdates.reasoningSeconds = elapsed;
+              const finalizedReasoningSeconds = reasoningTracker.finalizeReasoningFromResponse(
+                responseSource,
+                Date.now()
+              );
+              if (capturedReasoningSeconds === null && finalizedReasoningSeconds !== null) {
+                capturedReasoningSeconds = finalizedReasoningSeconds;
+              }
+
+              if (capturedReasoningSeconds !== null) {
+                finalMessageUpdates.reasoningSeconds = capturedReasoningSeconds;
               }
 
               if (assistantMessageId) {
@@ -378,12 +381,20 @@ export const useSendGeneralMessage = ({
             }
           }
 
-          const finalFallback = normalizeAssistantContent(accumulated, trimmed);
+          const finalFallback = normalizeAssistantContent(streamTextAccumulator.get(), trimmed);
+          accumulated = streamTextAccumulator.set(finalFallback);
+          if (capturedReasoningSeconds === null) {
+            capturedReasoningSeconds = reasoningTracker.finalizeReasoningFromResponse(finalFallback, Date.now());
+          }
           if (assistantMessageId) {
-            updateMessage(generalSession.id, assistantMessageId, {
+            const fallbackMessageUpdates: Partial<ChatMessage> = {
               content: finalFallback,
               toolStatus: completedSearchToolStatus,
-            });
+            };
+            if (capturedReasoningSeconds !== null) {
+              fallbackMessageUpdates.reasoningSeconds = capturedReasoningSeconds;
+            }
+            updateMessage(generalSession.id, assistantMessageId, fallbackMessageUpdates);
           } else {
             const assistantMessage = appendMessage(generalSession.id, "assistant", finalFallback);
             assistantMessageId = (assistantMessage as ChatMessage | null)?.id ?? null;
@@ -398,10 +409,14 @@ export const useSendGeneralMessage = ({
           console.error("Failed to send general message:", error);
           const fallback = buildAssistantErrorReply(error);
           if (assistantMessageId) {
-            updateMessage(generalSession.id, assistantMessageId, {
+            const errorMessageUpdates: Partial<ChatMessage> = {
               content: fallback,
               toolStatus: completedSearchToolStatus,
-            });
+            };
+            if (capturedReasoningSeconds !== null) {
+              errorMessageUpdates.reasoningSeconds = capturedReasoningSeconds;
+            }
+            updateMessage(generalSession.id, assistantMessageId, errorMessageUpdates);
           } else {
             appendMessage(generalSession.id, "assistant", fallback);
           }

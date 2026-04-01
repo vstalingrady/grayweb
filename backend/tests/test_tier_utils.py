@@ -26,7 +26,7 @@ def test_coerce_model_for_tier_treats_pro_as_voyager() -> None:
 
 def test_coerce_model_for_tier_remaps_glm_alias() -> None:
     effective_model, coerced = coerce_model_for_tier("z-ai/glm-4.7-2025", "pathfinder")
-    assert effective_model == "z-ai/glm-4.7"
+    assert effective_model == "z-ai/glm-5"
     assert coerced is True
 
 
@@ -37,8 +37,26 @@ def test_coerce_model_for_tier_allows_gpt_oss_fast_for_pathfinder() -> None:
 
 
 def test_coerce_model_for_tier_allows_glm_fast_for_pathfinder() -> None:
-    effective_model, coerced = coerce_model_for_tier("z-ai/glm-4.7:fast", "pathfinder")
-    assert effective_model == "z-ai/glm-4.7:fast"
+    effective_model, coerced = coerce_model_for_tier("z-ai/glm-5:fast", "pathfinder")
+    assert effective_model == "z-ai/glm-5:fast"
+    assert coerced is False
+
+
+def test_coerce_model_for_tier_remaps_minimax_alias() -> None:
+    effective_model, coerced = coerce_model_for_tier("minimax/minimax-m2.1", "pathfinder")
+    assert effective_model == "minimax/minimax-m2.5"
+    assert coerced is True
+
+
+def test_coerce_model_for_tier_preserves_openrouter_auto() -> None:
+    effective_model, coerced = coerce_model_for_tier("openrouter/auto", "pioneer")
+    assert effective_model == "openrouter/auto"
+    assert coerced is False
+
+
+def test_coerce_model_for_tier_allows_xiaomi_mimo_without_suffix() -> None:
+    effective_model, coerced = coerce_model_for_tier("xiaomi/mimo-v2-flash", "pathfinder")
+    assert effective_model == "xiaomi/mimo-v2-flash"
     assert coerced is False
 
 

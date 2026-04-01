@@ -974,23 +974,23 @@
 }
 
 .calendarSidebarColor[data-variant="primary"] {
-  background: linear-gradient(135deg, #4e7cff, #5c8bff);
+  background: linear-gradient(135deg, #f2f2f2, #d9d9d9);
 }
 
 .calendarSidebarColor[data-variant="secondary"] {
-  background: linear-gradient(135deg, #ff6f61, #ff947b);
+  background: linear-gradient(135deg, #d8d8d8, #bfbfbf);
 }
 
 .calendarSidebarColor[data-variant="tertiary"] {
-  background: linear-gradient(135deg, #f7c948, #fbd671);
+  background: linear-gradient(135deg, #c2c2c2, #a9a9a9);
 }
 
 .calendarSidebarColor[data-variant="quaternary"] {
-  background: linear-gradient(135deg, #5ed2a0, #6de0b1);
+  background: linear-gradient(135deg, #ababab, #939393);
 }
 
 .calendarSidebarColor[data-variant="quinary"] {
-  background: linear-gradient(135deg, #a67cff, #b893ff);
+  background: linear-gradient(135deg, #969696, #7f7f7f);
 }
 
 .calendarSidebarLabel {

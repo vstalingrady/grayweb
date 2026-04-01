@@ -12,8 +12,37 @@ export default function GlobalError({
 }) {
   const { t } = useI18n();
   useEffect(() => {
-    // Optional: Log the error to an error reporting service
     console.error(error);
+
+    const message = typeof error?.message === "string" ? error.message : "";
+    const staleActionError =
+      message.includes("Failed to find Server Action") ||
+      message.includes("older or newer deployment");
+    if (!staleActionError) {
+      return;
+    }
+
+    const reloadGuardKey = "gray_server_action_reload_at";
+    const reloadCooldownMs = 5 * 60 * 1000;
+    let shouldReload = true;
+    try {
+      const previousReload = sessionStorage.getItem(reloadGuardKey);
+      if (previousReload) {
+        const previousReloadMs = Number(previousReload);
+        if (Number.isFinite(previousReloadMs) && Date.now() - previousReloadMs < reloadCooldownMs) {
+          shouldReload = false;
+        }
+      }
+      if (shouldReload) {
+        sessionStorage.setItem(reloadGuardKey, String(Date.now()));
+      }
+    } catch {
+      shouldReload = true;
+    }
+
+    if (shouldReload) {
+      window.location.reload();
+    }
   }, [error]);
 
   return (

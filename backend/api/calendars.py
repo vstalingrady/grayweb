@@ -20,8 +20,10 @@ from backend.models import (
 from backend.database import calendars, calendar_events, habits, get_database
 from backend.auth import get_current_user, require_same_user
 from backend.time_utils import utcnow
-from backend.tier_utils import normalize_plan_tier
-from backend.compat_imports import row_get as _row_get
+try:
+    from backend.compat_imports import row_get as _row_get
+except ImportError:  # Fallback when compat bundle isn't available yet.
+    from backend.core.serializers import row_get as _row_get
 
 router = APIRouter(tags=["calendars"])
 
@@ -75,16 +77,7 @@ def _serialize_calendar_event_record(
 
 
 def _require_calendar_access(current_user: Dict[str, Any]) -> None:
-    tier = normalize_plan_tier(
-        _row_get(current_user, "plan_tier"),
-        _row_get(current_user, "role"),
-        _row_get(current_user, "subscription_expires_at"),
-    )
-    if tier not in ("voyager", "pioneer"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Calendar access requires a Voyager or Pioneer plan.",
-        )
+    return None
 
 
 def _validate_event_time_range(start_time: datetime, end_time: datetime) -> None:

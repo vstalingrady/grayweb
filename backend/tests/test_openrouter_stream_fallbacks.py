@@ -23,11 +23,36 @@ async def _execute_function_call_stub(tool_call, user_id, db, **kwargs):
     return {"tool": tool_call.name, "ok": True}
 
 
+class _StubUsageTracker:
+    calls = []
+
+    def __init__(self, db):
+        self.db = db
+
+    @classmethod
+    def reset(cls):
+        cls.calls = []
+
+    async def track_usage(self, *args, **kwargs):
+        return None
+
+    async def track_cost(self, user_id: int, cost: float, description: str = "service_cost"):
+        self.calls.append(
+            {
+                "user_id": user_id,
+                "cost": float(cost),
+                "description": description,
+            }
+        )
+
+
 async def _collect_events(
     openrouter_service: _StubOpenRouterService,
     *,
     message: str = "hello",
     search_enabled: bool = False,
+    usage_tracker_cls=None,
+    db=None,
 ):
     return [
         event
@@ -48,7 +73,8 @@ async def _collect_events(
             needs_structured_tools=False,
             is_onboarding_tool=False,
             execute_function_call_fn=_execute_function_call_stub,
-            db=None,
+            db=db,
+            usage_tracker_cls=usage_tracker_cls,
         )
     ]
 
@@ -143,3 +169,60 @@ async def test_tool_only_search_turn_emits_search_fallback_with_query_and_ground
         final_payload["grounding_metadata"]["grounding_chunks"][0]["web"]["uri"]
         == "https://example.com/mars-weather"
     )
+
+
+@pytest.mark.asyncio
+async def test_search_cost_not_tracked_without_grounding_evidence():
+    _StubUsageTracker.reset()
+    openrouter_service = _StubOpenRouterService(
+        turns=[
+            [],
+        ]
+    )
+
+    await _collect_events(
+        openrouter_service,
+        message="hello",
+        search_enabled=True,
+        usage_tracker_cls=_StubUsageTracker,
+        db=object(),
+    )
+
+    assert _StubUsageTracker.calls == []
+
+
+@pytest.mark.asyncio
+async def test_search_cost_tracked_once_when_grounding_present():
+    _StubUsageTracker.reset()
+    openrouter_service = _StubOpenRouterService(
+        turns=[
+            [
+                {
+                    "annotations": [
+                        {
+                            "type": "url_citation",
+                            "url_citation": {
+                                "url": "https://example.com/reference",
+                                "title": "Reference",
+                                "start_index": 0,
+                                "end_index": 10,
+                            },
+                        }
+                    ]
+                }
+            ]
+        ]
+    )
+
+    await _collect_events(
+        openrouter_service,
+        message="hello",
+        search_enabled=True,
+        usage_tracker_cls=_StubUsageTracker,
+        db=object(),
+    )
+
+    assert len(_StubUsageTracker.calls) == 1
+    assert _StubUsageTracker.calls[0]["user_id"] == 1
+    assert _StubUsageTracker.calls[0]["cost"] == 0.01
+    assert _StubUsageTracker.calls[0]["description"] == "web_search"

@@ -7,7 +7,7 @@ import { useChatStore } from "@/components/gray/ChatProvider";
 import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
 import styles from "./ModelSelector.module.css";
-import { ALL_PIONEER_MODEL_IDS, PIONEER_GROUPS } from "./modelCatalog";
+import { ALL_PIONEER_MODEL_IDS, ALWAYS_REASONING_MODEL_IDS, PIONEER_GROUPS } from "./modelCatalog";
 import { normalizePlanTier, PLAN_TIER_LEVELS } from "@/components/gray/utils/helperFunctions";
 
 type ModelOption = {
@@ -53,9 +53,13 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
 
   const currentTier = normalizePlanTier(user);
   const currentLevel = PLAN_TIER_LEVELS[currentTier] ?? 0;
-  const isReasoningForcedOn = selectedModelId === "moonshotai/kimi-k2.5";
+  const isReasoningForcedOn =
+    modelTier === "pioneer" &&
+    typeof selectedModelId === "string" &&
+    ALWAYS_REASONING_MODEL_IDS.includes(selectedModelId);
   const shouldShowReasoningLevel =
-    selectedModelId === "google/gemini-3-pro-preview" || modelTier === "pro";
+    modelTier === "pioneer" &&
+    (selectedModelId === "google/gemini-3.1-pro-preview" || selectedModelId === "google/gemini-3-pro-preview");
   const isReasoningToggleDisabled = isReasoningForcedOn;
   const reasoningDescription = isReasoningForcedOn
     ? null
@@ -129,13 +133,14 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
         setModelTier("pro");
       } else {
         setModelTier("lite");
+        setReasoningMode(false);
       }
       setSelectedModelId(null); // Clear specific model selection for base tiers
 
       setIsOpen(false);
       setShowAllModels(false);
     },
-    [currentLevel, setModelTier, setSelectedModelId]
+    [currentLevel, setModelTier, setReasoningMode, setSelectedModelId]
   );
 
   const handlePioneerSelect = useCallback(
@@ -169,14 +174,9 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
 
   const handleAllModelsClick = useCallback(
     (event: ReactMouseEvent<HTMLButtonElement>) => {
-      if (isAllModelsLocked) {
-        event.preventDefault();
-        window.location.assign("/pricing");
-        return;
-      }
       toggleAllModels(event);
     },
-    [isAllModelsLocked, toggleAllModels]
+    [toggleAllModels]
   );
 
   const handleGroupToggle = useCallback((groupId: string) => {

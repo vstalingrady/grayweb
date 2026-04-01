@@ -113,6 +113,7 @@ def _ensure_sqlite_runtime_indexes() -> None:
     _ensure_sqlite_index("payment_webhook_events", "ix_payment_webhook_events_order_id", "order_id")
     _ensure_sqlite_index("media_uploads", "ix_media_uploads_user_id_created_at", "user_id, created_at")
     _ensure_sqlite_index("reminders", "ix_reminders_user_status_remind_at", "user_id, status, remind_at")
+    _ensure_sqlite_index("usage_events", "ix_usage_events_user_id_created_at", "user_id, created_at")
 
     # Auto-dedupe existing legacy duplicates before creating UNIQUE indexes.
     _ensure_sqlite_unique_index(
@@ -281,6 +282,30 @@ def run_startup_migrations():
             UNIQUE(provider, event_key)
         )
     """)
+    _ensure_sqlite_table("usage_events", """
+        CREATE TABLE usage_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            model TEXT,
+            input_tokens INTEGER NOT NULL DEFAULT 0,
+            output_tokens INTEGER NOT NULL DEFAULT 0,
+            cached_tokens INTEGER NOT NULL DEFAULT 0,
+            cost_usd REAL NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+    """)
+    _ensure_sqlite_columns(
+        "usage_events",
+        [
+            ("model", "TEXT", None),
+            ("input_tokens", "INTEGER", "0"),
+            ("output_tokens", "INTEGER", "0"),
+            ("cached_tokens", "INTEGER", "0"),
+            ("cost_usd", "REAL", "0"),
+            ("created_at", "DATETIME", "CURRENT_TIMESTAMP"),
+        ],
+    )
 
     _ensure_sqlite_runtime_indexes()
 

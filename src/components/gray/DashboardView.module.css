@@ -16,13 +16,26 @@
   overflow: visible;
 }
 
-:global([data-dashboard-tab="pulse"]) .dashboardCalendarShell,
+:global([data-dashboard-tab="pulse"]) .dashboardCalendarShell:not([data-compact="true"]),
 :global([data-dashboard-tab="calendar"]) .dashboardCalendarShell {
   height: 100%;
   min-height: 0;
   max-height: var(--dashboard-panel-max-height, none);
   max-width: 100%;
   overflow: hidden;
+}
+
+:global([data-dashboard-tab="pulse"]) .dashboardCalendarContainer[data-compact="true"],
+:global([data-dashboard-tab="pulse"]) .dashboardCalendarShell[data-compact="true"],
+:global([data-dashboard-tab="pulse"]) .dashboardCalendarSurface[data-compact="true"] {
+  height: auto;
+  max-height: none;
+  min-height: 0;
+  overflow: visible;
+}
+
+:global([data-dashboard-tab="pulse"]) .dashboardCalendarContainer[data-compact="true"] {
+  padding-top: clamp(10px, 1.8vh, 16px);
 }
 
 .dashboardCalendarContainer>* {
@@ -170,6 +183,13 @@
   max-width: 1200px;
   margin: 0 auto;
   width: 100%;
+}
+
+@media (max-width: 768px) {
+  .dashboardViewScrollContainer {
+    overflow: visible;
+    padding-top: env(safe-area-inset-top, 0px);
+  }
 }
 
 .dashboardCalendarResizeHandle {

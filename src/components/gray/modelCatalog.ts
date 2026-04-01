@@ -34,8 +34,8 @@ export const PIONEER_GROUPS: ModelGroup[] = [
     label: "Google",
     iconPath: "/logos/gemini-color.svg",
     models: [
-      { id: "google/gemini-3-pro-preview", label: "Gemini 3 Pro", cost: "$$$", tierRequired: "voyager" },
-      { id: "google/gemini-3-flash-preview", label: "Gemini 3 Flash", cost: "$$", tierRequired: "pathfinder" },
+      { id: "google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro", cost: "$$$", tierRequired: "voyager" },
+      { id: "google/gemini-3.1-flash", label: "Gemini 3.1 Flash", cost: "$$", tierRequired: "pathfinder" },
     ],
   },
   {
@@ -84,9 +84,15 @@ export const PIONEER_GROUPS: ModelGroup[] = [
     label: "MiniMax",
     iconPath: "/logos/minimax-color.svg",
     models: [
-      { id: "minimax/minimax-m2.1", label: "MiniMax M2.1", cost: "$$", tierRequired: "pathfinder" },
+      { id: "minimax/minimax-m2.5", label: "MiniMax M2.5", cost: "$$", tierRequired: "pathfinder" },
       { id: "minimax/minimax-m2-her", label: "MiniMax M2 - her", cost: "$$", tierRequired: "pathfinder" },
     ],
+  },
+  {
+    id: "qwen",
+    label: "Qwen",
+    iconPath: "/logos/qwen-color.svg",
+    models: [{ id: "qwen/qwen3.5-plus-02-15", label: "Qwen3.5 Plus", cost: "$$", tierRequired: "pathfinder" }],
   },
   {
     id: "nvidia",
@@ -100,16 +106,15 @@ export const PIONEER_GROUPS: ModelGroup[] = [
     id: "xiaomi",
     label: "Xiaomi",
     iconPath: "/logos/xiaomi.svg",
-    models: [{ id: "xiaomi/mimo-v2-flash:free", label: "MiMo V2 Flash", cost: "$", tierRequired: "pathfinder" }],
+    models: [{ id: "xiaomi/mimo-v2-flash", label: "MiMo V2 Flash", cost: "$", tierRequired: "pathfinder" }],
   },
   {
     id: "z-ai",
     label: "Z.ai",
     iconPath: "/logos/zaiwhite.svg",
     models: [
-      { id: "z-ai/glm-4.7", label: "GLM 4.7", cost: "$", tierRequired: "pathfinder" },
-      { id: "z-ai/glm-4.7-flash", label: "GLM 4.7 Flash", cost: "$", tierRequired: "pathfinder" },
-      { id: "z-ai/glm-4.7:fast", label: "GLM 4.7", isFast: true, cost: "$$", tierRequired: "pathfinder" },
+      { id: "z-ai/glm-5", label: "GLM 5", cost: "$", tierRequired: "pathfinder" },
+      { id: "z-ai/glm-5:fast", label: "GLM 5", isFast: true, cost: "$$", tierRequired: "pathfinder" },
     ],
   },
 ];
@@ -123,3 +128,11 @@ export const PIONEER_ONLY_MODEL_IDS: string[] = PIONEER_GROUPS.flatMap((group) =
 export const RECOMMENDED_PIONEER_MODEL_IDS: string[] = PIONEER_GROUPS.flatMap((group) =>
   group.models.filter((model) => (model.tierRequired ?? "voyager") === "voyager").map((model) => model.id)
 );
+
+/**
+ * Models that should always keep reasoning enabled AND locked in the UI.
+ * Gemini 3.1 Pro is intentionally excluded because it supports low/high effort.
+ */
+export const ALWAYS_REASONING_MODEL_IDS: string[] = [
+  "moonshotai/kimi-k2.5",
+];

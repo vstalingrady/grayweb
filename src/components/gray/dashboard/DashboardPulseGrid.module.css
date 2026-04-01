@@ -13,53 +13,99 @@
   align-items: start;
 }
 
-.mobilePulseLayout {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+.compactPulseStack {
+  display: flex;
+  flex-direction: column;
   width: min(var(--chat-column-max-width, 680px), 100%);
-  height: 100%;
-  min-height: 0;
   margin: 0 auto;
-  padding: 0 0 calc(env(safe-area-inset-bottom, 0px) + 8px);
   gap: 12px;
+  padding: 8px 0 calc(env(safe-area-inset-bottom, 0px) + 12px);
+  min-height: 0;
 }
 
-.mobilePulseSection {
+.compactPulseSection {
   background: #090909;
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 16px;
-  padding: 14px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 0;
-  min-height: 0;
+  gap: 12px;
+  overflow: visible;
 }
 
-.mobilePulseCalendarSection {
-  padding-bottom: 12px;
+.compactCalendarSection {
+  padding-top: 14px;
 }
 
-.mobilePulseEventsSection {
-  min-height: 0;
+.compactEventsSection {
+  min-height: 320px;
 }
 
-.mobilePulseProactivitySection {
-  align-self: stretch;
+.compactProactivitySection {
+  min-height: 120px;
 }
 
-.mobilePulseSectionBody {
-  min-height: 0;
-  overflow: hidden;
+.compactSectionHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
 }
 
-.mobileEventList {
+.compactHeaderCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.compactSectionTitle {
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.compactSectionMeta {
+  font-size: 0.76rem;
+  color: rgba(229, 229, 229, 0.84);
+  letter-spacing: 0.03em;
+}
+
+.compactSectionBody {
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   min-height: 0;
-  overflow-y: auto;
+  overflow: visible;
 }
 
-.mobileProactivityChecklist {
-  gap: 6px;
+.compactCalendarBody {
+  gap: 8px;
+}
+
+.compactMonthLabel {
+  font-size: 0.78rem;
+  color: rgba(240, 240, 240, 0.8);
+  letter-spacing: 0.03em;
+}
+
+.compactMiniMonthShell {
+  background: rgba(14, 14, 14, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 10px 8px;
+  overflow: visible;
+}
+
+.compactEventList {
+  gap: 10px;
+}
+
+.compactProactivityChecklist {
+  gap: 8px;
 }
 
 .dashboardHeaderArea {
@@ -165,6 +211,10 @@
   gap: 6px;
 }
 
+.compactSectionHeader .miniCalendarHeaderControls {
+  margin-left: auto;
+}
+
 .miniCalendarNavButton {
   width: 22px;
   height: 22px;
@@ -188,13 +238,13 @@
 }
 
 .miniCalendarCompact {
-  --mini-month-gap: 8px;
-  --mini-month-week-gap: 3px;
-  --mini-month-day-gap: 1px;
-  --mini-month-cell-max: clamp(22px, calc((100% - (6 * var(--mini-month-day-gap))) / 7), 34px);
+  --mini-month-gap: 10px;
+  --mini-month-week-gap: 4px;
+  --mini-month-day-gap: 2px;
+  --mini-month-cell-max: clamp(24px, calc((100% - (6 * var(--mini-month-day-gap))) / 7), 36px);
   --mini-month-day-font: 0.62rem;
-  --mini-month-weekday-font: 0.48rem;
-  --mini-month-weekday-letter-spacing: 0.22em;
+  --mini-month-weekday-font: 0.5rem;
+  --mini-month-weekday-letter-spacing: 0.16em;
 }
 
 .dashboardCardAction {
@@ -572,7 +622,7 @@
       "calendar"
       "events"
       "proactivity";
-    padding: calc(env(safe-area-inset-top, 0px) + 8px) 0 calc(env(safe-area-inset-bottom, 0px) + 8px);
+    padding: calc(env(safe-area-inset-top, 0px) + 16px) 0 calc(env(safe-area-inset-bottom, 0px) + 8px);
   }
 
   .dashboardHeaderArea {
@@ -608,6 +658,23 @@
   }
 }
 
+@media (max-width: 768px) {
+  .compactPulseStack {
+    width: 100%;
+    gap: 10px;
+    padding-top: clamp(10px, 1.8vh, 16px);
+  }
+
+  .compactPulseSection {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .compactMiniMonthShell {
+    padding: 10px 6px 8px;
+  }
+}
+
 /* Light mode: dashboard card surfaces and control contrast */
 :global(html.light) .dashboardHeaderArea,
 :global(html.light) .dashboardCard {
@@ -615,8 +682,13 @@
   border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
 }
 
-:global(html.light) .mobilePulseSection {
+:global(html.light) .compactPulseSection {
   background: var(--gray-ui-surface-elevated, #ffffff);
+  border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
+}
+
+:global(html.light) .compactMiniMonthShell {
+  background: var(--gray-ui-surface, #ffffff);
   border-color: var(--gray-ui-border-soft, rgba(0, 0, 0, 0.08));
 }
 
@@ -630,6 +702,9 @@
 :global(html.light) .dashboardDate,
 :global(html.light) .dashboardEventTime,
 :global(html.light) .dashboardEventDetails,
+:global(html.light) .compactSectionTitle,
+:global(html.light) .compactSectionMeta,
+:global(html.light) .compactMonthLabel,
 :global(html.light) .dashboardCardTitle,
 :global(html.light) .dashboardSectionTitle,
 :global(html.light) .dashboardListEmpty,

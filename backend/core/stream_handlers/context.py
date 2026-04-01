@@ -11,6 +11,7 @@ from backend.core.ai_config import OPENROUTER_LITE_MODEL
 # Tier aliases for model routing
 TIER_ALIASES = {"lite", "gray-lite", "pro", "gray-pro"}
 PIONEER_ALIAS = "pioneer"
+AUTO_ALIAS = {"auto", "openrouter/auto"}
 DEFAULT_PIONEER_MODEL = "anthropic/claude-sonnet-4.5"
 
 
@@ -108,6 +109,9 @@ def determine_provider_and_model(
     # Tier aliases -> OpenRouter lite tier
     if normalized_model in TIER_ALIASES:
         result_model = OPENROUTER_LITE_MODEL
+    elif normalized_model in AUTO_ALIAS:
+        # Preserve OpenRouter autorouter selection (no hard model steering).
+        result_model = "openrouter/auto"
     elif normalized_model == PIONEER_ALIAS:
         if "/" not in explicit_model:
             result_model = DEFAULT_PIONEER_MODEL

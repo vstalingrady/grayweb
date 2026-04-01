@@ -63,7 +63,7 @@ FALLBACK_PRICING: Dict[str, Dict[str, float]] = {
     "minimax/minimax-m2-her": {"prompt": 3.0e-07, "completion": 1.2e-06, "cached": 3.0e-08},
     
     # Xiaomi MiMo (Gray Lite default)
-    "xiaomi/mimo-v2-flash:free": {"prompt": 1.0e-07, "completion": 3.0e-07, "cached": 1.0e-08},
+    "xiaomi/mimo-v2-flash": {"prompt": 1.0e-07, "completion": 3.0e-07, "cached": 1.0e-08},
 }
 
 # Default pricing for unknown models
@@ -472,6 +472,68 @@ class UsageTracker:
             "next_six_hour_reset": next_six_hour_reset.isoformat(),
         }
 
+    async def get_cache_hit_stats(
+        self,
+        user_id: int,
+        *,
+        lookback_hours: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Return cache-hit metrics derived from persisted usage_events rows."""
+        values: Dict[str, Any] = {"user_id": user_id}
+        filters = ["user_id = :user_id"]
+        if lookback_hours is not None and lookback_hours > 0:
+            since = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
+                hours=int(lookback_hours)
+            )
+            values["since"] = since
+            filters.append("created_at >= :since")
+
+        query = f"""
+            SELECT
+                COALESCE(SUM(input_tokens), 0) AS input_tokens,
+                COALESCE(SUM(output_tokens), 0) AS output_tokens,
+                COALESCE(SUM(cached_tokens), 0) AS cached_tokens,
+                COALESCE(SUM(cost_usd), 0) AS cost_usd,
+                COUNT(*) AS event_count
+            FROM usage_events
+            WHERE {' AND '.join(filters)}
+        """
+        row = await self.db.fetch_one(query=query, values=values)
+        if not row:
+            return {
+                "user_id": user_id,
+                "event_count": 0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cached_tokens": 0,
+                "total_prompt_tokens": 0,
+                "cache_hit_rate_percent": 0.0,
+                "cost_usd": 0.0,
+                "lookback_hours": lookback_hours,
+            }
+
+        input_tokens = int(row["input_tokens"] or 0)
+        output_tokens = int(row["output_tokens"] or 0)
+        cached_tokens = int(row["cached_tokens"] or 0)
+        total_prompt_tokens = input_tokens + cached_tokens
+        cache_hit_rate_percent = (
+            (cached_tokens / total_prompt_tokens) * 100.0
+            if total_prompt_tokens > 0
+            else 0.0
+        )
+
+        return {
+            "user_id": user_id,
+            "event_count": int(row["event_count"] or 0),
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cached_tokens": cached_tokens,
+            "total_prompt_tokens": total_prompt_tokens,
+            "cache_hit_rate_percent": float(round(cache_hit_rate_percent, 2)),
+            "cost_usd": float(row["cost_usd"] or 0.0),
+            "lookback_hours": lookback_hours,
+        }
+
     async def track_usage(
         self,
         user_id: int,
@@ -482,7 +544,7 @@ class UsageTracker:
     ):
         """Track token usage and update cost counters."""
         # Calculate cost based on model-specific pricing
-        model_id = model or "xiaomi/mimo-v2-flash:free"  # Default to MiMo lite
+        model_id = model or "xiaomi/mimo-v2-flash"  # Default to MiMo lite
         cost = calculate_cost(model_id, input_tokens, output_tokens, cached_tokens)
 
         total_tokens = input_tokens + output_tokens + cached_tokens
@@ -498,6 +560,48 @@ class UsageTracker:
             query=query,
             values={"id": user_id, "tokens": total_tokens, "cost": cost},
         )
+
+        try:
+            await self.db.execute(
+                query="""
+                    INSERT INTO usage_events (
+                        user_id,
+                        model,
+                        input_tokens,
+                        output_tokens,
+                        cached_tokens,
+                        cost_usd,
+                        created_at
+                    ) VALUES (
+                        :user_id,
+                        :model,
+                        :input_tokens,
+                        :output_tokens,
+                        :cached_tokens,
+                        :cost_usd,
+                        :created_at
+                    )
+                """,
+                values={
+                    "user_id": user_id,
+                    "model": model_id,
+                    "input_tokens": int(input_tokens),
+                    "output_tokens": int(output_tokens),
+                    "cached_tokens": int(cached_tokens),
+                    "cost_usd": float(cost),
+                    "created_at": datetime.datetime.now(datetime.timezone.utc),
+                },
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to persist usage event row",
+                extra={
+                    "event_type": "usage_event_persist_failed",
+                    "user_id": user_id,
+                    "model": model_id,
+                    "error": str(exc),
+                },
+            )
 
         logger.debug(
             f"Tracked usage for user {user_id}: {total_tokens} tokens, ${cost:.6f} cost",

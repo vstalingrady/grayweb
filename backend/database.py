@@ -340,6 +340,19 @@ users = sqlalchemy.Table(
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
 
+usage_events = sqlalchemy.Table(
+    "usage_events",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+    sqlalchemy.Column("user_id", sqlalchemy.Integer, nullable=False, index=True),
+    sqlalchemy.Column("model", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("input_tokens", sqlalchemy.Integer, nullable=False, default=0),
+    sqlalchemy.Column("output_tokens", sqlalchemy.Integer, nullable=False, default=0),
+    sqlalchemy.Column("cached_tokens", sqlalchemy.Integer, nullable=False, default=0),
+    sqlalchemy.Column("cost_usd", sqlalchemy.Float, nullable=False, default=0.0),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+)
+
 transactions = sqlalchemy.Table(
     "transactions",
     metadata,

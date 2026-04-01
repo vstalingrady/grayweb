@@ -6,6 +6,9 @@ message persistence, and history loading.
 from __future__ import annotations
 
 import uuid
+from datetime import timezone
+from importlib import import_module
+from importlib.util import find_spec
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from fastapi import HTTPException
@@ -44,6 +47,23 @@ def _get_logger():
         from backend.logging_config import create_logger
         _logger = create_logger("backend.conversation_manager")
     return _logger
+
+
+def _queue_chat_cache_append(
+    conversation_id: str,
+    message_payload: Dict[str, Any],
+) -> None:
+    """Best-effort Redis cache append for hot conversation reads."""
+    if find_spec("backend.chat_cache") is None:
+        return
+    append_cached_message = import_module("backend.chat_cache").append_cached_message
+    from backend.core.async_utils import create_logged_task
+
+    create_logged_task(
+        append_cached_message(conversation_id, message_payload),
+        logger=_get_logger(),
+        name="chat_cache.append_conversation_message",
+    )
 
 
 def _get_utcnow():
@@ -261,22 +281,25 @@ async def save_conversation_message(
         if user_id is not None and str(owner_id) != str(user_id):
             raise HTTPException(status_code=403, detail="You can only access your own conversations")
 
+        created_at = utcnow()
         insert_query = user_chat_messages.insert().values(
             thread_id=conversation_id,
             role=role,
             text=text,
             grounding_metadata=grounding_metadata,
             attachments=message.get("attachments"),
-            created_at=utcnow(),
+            created_at=created_at,
         )
         message_id = await database.execute(insert_query)
-        
+
         update_query = (
             user_chat_threads.update()
             .where(user_chat_threads.c.id == conversation_id)
-            .values(last_message_at=utcnow(), updated_at=utcnow())
+            .values(last_message_at=created_at, updated_at=created_at)
         )
         await database.execute(update_query)
+
+        timestamp_ms = int(created_at.replace(tzinfo=timezone.utc).timestamp() * 1000)
         append_to_conversation_cache(
             conversation_id,
             user_id,
@@ -285,10 +308,21 @@ async def save_conversation_message(
                 "text": text,
                 "grounding_metadata": grounding_metadata,
                 "attachments": message.get("attachments"),
+                "timestamp": timestamp_ms,
+            },
+        )
+        _queue_chat_cache_append(
+            conversation_id,
+            {
+                "role": role,
+                "text": text,
+                "grounding_metadata": grounding_metadata,
+                "attachments": message.get("attachments"),
+                "timestamp": timestamp_ms,
             },
         )
         return message_id
-        
+
     except HTTPException:
         raise
     except Exception as error:

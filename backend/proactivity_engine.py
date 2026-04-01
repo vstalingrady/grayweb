@@ -651,6 +651,7 @@ class ProactivityEngine:
 
         dispatch = {
             "user_id": user_id,
+            "notification_type": "check_in",
             "cadence": cadence,
             "message": message,
             "source": source,
@@ -685,7 +686,7 @@ class ProactivityEngine:
         await self._ensure_connection()
         row = await self.db.fetch_one(
             """
-            SELECT id, label, description, remind_at, status
+            SELECT id, label, description, remind_at, status, delivery_mode, entity_type
             FROM reminders
             WHERE id = :id AND user_id = :user_id
             """,
@@ -729,6 +730,11 @@ class ProactivityEngine:
         if description:
             message_lines.append(description)
         message = "\n".join(message_lines).strip()
+        delivery_mode_raw = reminder.get("delivery_mode") or reminder.get("entity_type") or "reminder"
+        if isinstance(delivery_mode_raw, str):
+            reminder_delivery_mode = delivery_mode_raw.strip().lower() or "reminder"
+        else:
+            reminder_delivery_mode = "reminder"
 
         # Persist into General chat so the reminder isn't missed.
         await self._save_general_message(user_id, "model", message)
@@ -765,6 +771,8 @@ class ProactivityEngine:
 
         dispatch = {
             "user_id": user_id,
+            "notification_type": "reminder",
+            "reminder_delivery_mode": reminder_delivery_mode,
             "message": message,
             "source": source,
             "due_at": remind_at_utc.isoformat(),
