@@ -82,14 +82,27 @@ const HeroTesseract = () => {
     geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-    // Thicker lines for better glow
-    const linesInstance = new THREE.LineSegments(geom, new THREE.LineBasicMaterial({
-      vertexColors: true,
-      transparent: true,
-      opacity: 1.0,
-      linewidth: 2
-    }));
-    const lines = linesInstance;
+    const createLineMaterial = (opacity: number, blending = THREE.NormalBlending) =>
+      new THREE.LineBasicMaterial({
+        vertexColors: true,
+        transparent: true,
+        opacity,
+        blending,
+        depthWrite: false,
+      });
+
+    const glowLayers = [0.22, 0.14, 0.08].map((opacity, index) => {
+      const glow = new THREE.LineSegments(
+        geom,
+        createLineMaterial(opacity, THREE.AdditiveBlending)
+      );
+      const scale = 1 + (index + 1) * 0.035;
+      glow.scale.setScalar(scale);
+      container.add(glow);
+      return glow;
+    });
+
+    const lines = new THREE.LineSegments(geom, createLineMaterial(0.98));
     container.add(lines);
 
     // Tech logo sprites disabled for a cleaner, non-spinning appearance
@@ -181,9 +194,11 @@ const HeroTesseract = () => {
       cancelAnimationFrame(animationFrameId);
       renderer.dispose();
       geom.dispose();
-      if (lines.material instanceof THREE.Material) {
-        lines.material.dispose();
-      }
+      [...glowLayers, lines].forEach((layer) => {
+        if (layer.material instanceof THREE.Material) {
+          layer.material.dispose();
+        }
+      });
       sprites.forEach(({ sprite }) => {
         if (sprite.material.map) sprite.material.map.dispose();
         sprite.material.dispose();

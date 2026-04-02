@@ -2966,7 +2966,6 @@ a:hover {
   border: 0;
   background: transparent !important;
   box-sizing: border-box;
-  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.34)) drop-shadow(0 0 28px rgba(255, 255, 255, 0.14));
 }
 
 @media (max-width: 900px) {
