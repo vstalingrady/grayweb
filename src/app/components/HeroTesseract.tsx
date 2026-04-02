@@ -19,7 +19,6 @@ const HeroTesseract = () => {
     const d = 3;
     let scrollFactor = 1;
     let animationFrameId: number;
-    let composer: any;
     const sprites: { sprite: THREE.Sprite; angle: number }[] = [];
 
     // Initialize
@@ -32,7 +31,7 @@ const HeroTesseract = () => {
     });
     const renderer = rendererInstance;
     renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
-    renderer.setClearColor(0x000000, 1);
+    renderer.setClearColor(0x000000, 0);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
     const sceneInstance = new THREE.Scene();
@@ -95,33 +94,6 @@ const HeroTesseract = () => {
 
     // Tech logo sprites disabled for a cleaner, non-spinning appearance
 
-    // Setup selective bloom effect (only bright objects glow)
-    async function setupBloom() {
-      try {
-        const { EffectComposer } = await import('three/examples/jsm/postprocessing/EffectComposer.js');
-        const { RenderPass } = await import('three/examples/jsm/postprocessing/RenderPass.js');
-        const { UnrealBloomPass } = await import('three/examples/jsm/postprocessing/UnrealBloomPass.js');
-
-        composer = new EffectComposer(renderer);
-
-        const renderPass = new RenderPass(scene, camera);
-        composer.addPass(renderPass);
-
-        // High threshold bloom: only bright white lines glow, background stays dark
-        const bloomPass = new UnrealBloomPass(
-          new THREE.Vector2(canvas.clientWidth, canvas.clientHeight),
-          1.2,  // strength - moderate glow
-          0.3,  // radius - tight glow around lines
-          0.85  // threshold - only very bright objects (white lines) glow
-        );
-        composer.addPass(bloomPass);
-      } catch (error) {
-        console.error('[HeroTesseract] Failed to load bloom effect:', error);
-      }
-    }
-
-    setupBloom();
-
     // Scroll interaction
     const handleWheel = (e: WheelEvent) => {
       scrollFactor += e.deltaY * -0.001;
@@ -174,11 +146,7 @@ const HeroTesseract = () => {
       container.rotation.x += speed3Dx;
       container.rotation.y += speed3Dy;
 
-      if (composer) {
-        composer.render();
-      } else {
-        renderer.render(scene, camera);
-      }
+      renderer.render(scene, camera);
     }
 
     animate();
@@ -198,9 +166,6 @@ const HeroTesseract = () => {
       updateCameraPosition();
 
       renderer.setSize(width, height, false); // false prevents setting style.width/height
-      if (composer) {
-        composer.setSize(width, height);
-      }
     };
 
     const resizeObserver = new ResizeObserver(() => {
