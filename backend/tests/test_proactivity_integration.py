@@ -48,6 +48,18 @@ async def _create_test_user(db):
     )
     return await db.execute(query)
 
+
+async def _insert_user_message(db, user_id, *, created_at):
+    await db.execute(
+        main.general_chat_messages.insert().values(
+            user_id=user_id,
+            user_data_id=user_id,
+            role="user",
+            content="hello",
+            created_at=created_at,
+        )
+    )
+
 @pytest.mark.asyncio
 async def test_proactivity_engine_flow(connected_db):
     db = connected_db
@@ -116,3 +128,39 @@ async def test_proactivity_engine_flow(connected_db):
     # Let's re-read `proactivity_engine.py` if needed.
     
     pass
+
+
+@pytest.mark.asyncio
+async def test_proactivity_skips_stale_inactive_users(connected_db, monkeypatch):
+    db = connected_db
+    user_id = await _create_test_user(db)
+
+    payload = {
+        "cadence": "Daily",
+        "time": "09:00",
+        "times": ["09:00"],
+        "channels": ["assistant"],
+        "timezone": "UTC"
+    }
+    await db.execute(main.proactivity_settings.insert().values(
+        user_id=user_id,
+        payload=payload,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc)
+    ))
+
+    stale_created_at = datetime.now(timezone.utc) - timedelta(days=5)
+    await _insert_user_message(db, user_id, created_at=stale_created_at)
+
+    mock_ai = AsyncMock()
+    engine = ProactivityEngine(db=db, ai_generator=mock_ai)
+    monkeypatch.setenv("PROACTIVITY_INACTIVE_DAYS", "3")
+
+    result = await engine.dispatch_user_if_due(
+        user_id,
+        source="scheduler",
+        force=False,
+    )
+
+    assert result is None
+    mock_ai.generate_daily_briefing.assert_not_awaited()

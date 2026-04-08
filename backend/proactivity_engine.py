@@ -284,9 +284,33 @@ class ProactivityEngine:
             )
             return None
 
-        # REMOVED: Inactivity check was blocking active users from receiving pings.
-        # The design doc says absence-based nudges should be a FEATURE, not a blocker.
-        # If we need to limit pings to churned users, do it in the scheduler, not here.
+        if not force:
+            max_idle_days = self._inactive_days_threshold()
+            if max_idle_days > 0:
+                last_user_message_at = await self._last_user_message_timestamp(user_id)
+                if last_user_message_at is None:
+                    logger.info(
+                        "Skipping proactivity send (no recent user activity)",
+                        extra={
+                            "event_type": "proactivity_inactive_skip",
+                            "user_id": user_id,
+                            "reason": "no_user_message",
+                        },
+                    )
+                    return None
+
+                idle_for = datetime.now(dt_timezone.utc) - last_user_message_at
+                if idle_for > timedelta(days=max_idle_days):
+                    logger.info(
+                        "Skipping proactivity send (user inactive too long)",
+                        extra={
+                            "event_type": "proactivity_inactive_skip",
+                            "user_id": user_id,
+                            "idle_days": round(idle_for.total_seconds() / 86400, 2),
+                            "max_idle_days": max_idle_days,
+                        },
+                    )
+                    return None
 
 
         # Generate delivery_key FIRST - this is our deduplication key
@@ -506,17 +530,15 @@ class ProactivityEngine:
 
     @staticmethod
     def _inactive_days_threshold() -> int:
-        """Return the inactivity threshold in days. Set to 0 to disable.
-        
-        Default is 30 days - users who haven't messaged in 30 days are
-        considered churned. The design doc suggests "absence-based" nudges
-        after ~3 days, so we want to be generous here.
+        """Return the maximum user idle time in days for scheduled check-ins.
+
+        Set to 0 to disable the inactivity guard entirely.
         """
-        raw = os.getenv("PROACTIVITY_INACTIVE_DAYS", "30")
+        raw = os.getenv("PROACTIVITY_INACTIVE_DAYS", "3")
         try:
             return int(raw)
         except (TypeError, ValueError):
-            return 30
+            return 3
 
     def _already_sent_in_window(
         self,
