@@ -359,7 +359,7 @@ In your page, callPaddle.Initialize()and pass your client-side token astoken. Fo
 2<script type="text/javascript">
 3  Paddle.Environment.set("sandbox");
 4  Paddle.Initialize({ 
-5    token: "test_7d279f61a3499fed520f7cd8c08" // replace with a client-side token
+5    token: "test_REDACTED_EXAMPLE_CLIENT_TOKEN" // replace with a client-side token
 6  });
 7</script>
 ```
@@ -445,7 +445,7 @@ We'll present localized prices formonthItemswhen the monthly toggle is selected,
 12345678910111213141516171819201<script type="text/javascript">
 2  Paddle.Environment.set("sandbox");
 3  Paddle.Initialize({ 
-4    token: 'test_7d279f61a3499fed520f7cd8c08' // replace with a client-side token
+4    token: 'test_REDACTED_EXAMPLE_CLIENT_TOKEN' // replace with a client-side token
 5  });
 6  
 7  // define products and prices

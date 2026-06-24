@@ -326,7 +326,7 @@ This example sets up an inline checkout, then sets the checkoutthemetodark,local
 1234567891011121314151617181<script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
 2<script type="text/javascript">
 3  Paddle.Initialize({
-4    token: 'live_7d279f61a3499fed520f7cd8c08', // replace with a client-side token
+4    token: 'live_REDACTED_EXAMPLE_CLIENT_TOKEN', // replace with a client-side token
 5    pwCustomer: { },
 6    checkout: {
 7      settings: {

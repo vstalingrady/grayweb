@@ -151,7 +151,7 @@ You can create and manage client-side tokens inPaddle > Developer tools > Authen
 
 ```javascript
 1231Paddle.Initialize({
-2  token: 'live_7d279f61a3499fed520f7cd8c08'
+2  token: 'live_REDACTED_EXAMPLE_CLIENT_TOKEN'
 3});
 ```
 
@@ -168,7 +168,7 @@ This example passes the Paddle ID for a customer entity in Paddle to Retain.
 
 ```javascript
 1234561Paddle.Initialize({
-2  token: 'live_7d279f61a3499fed520f7cd8c08',
+2  token: 'live_REDACTED_EXAMPLE_CLIENT_TOKEN',
 3  pwCustomer: {
 4    id: 'ctm_01gt25aq4b2zcfw12szwtjrbdt'
 5  }
@@ -188,7 +188,7 @@ This example sets default checkout settings for all checkouts opened on a page. 
 
 ```javascript
 123456789101112131Paddle.Initialize({
-2  token: 'live_7d279f61a3499fed520f7cd8c08', // replace with a client-side token
+2  token: 'live_REDACTED_EXAMPLE_CLIENT_TOKEN', // replace with a client-side token
 3  checkout: {
 4    settings: {
 5      displayMode: "inline",
@@ -212,7 +212,7 @@ This example sets default checkout settings for all checkouts opened on a page. 
 
 ```javascript
 12345678910111213141Paddle.Initialize({
-2  token: 'live_7d279f61a3499fed520f7cd8c08', // replace with a client-side token
+2  token: 'live_REDACTED_EXAMPLE_CLIENT_TOKEN', // replace with a client-side token
 3  checkout: {
 4    settings: {
 5      displayMode: "inline",
@@ -233,7 +233,7 @@ This example sets default checkout settings for all checkouts opened on a page. 
 
 ```javascript
 123456789101Paddle.Initialize({
-2  token: 'live_7d279f61a3499fed520f7cd8c08', // replace with a client-side token
+2  token: 'live_REDACTED_EXAMPLE_CLIENT_TOKEN', // replace with a client-side token
 3  checkout: {
 4    settings: {
 5      displayMode: "overlay",
@@ -254,7 +254,7 @@ This example logs events emitted by Paddle.js to console.
 
 ```javascript
 1234561Paddle.Initialize({
-2  token: 'live_7d279f61a3499fed520f7cd8c08', // replace with a client-side token
+2  token: 'live_REDACTED_EXAMPLE_CLIENT_TOKEN', // replace with a client-side token
 3  eventCallback: function(data) {
 4    console.log(data);
 5  }
@@ -271,7 +271,7 @@ This example uses a switch statement to log some text to console based on events
 
 ```javascript
 1234567891011121314151617181Paddle.Initialize({
-2  token: 'live_7d279f61a3499fed520f7cd8c08', // replace with a client-side token
+2  token: 'live_REDACTED_EXAMPLE_CLIENT_TOKEN', // replace with a client-side token
 3  eventCallback: function(data) {
 4    switch(data.name) {
 5      case "checkout.loaded":

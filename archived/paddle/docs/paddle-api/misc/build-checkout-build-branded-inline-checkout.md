@@ -362,7 +362,7 @@ In your page, callPaddle.Initialize()and pass your client-side token astoken. Fo
 2<script type="text/javascript">
 3  Paddle.Environment.set("sandbox");
 4  Paddle.Initialize({ 
-5    token: "test_7d279f61a3499fed520f7cd8c08" // replace with a client-side token
+5    token: "test_REDACTED_EXAMPLE_CLIENT_TOKEN" // replace with a client-side token
 6  });
 7</script>
 ```
@@ -445,7 +445,7 @@ In our sample, we pass these settings tocheckout.settings:
 12345678910111213141<script type="text/javascript">
 2  Paddle.Environment.set("sandbox");
 3  Paddle.Initialize({ 
-4    token: "test_7d279f61a3499fed520f7cd8c08", // replace with a client-side token
+4    token: "test_REDACTED_EXAMPLE_CLIENT_TOKEN", // replace with a client-side token
 5    checkout: {
 6      settings: {
 7        displayMode: "inline",
@@ -505,7 +505,7 @@ Recurring items on a checkout must have the same billing interval. For example, 
 12345678910111213141516171819201<script type="text/javascript">
 2  Paddle.Environment.set("sandbox");
 3  Paddle.Initialize({
-4    token: "test_7d279f61a3499fed520f7cd8c08", // replace with a client-side token
+4    token: "test_REDACTED_EXAMPLE_CLIENT_TOKEN", // replace with a client-side token
 5    checkout: {
 6      settings: {
 7        displayMode: "inline",
@@ -749,7 +749,7 @@ For simplicity, we use the built-in.toFixed()JavaScript method to format values 
 45    
 46  Paddle.Environment.set("sandbox");
 47  Paddle.Initialize({
-48    token: "test_7d279f61a3499fed520f7cd8c08", // replace with a client-side token
+48    token: "test_REDACTED_EXAMPLE_CLIENT_TOKEN", // replace with a client-side token
 
 ```
 

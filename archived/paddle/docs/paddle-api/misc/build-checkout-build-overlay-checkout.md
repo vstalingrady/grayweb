@@ -351,7 +351,7 @@ In your page, callPaddle.Initialize()and pass your client-side token astoken. Fo
 2<script type="text/javascript">
 3  Paddle.Environment.set("sandbox");
 4  Paddle.Initialize({ 
-5    token: "test_7d279f61a3499fed520f7cd8c08" // replace with a client-side token
+5    token: "test_REDACTED_EXAMPLE_CLIENT_TOKEN" // replace with a client-side token
 6  });
 7</script>
 ```
@@ -451,7 +451,7 @@ Recurring items on a checkout must have the same billing interval. For example, 
 12345678910111213141516171819201<script type="text/javascript">
 2  Paddle.Environment.set("sandbox");
 3  Paddle.Initialize({
-4    token: "test_7d279f61a3499fed520f7cd8c08" // replace with a client-side token
+4    token: "test_REDACTED_EXAMPLE_CLIENT_TOKEN" // replace with a client-side token
 5  });
 6  
 7  // define items
@@ -557,7 +557,7 @@ We updated theonClickevent on our checkout button to pass ourcustomerInfovariabl
 12345678910111213141516171819201<script type="text/javascript">
 2  Paddle.Environment.set("sandbox");
 3  Paddle.Initialize({
-4    token: "test_7d279f61a3499fed520f7cd8c08" // replace with a client-side token
+4    token: "test_REDACTED_EXAMPLE_CLIENT_TOKEN" // replace with a client-side token
 5  });
 6  
 7  // define items
@@ -595,7 +595,7 @@ You can use theeventCallbackparameter forPaddle.Initialize()to work with events 
 
 ```javascript
 12345671Paddle.Initialize({
-2  token: "test_7d279f61a3499fed520f7cd8c08", // replace with a client-side token
+2  token: "test_REDACTED_EXAMPLE_CLIENT_TOKEN", // replace with a client-side token
 3  // prints events to console for debugging
 4  eventCallback: function(data) {
 5    console.log(data);

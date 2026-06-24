@@ -461,7 +461,7 @@ This example opens an inline, one-page checkout for an upsell flow. Theupsellobj
 8// previousTransactionId was captured from the initial checkout.completed event
 9Paddle.Checkout.open({
 10  items: upsellItems,
-11  customerAuthToken: 'pca_01hwz42rfyaxw721bgkppp66gx_01h282ye3v2d9cmcm8dzpawrd0_otkqbvati3ryh2f6o7zdr6owjsdhkgmm',
+11  customerAuthToken: 'pca_REDACTED_EXAMPLE_CUSTOMER_AUTH_TOKEN',
 12  settings: {
 13    displayMode: "inline",
 14    frameTarget: "checkout-container",

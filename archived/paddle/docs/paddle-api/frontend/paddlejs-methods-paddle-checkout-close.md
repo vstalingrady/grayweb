@@ -100,7 +100,7 @@ This example shows how you can usePaddle.Checkout.close()to close an inline chec
 7
 8<script type="text/javascript">
 9  Paddle.Initialize({
-10    token: 'live_7d279f61a3499fed520f7cd8c08'
+10    token: 'live_REDACTED_EXAMPLE_CLIENT_TOKEN'
 11  });
 12
 13  function openCheckout() {

@@ -431,7 +431,7 @@ This example sets default checkout settings for all checkouts opened on a page.s
 
 ```javascript
 12345678910111Paddle.Initialize({
-2  token: 'live_7d279f61a3499fed520f7cd8c08',
+2  token: 'live_REDACTED_EXAMPLE_CLIENT_TOKEN',
 3  checkout: {
 4    settings: {
 5      displayMode: "overlay",

@@ -429,7 +429,7 @@ This example opens an inline checkout for a one-time item.customerAuthTokenis pa
 7
 8Paddle.Checkout.open({
 9  items: itemsList,
-10  customerAuthToken: "pca_01hwz42rfyaxw721bgkppp66gx_01h282ye3v2d9cmcm8dzpawrd0_otkqbvati3ryh2f6o7zdr6owjsdhkgmm",
+10  customerAuthToken: "pca_REDACTED_EXAMPLE_CUSTOMER_AUTH_TOKEN",
 11  settings: {
 12    displayMode: "inline",
 13    frameTarget: "checkout-container",
@@ -473,7 +473,7 @@ This example shows opening a checkout that presents a customer the option to pay
 6];
 7
 8Paddle.Checkout.open({
-9  customerAuthToken: "pca_01hwz42rfyaxw721bgkppp66gx_01h282ye3v2d9cmcm8dzpawrd0_otkqbvati3ryh2f6o7zdr6owjsdhkgmm",
+9  customerAuthToken: "pca_REDACTED_EXAMPLE_CUSTOMER_AUTH_TOKEN",
 10  settings: {
 11    displayMode: "inline",
 12    frameTarget: "checkout-container",
@@ -638,7 +638,7 @@ This example opens an inline checkout for a one-time item.customerAuthTokenandsa
 6];
 7
 8Paddle.Checkout.open({
-9  customerAuthToken: "pca_01hwz42rfyaxw721bgkppp66gx_01h282ye3v2d9cmcm8dzpawrd0_otkqbvati3ryh2f6o7zdr6owjsdhkgmm",
+9  customerAuthToken: "pca_REDACTED_EXAMPLE_CUSTOMER_AUTH_TOKEN",
 10  savedPaymentMethodId: "paymtd_01hs8zx6x377xfsfrt2bqsevbw",
 11  settings: {
 12    displayMode: "inline",

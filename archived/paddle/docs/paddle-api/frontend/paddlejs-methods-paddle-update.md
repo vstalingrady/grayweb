@@ -113,7 +113,7 @@ This example checks if Paddle is initialized using thePaddle.Initializedflag, th
 7  );
 8} else {
 9  Paddle.Initalize({
-10      token: 'live_7d279f61a3499fed520f7cd8c08',
+10      token: 'live_REDACTED_EXAMPLE_CLIENT_TOKEN',
 11      checkout: {
 12        displayMode: "overlay",
 13        theme: "dark",

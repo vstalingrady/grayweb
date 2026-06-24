@@ -455,7 +455,7 @@ This example opens a one-page inline checkout. It passes thesettingsobject to th
 
 ```javascript
 12345678910111213141Paddle.Initialize({
-2  token: 'live_7d279f61a3499fed520f7cd8c08', // replace with a client-side token
+2  token: 'live_REDACTED_EXAMPLE_CLIENT_TOKEN', // replace with a client-side token
 3  checkout: {
 4    settings: {
 5      displayMode: "inline",

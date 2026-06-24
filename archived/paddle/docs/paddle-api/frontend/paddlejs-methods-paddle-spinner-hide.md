@@ -99,7 +99,7 @@ eventCallbackis used inPaddle.Initialize()to callPaddle.Spinner.hide()whentheche
 6
 7<script type="text/javascript">
 8  Paddle.Initialize({
-9    token: 'live_7d279f61a3499fed520f7cd8c08',
+9    token: 'live_REDACTED_EXAMPLE_CLIENT_TOKEN',
 10    // Event callback to hide spinner once `checkout.loaded` is emitted
 11    eventCallback: function(data) {
 12      console.log(data);

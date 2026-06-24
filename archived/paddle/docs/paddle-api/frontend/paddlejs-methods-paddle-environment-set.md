@@ -93,7 +93,7 @@ This example sets the environment tosandbox.
 ```javascript
 123451Paddle.Environment.set("sandbox");
 2Paddle.Initialize({
-3  token: 'live_7d279f61a3499fed520f7cd8c08',
+3  token: 'live_REDACTED_EXAMPLE_CLIENT_TOKEN',
 4  pwCustomer: { }
 5});
 ```
@@ -107,7 +107,7 @@ This example doesn't set the checkout environment. Paddle defaults toproduction.
 
 ```javascript
 12341Paddle.Initialize({
-2  token: 'live_7d279f61a3499fed520f7cd8c08',
+2  token: 'live_REDACTED_EXAMPLE_CLIENT_TOKEN',
 3  pwCustomer: { }
 4});
 ```

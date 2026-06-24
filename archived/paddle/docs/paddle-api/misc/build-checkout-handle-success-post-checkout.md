@@ -248,7 +248,7 @@ This example logs thecheckout.completedevent emitted by Paddle.js to console.
 
 ```javascript
 123456781Paddle.Initialize({
-2  token: 'live_7d279f61a3499fed520f7cd8c08', // replace with a client-side token
+2  token: 'live_REDACTED_EXAMPLE_CLIENT_TOKEN', // replace with a client-side token
 3  eventCallback: function(data) {
 4    if (data.name == "checkout.completed") {
 5      console.log(data);

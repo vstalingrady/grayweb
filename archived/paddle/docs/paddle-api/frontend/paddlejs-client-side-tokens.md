@@ -93,7 +93,7 @@ When youinitialize Paddle.js, you include a client-side token. Paddle uses your 
 1234561<script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
 2<script type="text/javascript">
 3  Paddle.Initialize({ 
-4    token: 'live_7d279f61a3499fed520f7cd8c08' // replace with a client-side token
+4    token: 'live_REDACTED_EXAMPLE_CLIENT_TOKEN' // replace with a client-side token
 5  });
 6</script>
 ```
@@ -171,7 +171,7 @@ Client-side tokens always follow a specific format.
 
 ```bash
 121test_4s7gd50ap72ms92nnsa20ma61lt
-2live_7d279f61a3499fed520f7cd8c08
+2live_REDACTED_EXAMPLE_CLIENT_TOKEN
 ```
 
 

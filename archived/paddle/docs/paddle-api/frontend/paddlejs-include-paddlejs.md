@@ -112,7 +112,7 @@ Initialize Paddle.js by calling thePaddle.Initialize()methodwith a configuration
 1234561<script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
 2<script type="text/javascript">
 3  Paddle.Initialize({ 
-4    token: 'live_7d279f61a3499fed520f7cd8c08' // replace with a client-side token
+4    token: 'live_REDACTED_EXAMPLE_CLIENT_TOKEN' // replace with a client-side token
 5  });
 6</script>
 ```
@@ -176,7 +176,7 @@ Paddle ID of a customer entity, prefixedctm_. Only customer IDs are accepted. Do
 1234567891<script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
 2<script type="text/javascript">
 3  Paddle.Initialize({
-4    token: 'live_7d279f61a3499fed520f7cd8c08', // replace with a client-side token
+4    token: 'live_REDACTED_EXAMPLE_CLIENT_TOKEN', // replace with a client-side token
 5    pwCustomer: {
 6      id: 'ctm_01gt25aq4b2zcfw12szwtjrbdt' // replace with a customer Paddle ID
 7    }

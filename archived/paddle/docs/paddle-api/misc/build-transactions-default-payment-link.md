@@ -257,7 +257,7 @@ This example sets default checkout settings for all checkouts opened on a page. 
 
 ```javascript
 123456789101112131Paddle.Initialize({
-2  token: 'live_7d279f61a3499fed520f7cd8c08', // replace with a client-side token
+2  token: 'live_REDACTED_EXAMPLE_CLIENT_TOKEN', // replace with a client-side token
 3  checkout: {
 4    settings: {
 5      displayMode: "inline",
@@ -281,7 +281,7 @@ Paddle.js opens an overlay checkout by default, but this is a good way topass ad
 
 ```javascript
 123456789101Paddle.Initialize({
-2  token: 'live_7d279f61a3499fed520f7cd8c08', // replace with a client-side token
+2  token: 'live_REDACTED_EXAMPLE_CLIENT_TOKEN', // replace with a client-side token
 3  checkout: {
 4    settings: {
 5      displayMode: "overlay",

@@ -387,7 +387,7 @@ This example passescustomerAuthTokentoPaddle.Checkout.open(), so customers are p
 7
 8Paddle.Checkout.open({
 9  items: itemsList,
-10  customerAuthToken: "pca_01hwz42rfyaxw721bgkppp66gx_01h282ye3v2d9cmcm8dzpawrd0_otkqbvati3ryh2f6o7zdr6owjsdhkgmm",
+10  customerAuthToken: "pca_REDACTED_EXAMPLE_CUSTOMER_AUTH_TOKEN",
 11  settings: {
 12    displayMode: "inline",
 13    frameTarget: "checkout-container",
@@ -425,7 +425,7 @@ This example passescustomerAuthTokenandsavedPaymentMethodIdtoPaddle.Checkout.ope
 6];
 7
 8Paddle.Checkout.open({
-9  customerAuthToken: "pca_01hwz42rfyaxw721bgkppp66gx_01h282ye3v2d9cmcm8dzpawrd0_otkqbvati3ryh2f6o7zdr6owjsdhkgmm",
+9  customerAuthToken: "pca_REDACTED_EXAMPLE_CUSTOMER_AUTH_TOKEN",
 10  savedPaymentMethodId: "paymtd_01hs8zx6x377xfsfrt2bqsevbw",
 11  settings: {
 12    displayMode: "inline",
@@ -459,7 +459,7 @@ This example passes the previously completed transaction ID asupsell.transaction
 8// previousTransactionId was captured from the initial checkout.completed event
 9Paddle.Checkout.open({
 10  items: upsellItems,
-11  customerAuthToken: 'pca_01hwz42rfyaxw721bgkppp66gx_01h282ye3v2d9cmcm8dzpawrd0_otkqbvati3ryh2f6o7zdr6owjsdhkgmm',
+11  customerAuthToken: 'pca_REDACTED_EXAMPLE_CUSTOMER_AUTH_TOKEN',
 12  settings: {
 13    displayMode: "inline",
 14    frameTarget: "checkout-container",
