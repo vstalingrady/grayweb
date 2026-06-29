@@ -177,7 +177,7 @@ def _store_cached_pdf_text_from_grounding(
             store_cached_pdf_text(cache_key, text)
 
 
-OPENROUTER_LITE_MODEL = "xiaomi/mimo-v2-flash"
+OPENROUTER_LITE_MODEL = "openrouter/owl-alpha"
 
 
 class OpenRouterService:
@@ -233,6 +233,8 @@ class OpenRouterService:
         "google/gemini-3-pro-preview": "google/gemini-3.1-pro-preview",
         "google/gemini-3-flash-preview": "google/gemini-3.1-flash",
         "qwen/qwen3-max-thinking": "qwen/qwen3.5-plus-02-15",
+        # OpenRouter hosted models (free tier friendly for demos)
+        "openrouter/owl-alpha": "openrouter/owl-alpha",
         # Default fallback
         "default": "anthropic/claude-sonnet-4.5",
     }
@@ -295,6 +297,8 @@ class OpenRouterService:
         "openai/gpt-4o": 128_000,
         "openai/gpt-4-turbo": 128_000,
         "openai/gpt-4o-mini": 128_000,
+        # OpenRouter hosted models
+        "openrouter/owl-alpha": 1_048_756,  # 1M context, free tier
         # Kimi models (262k context)
         "moonshotai/kimi-k2.5": 262_144,
         "moonshotai/kimi-k2-0905": 262_144,

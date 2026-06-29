@@ -39,6 +39,7 @@ PATHFINDER_MODEL_IDS = {
     "x-ai/grok-4.1-fast",
     "moonshotai/kimi-k2.5",
     "nvidia/nemotron-3-nano-30b-a3b:free",
+    "openrouter/owl-alpha",
     "xiaomi/mimo-v2-flash",
     "z-ai/glm-5",
     "z-ai/glm-5:fast",

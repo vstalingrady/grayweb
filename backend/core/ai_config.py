@@ -17,7 +17,7 @@ AI_PROVIDER = "openrouter"
 
 # Model identifiers
 GROK_TOOL_MODEL = os.getenv("GROK_TOOL_MODEL", "x-ai/grok-4.1-fast")
-OPENROUTER_LITE_MODEL = "xiaomi/mimo-v2-flash"
+OPENROUTER_LITE_MODEL = "openrouter/owl-alpha"
 
 
 # --- Tier Configuration ---

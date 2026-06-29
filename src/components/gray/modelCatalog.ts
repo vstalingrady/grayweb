@@ -53,7 +53,10 @@ export const PIONEER_GROUPS: ModelGroup[] = [
     id: "openrouter",
     label: "OpenRouter",
     iconPath: "/grayai.png",
-    models: [{ id: "openrouter/auto", label: "Auto", cost: "$$", tierRequired: "voyager" }],
+    models: [
+      { id: "openrouter/auto", label: "Auto", cost: "$$", tierRequired: "voyager" },
+      { id: "openrouter/owl-alpha", label: "Owl Alpha (free)", cost: "Free", tierRequired: "pathfinder" },
+    ],
   },
   {
     id: "deepseek",
